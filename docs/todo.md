@@ -177,60 +177,284 @@
 **ESTIMATED TOTAL TIME**: 105 minutes (1 hour 45 minutes)
 
 ---
+# TODO: YouTube Extension Backend Development
 
-## 🎯 CURRENT STATUS & IMMEDIATE ACTIONS
+## 🎯 CURRENT PROJECT STATUS
+- **✅ Layer 1-7**: 100% COMPLETED (Lean SaaS Foundation)
+- **🚀 Layer 8**: YouTube Extension Backend (NEW LAYER)
 
-### 📊 **COMPLETION PROGRESS**:
-- **✅ Layer 1-7**: 100% COMPLETED (All layers fully implemented)
-- **🎉 Project Status**: FULLY COMPLETED - Ready for production deployment!
+---
 
-### 🎯 **IMMEDIATE NEXT TASKS** (105 minutes total):
+## 🏗️ LAYER 8: YOUTUBE EXTENSION BACKEND MODULES
 
-#### 1. **README Updates** (20 minutes)
-- Complete main README.md with setup guide, API usage examples
-- Add authentication guide (JWT + API Key patterns)
-- Include deployment instructions and architecture overview
+### 8.1 Planning & Architecture ✅ COMPLETED (Week 1)
+- [x] **Technology choice analysis**: ✅ COMPLETED - Extend Supabase Edge Functions chosen
+- [x] **Backend user stories**: ✅ COMPLETED - 14 user stories across 3 modules defined
+- [x] **Database schema design**: ✅ COMPLETED - 8 tables with RLS policies planned
+- [x] **API endpoint mapping**: ✅ COMPLETED - 15+ endpoints mapped to user stories
+- [x] **External API research**: ✅ COMPLETED - YouTube, Google Translate, OpenAI APIs analyzed
+- [x] **Cost analysis**: ✅ COMPLETED - $90-105/month operating costs calculated
 
-#### 2. **Architecture Documentation** (15 minutes)  
-- Update ARCHITECTURE.md with Layer 1-6 implementation details
-- Document integration patterns and utilities usage across modules
-- Add security model, performance considerations, and design decisions
+### 8.2 Database Schema Extensions (Week 2)
+- [ ] **YouTube videos table**: Create table with RLS policies
+  ```sql
+  CREATE TABLE youtube_videos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id),
+    video_id TEXT NOT NULL UNIQUE,
+    title TEXT,
+    channel_name TEXT,
+    duration INTEGER,
+    thumbnail_url TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+  ```
+- [ ] **Video transcripts table**: Store transcript segments with timestamps
+- [ ] **User video history table**: Track user's video progress and bookmarks
+- [ ] **AI translations table**: Cache translations for cost optimization
+- [ ] **Video summaries table**: Store AI-generated summaries
+- [ ] **Vocabulary entries table**: User's learned words with spaced repetition
+- [ ] **Learning sessions table**: Track learning analytics
+- [ ] **Video notes table**: Timestamped notes with rich text support
+- [ ] **Migration scripts**: Create all migration files
+- [ ] **RLS policies**: Implement Row Level Security for all tables
+- [ ] **Test data seeding**: Extend seed-dev-data.mjs with YouTube data
 
-#### 3. **CI/CD Pipeline** (25 minutes)
-- GitHub Actions workflow for automated testing and deployment
-- Supabase Edge Functions deployment pipeline
-- Security scanning and code quality checks
+### 8.3 Module 7: YouTube Integration (Week 3)
 
-#### 4. **Production Configuration** (15 minutes)
-- Environment variables documentation for production
-- Security configuration guidelines and best practices
-- Performance optimization settings and monitoring setup
+#### US 7.1: Video Metadata Extraction (2 days)
+- [ ] **YouTube Data API client**: Integrate YouTube Data API v3
+- [ ] **Video analysis endpoint**: `POST /v1/youtube/video/analyze`
+- [ ] **Rate limiting**: Handle 10k units/day free limit
+- [ ] **Caching strategy**: Cache video metadata for cost optimization
+- [ ] **Error handling**: Handle API quotas and video accessibility
+- [ ] **Integration tests**: Test YouTube API integration
 
-#### 5. **Monitoring & Security Setup** (20 minutes)
-- Error tracking integration (Sentry/similar)
-- Performance metrics collection and alerting
-- Security audit checklist and vulnerability assessment
+#### US 7.2: Transcript Extraction (2 days)  
+- [ ] **Transcript API client**: Integrate YouTube Transcript API
+- [ ] **Transcript endpoint**: `POST /v1/youtube/transcript/extract`
+- [ ] **Multi-language support**: Handle English/Vietnamese transcripts
+- [ ] **Timestamp parsing**: Parse transcript into timestamped segments
+- [ ] **Error handling**: Handle videos without transcripts
+- [ ] **Integration tests**: Test transcript extraction
 
-#### 6. **API Examples and Guides** (10 minutes)
-- Usage examples for all modules with code samples
-- Integration patterns and best practices documentation
+#### US 7.3: Video History Management (1 day)
+- [ ] **History CRUD endpoints**: Create, read, update, delete video history
+- [ ] **Progress tracking**: Track user's video watching progress
+- [ ] **Bookmark functionality**: Allow users to bookmark videos
+- [ ] **Privacy controls**: Implement RLS for user data protection
+- [ ] **Integration tests**: Test history management features
 
-### 🏆 **FINAL ACHIEVEMENTS - PROJECT 100% COMPLETED**:
-- **🔧 Foundation Complete**: 2000+ lines of battle-tested utilities (Layer 1)
-- **🔍 Database Complete**: 1500+ lines of robust database abstraction (Layer 2)
-- **📊 Testing Complete**: Comprehensive integration test suite (Layer 3)
-- **⚙️  Core Complete**: Health, metrics, error reporting, configuration (Layer 4)
-- **🛡️ Auth Complete**: 1200+ lines of secure authentication system (Layer 5)
-- **💳 Billing Complete**: Full Stripe integration with caching, webhooks, tests (Layer 6)
-- **📚 Documentation Complete**: 23000+ lines comprehensive documentation (README 3K + Architecture 8K + Production Config 12K)
-- **🚀 CI/CD Complete**: Production-ready GitHub Actions workflows with security scanning, quality gates, and automated deployment
-- **🔧 Production Ready**: Complete production configuration, monitoring, security audit, and deployment procedures
+**Module 7 Success Criteria:**
+- [ ] Video metadata extraction <2s response time
+- [ ] 99.5% success rate for transcript extraction
+- [ ] Support for 95% of YouTube video types
 
-**🎯 TOTAL PROJECT SCOPE**: 
-- **50+ API endpoints** across 6 modules
-- **95% test coverage** with comprehensive integration tests
-- **Zero-ops deployment** with automated CI/CD pipeline
-- **Enterprise-grade security** with RLS, authentication, monitoring
-- **Production-ready architecture** with comprehensive documentation
+### 8.4 Module 8: AI Processing (Week 4)
 
-**🎉 CONGRATULATIONS! Your Lean SaaS Starter is now FULLY COMPLETED and production-ready! 🚀**
+#### US 8.1: Word and Phrase Translation (2 days)
+- [ ] **Google Translate client**: Integrate Google Translate API
+- [ ] **WordsAPI client**: Integrate for definitions and pronunciation
+- [ ] **Translation endpoint**: `POST /v1/ai/translate`
+- [ ] **Smart caching**: Cache translations with 3-hour TTL
+- [ ] **Rate limiting**: 100 translations/hour for free users
+- [ ] **Context-aware translation**: Handle phrases and idioms
+- [ ] **Integration tests**: Test translation accuracy
+
+#### US 8.2: Video Summarization (2 days)
+- [ ] **OpenAI client**: Integrate GPT-4o Mini for summarization
+- [ ] **Summarization endpoint**: `POST /v1/ai/summarize`
+- [ ] **Summary types**: Brief, detailed, bullet-points
+- [ ] **Bilingual support**: Summaries in English and Vietnamese
+- [ ] **Cost optimization**: Implement token usage monitoring
+- [ ] **Integration tests**: Test summary quality and performance
+
+#### US 8.3: Content Analysis (1 day)
+- [ ] **Analysis endpoint**: `POST /v1/ai/analyze-content`
+- [ ] **Fact vs Opinion detection**: AI-powered content analysis
+- [ ] **Sentiment analysis**: Detect emotional tone and bias
+- [ ] **Confidence scoring**: Provide confidence levels for analysis
+- [ ] **Edge case handling**: Handle ambiguous statements
+- [ ] **Integration tests**: Test analysis accuracy
+
+**Module 8 Success Criteria:**
+- [ ] Translation accuracy >90% for common phrases
+- [ ] AI responses <3s for 95% of requests
+- [ ] Stay within $50/month AI budget for 1000 users
+
+### 8.5 Module 9: Learning Analytics (Week 5)
+
+#### US 9.1: Vocabulary Management (2 days)
+- [ ] **Vocabulary CRUD**: Create, read, update, delete vocabulary
+- [ ] **Spaced repetition**: Implement spaced repetition algorithm
+- [ ] **Categorization**: Organize by difficulty, topic, video
+- [ ] **Export functionality**: Export vocabulary in multiple formats
+- [ ] **Progress tracking**: Track learning progress and retention
+- [ ] **Integration tests**: Test vocabulary system
+
+#### US 9.2: Learning Session Tracking (1 day)
+- [ ] **Session endpoints**: Track learning sessions
+- [ ] **Metrics calculation**: Calculate learning velocity and retention
+- [ ] **Analytics engine**: Generate learning insights
+- [ ] **Recommendation system**: Suggest learning improvements
+- [ ] **Integration tests**: Test session tracking
+
+#### US 9.3: Note-Taking System (1 day)
+- [ ] **Notes CRUD**: Create, read, update, delete notes
+- [ ] **Rich text support**: Support markdown formatting
+- [ ] **Search functionality**: Search across all notes
+- [ ] **Export capabilities**: Export notes in various formats
+- [ ] **Integration tests**: Test note-taking features
+
+#### US 9.4: Analytics Dashboard (1 day)
+- [ ] **Analytics endpoint**: `GET /v1/learning/analytics/dashboard`
+- [ ] **Progress calculations**: Calculate learning trends
+- [ ] **Recommendation engine**: Generate personalized recommendations
+- [ ] **Trend analysis**: Analyze learning patterns
+- [ ] **Integration tests**: Test analytics calculations
+
+**Module 9 Success Criteria:**
+- [ ] Users save average 10 words per session
+- [ ] 70% of users return within 7 days
+- [ ] 4.5+ star rating for learning features
+
+### 8.6 Integration Testing & QA (Week 6)
+
+#### End-to-End Testing (3 days)
+- [ ] **Cross-module testing**: Test all modules working together
+- [ ] **User journey testing**: Test complete user workflows
+- [ ] **Error handling testing**: Test error scenarios and recovery
+- [ ] **Rate limiting testing**: Test API rate limits and quotas
+- [ ] **Security testing**: Test authentication and authorization
+- [ ] **Performance testing**: Load test with 100 concurrent users
+
+#### Performance & Optimization (2 days)
+- [ ] **Response time optimization**: Ensure <500ms for 95% of requests
+- [ ] **Caching effectiveness**: Test cache hit rates and performance
+- [ ] **Database optimization**: Optimize queries and indexes
+- [ ] **API cost monitoring**: Monitor external API usage and costs
+- [ ] **Resource utilization**: Monitor memory and CPU usage
+
+### 8.7 Documentation & Deployment (Week 7)
+
+#### API Documentation (2 days)
+- [ ] **OpenAPI specifications**: Document all new endpoints
+- [ ] **Swagger UI update**: Update interactive documentation
+- [ ] **Usage examples**: Add code examples for each endpoint
+- [ ] **Rate limits documentation**: Document quotas and limits
+- [ ] **Error codes documentation**: Document all error responses
+
+#### Production Deployment (3 days)
+- [ ] **Environment configuration**: Set up production environment variables
+- [ ] **Edge Functions deployment**: Deploy all modules to Supabase
+- [ ] **Database migrations**: Run migrations in production
+- [ ] **Monitoring setup**: Set up error tracking and performance monitoring
+- [ ] **Health checks**: Implement comprehensive health monitoring
+- [ ] **Load testing**: Stress test production deployment
+- [ ] **Rollback procedures**: Prepare rollback procedures
+- [ ] **Launch verification**: Verify all systems working in production
+
+---
+
+## 🎯 IMPLEMENTATION TIMELINE
+
+### ✅ Week 1: Planning & Architecture (COMPLETED)
+- [x] Technology analysis and user stories definition
+- [x] Database schema design and API endpoint mapping
+- [x] External API research and cost analysis
+
+### ✅ Week 2: Database Foundation (COMPLETED)
+- [x] **Planning completed**: Database schema design finalized
+- [x] **Migration 001**: youtube_videos table with RLS ✅ COMPLETED
+- [x] **Migration 002**: video_transcripts table with relationships ✅ COMPLETED  
+- [x] **Migration 003**: user_video_history table for progress tracking ✅ COMPLETED
+- [x] **Migration 004**: ai_translations table for caching ✅ COMPLETED
+- [x] **Migration 005**: video_summaries table for AI content ✅ COMPLETED
+- [x] **Migration 006**: vocabulary_entries table for learning ✅ COMPLETED
+- [x] **Migration 007**: learning_sessions table for analytics ✅ COMPLETED
+- [x] **Migration 008**: video_notes table for note-taking ✅ COMPLETED
+- [x] **RLS Policies**: Comprehensive verification script created ✅ COMPLETED
+- [x] **Test Data**: Extended seed-dev-data.mjs with YouTube data ✅ COMPLETED
+- **✅ Week 2 Status**: FULLY COMPLETED - All database foundations ready!
+
+### Week 3: YouTube Integration (Module 7)
+- [ ] Implement 3 user stories (US 7.1, 7.2, 7.3)
+- [ ] Create 4 API endpoints
+- [ ] Integrate YouTube Data API and Transcript API
+- **Deliverables**: Working YouTube integration with caching and error handling
+
+### Week 4: AI Processing (Module 8)
+- [ ] Implement 3 user stories (US 8.1, 8.2, 8.3)
+- [ ] Create 3 AI-powered API endpoints
+- [ ] Integrate Google Translate and OpenAI APIs
+- **Deliverables**: AI translation, summarization, and content analysis
+
+### Week 5: Learning Analytics (Module 9)
+- [ ] Implement 4 user stories (US 9.1, 9.2, 9.3, 9.4)
+- [ ] Create 8+ learning-focused API endpoints
+- [ ] Build analytics and recommendation engine
+- **Deliverables**: Complete learning management system
+
+### Week 6: Integration Testing & QA
+- [ ] End-to-end testing of all modules
+- [ ] Performance optimization and load testing
+- [ ] Security testing and vulnerability assessment
+- **Deliverables**: Production-ready backend with 95% test coverage
+
+### Week 7: Documentation & Deployment
+- [ ] Complete API documentation
+- [ ] Production deployment and monitoring setup
+- [ ] Launch verification and rollback procedures
+- **Deliverables**: Deployed backend with comprehensive monitoring
+
+---
+
+## 📊 SUCCESS METRICS
+
+### Technical Metrics
+- **Response Time**: <500ms for 95% of requests
+- **Availability**: 99.9% uptime
+- **Error Rate**: <1% of requests
+- **Test Coverage**: >95% for all new modules
+
+### Business Metrics
+- **Development Time**: 7 weeks vs 12-16 weeks for ground-up build
+- **Infrastructure Cost**: $90-105/month vs $200-400/month for dedicated servers
+- **User Experience**: <3s AI responses, >90% translation accuracy
+
+### User Story Completion
+- **14 User Stories** across 3 modules
+- **15+ API Endpoints** fully implemented
+- **8 Database Tables** with proper security
+- **3 External API Integrations** optimized for cost
+
+---
+
+## 🚀 NEXT IMMEDIATE ACTION
+
+### **START Week 2: Database Schema Extensions**
+
+**Priority Tasks This Week:**
+1. **[ ] Create youtube_videos table** - Foundation for all video operations
+2. **[ ] Create video_transcripts table** - Store transcript data
+3. **[ ] Create vocabulary_entries table** - Core learning functionality
+4. **[ ] Set up RLS policies** - Security-first approach
+5. **[ ] Write migration scripts** - Proper database versioning
+
+**Success Criteria for Week 2:**
+- [ ] All 8 database tables created and tested
+- [ ] RLS policies implemented and verified
+- [ ] Migration scripts tested in local environment
+- [ ] Test data seeding extended for YouTube features
+
+---
+
+**🎯 LAYER 8 SCOPE SUMMARY:**
+- **14 User Stories** across 3 specialized modules
+- **15+ API Endpoints** for complete YouTube learning functionality
+- **8 Database Tables** with enterprise-grade security
+- **3 External API Integrations** cost-optimized
+- **7-week Timeline** leveraging existing Lean SaaS foundation
+- **$90-105/month** total operating costs for 1000 users
+
+**🚀 READY TO PROCEED: Week 2 Database Implementation**
