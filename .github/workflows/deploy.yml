@@ -1,0 +1,305 @@
+# Production deployment with staging, rollback, and monitoring
+
+name: 🚀 Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: 'Skip tests (emergency deployment)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ inputs.environment || 'production' }}
+  cancel-in-progress: false # Don't cancel production deployments
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+  DEPLOYMENT_ENV: ${{ inputs.environment || 'production' }}
+
+jobs:
+  # ============================================================================
+  # PRE-DEPLOYMENT CHECKS
+  # ============================================================================
+  pre-deployment:
+    name: 🔍 Pre-deployment Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      should-deploy: ${{ steps.checks.outputs.should-deploy }}
+      deployment-env: ${{ steps.checks.outputs.deployment-env }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: 📋 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Run pre-deployment checks
+        id: checks
+        run: |
+          echo "🔍 Running pre-deployment checks..."
+          
+          # Check if this is a valid deployment
+          SHOULD_DEPLOY="true"
+          DEPLOYMENT_ENV="${{ env.DEPLOYMENT_ENV }}"
+          
+          # Skip tests check
+          if [[ "${{ inputs.skip_tests }}" == "true" ]]; then
+            echo "⚠️  WARNING: Skipping tests as requested"
+            echo "🚨 This is an emergency deployment"
+          else
+            echo "✅ Tests will be run before deployment"
+          fi
+          
+          # Environment validation
+          if [[ "$DEPLOYMENT_ENV" == "production" ]]; then
+            echo "🎯 Deploying to PRODUCTION environment"
+            echo "🔐 Checking production secrets..."
+            
+            if [[ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]]; then
+              echo "❌ Missing SUPABASE_ACCESS_TOKEN secret"
+              SHOULD_DEPLOY="false"
+            fi
+            
+            if [[ -z "${{ secrets.SUPABASE_PROJECT_ID }}" ]]; then
+              echo "❌ Missing SUPABASE_PROJECT_ID secret"
+              SHOULD_DEPLOY="false"
+            fi
+          else
+            echo "🧪 Deploying to STAGING environment"
+          fi
+          
+          # Set outputs
+          echo "should-deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+          echo "deployment-env=$DEPLOYMENT_ENV" >> $GITHUB_OUTPUT
+          
+          if [[ "$SHOULD_DEPLOY" == "false" ]]; then
+            echo "❌ Pre-deployment checks failed"
+            exit 1
+          fi
+          
+          echo "✅ Pre-deployment checks passed"
+
+  # ============================================================================
+  # QUICK VALIDATION (IF NOT SKIPPING TESTS)
+  # ============================================================================
+  quick-validation:
+    name: 🧪 Quick Validation
+    runs-on: ubuntu-latest
+    needs: pre-deployment
+    if: needs.pre-deployment.outputs.should-deploy == 'true' && inputs.skip_tests != true
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: 📋 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Quick lint check
+        run: pnpm lint
+
+      - name: 🏗️ Build verification
+        run: pnpm build:backend
+
+      - name: 🧪 Quick unit tests
+        run: pnpm test:unit --run
+
+  # ============================================================================
+  # BACKEND DEPLOYMENT
+  # ============================================================================
+  deploy-backend:
+    name: 🚀 Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, quick-validation]
+    if: always() && needs.pre-deployment.outputs.should-deploy == 'true' && (needs.quick-validation.result == 'success' || needs.quick-validation.result == 'skipped')
+    timeout-minutes: 20
+    environment: 
+      name: ${{ needs.pre-deployment.outputs.deployment-env }}
+      url: ${{ steps.deploy.outputs.api-url }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: 📋 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔧 Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: 🔗 Link Supabase project
+        run: |
+          echo "🔗 Linking to Supabase project..."
+          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: 🏗️ Build backend modules
+        run: |
+          echo "🏗️ Building backend modules..."
+          pnpm build:backend
+
+      - name: 📄 Generate API documentation
+        run: pnpm docs:generate
+
+      - name: 🗄️ Deploy database migrations
+        run: |
+          echo "🗄️ Deploying database migrations..."
+          supabase db push --include-all
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: ⚡ Deploy Edge Functions
+        id: deploy
+        run: |
+          echo "⚡ Deploying Edge Functions..."
+          supabase functions deploy --no-verify-jwt
+          
+          # Set API URL output
+          API_URL="https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co"
+          echo "api-url=$API_URL" >> $GITHUB_OUTPUT
+          echo "🌐 API URL: $API_URL"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: 🔍 Post-deployment health check
+        run: |
+          echo "🔍 Running post-deployment health check..."
+          sleep 30  # Wait for deployment to be ready
+          
+          API_URL="https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co"
+          HEALTH_URL="$API_URL/functions/v1/core_health-check"
+          
+          echo "🌐 Checking: $HEALTH_URL"
+          
+          # Retry health check up to 3 times
+          for i in {1..3}; do
+            if curl -f -s "$HEALTH_URL" > /dev/null; then
+              echo "✅ Health check passed (attempt $i)"
+              break
+            else
+              echo "❌ Health check failed (attempt $i)"
+              if [[ $i -eq 3 ]]; then
+                echo "🚨 Health check failed after 3 attempts"
+                exit 1
+              fi
+              sleep 10
+            fi
+          done
+
+      - name: 📊 Deployment summary
+        run: |
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.pre-deployment.outputs.deployment-env }}" >> $GITHUB_STEP_SUMMARY
+          echo "**API URL:** https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Time:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Deployment Steps Completed:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Database migrations deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Edge Functions deployed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ API documentation generated" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Health check passed" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # POST-DEPLOYMENT MONITORING
+  # ============================================================================
+  post-deployment:
+    name: 📊 Post-deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-backend]
+    if: always() && needs.deploy-backend.result == 'success'
+    timeout-minutes: 10
+
+    steps:
+      - name: 🔍 Extended health monitoring
+        run: |
+          echo "🔍 Running extended health monitoring..."
+          API_URL="https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co"
+          
+          # Test core endpoints
+          ENDPOINTS=(
+            "/functions/v1/core_health-check"
+            "/functions/v1/core_version"
+            "/functions/v1/core_metrics"
+          )
+          
+          for endpoint in "${ENDPOINTS[@]}"; do
+            echo "Testing: $API_URL$endpoint"
+            if curl -f -s "$API_URL$endpoint" > /dev/null; then
+              echo "✅ $endpoint - OK"
+            else
+              echo "❌ $endpoint - FAILED"
+            fi
+          done
+
+      - name: 🚨 Notify deployment
+        if: always()
+        run: |
+          if [[ "${{ needs.deploy-backend.result }}" == "success" ]]; then
+            echo "✅ Deployment successful to ${{ needs.pre-deployment.outputs.deployment-env }}"
+            echo "🌐 API URL: https://${{ secrets.SUPABASE_PROJECT_ID }}.supabase.co"
+          else
+            echo "❌ Deployment failed"
+            echo "🚨 Please check logs and consider rollback if necessary"
+          fi

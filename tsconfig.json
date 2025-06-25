@@ -1,0 +1,181 @@
+// tsconfig.json - FIXED: Project references and exclude patterns
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext",
+      "webworker"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "baseUrl": ".",
+    "paths": {
+      // Main source paths
+      "@/*": [
+        "./src/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ],
+      "@modules/*": [
+        "./src/modules/*"
+      ],
+      // Package paths with correct scoped names
+      "@lean-saas/db-types/*": [
+        "./packages/db-types/*"
+      ],
+      "@lean-saas/ui/*": [
+        "./packages/ui/*"
+      ],
+      "@lean-saas/config/*": [
+        "./packages/config/*"
+      ],
+      // Legacy short names for backward compatibility
+      "@db-types/*": [
+        "./packages/db-types/*"
+      ],
+      "@ui/*": [
+        "./packages/ui/*"
+      ],
+      "@config/*": [
+        "./packages/config/*"
+      ],
+      // Shared utility paths (more specific)
+      "@utils/*": [
+        "./src/shared/utils/*"
+      ],
+      "@types/*": [
+        "./src/shared/types/*"
+      ],
+      "@constants/*": [
+        "./src/shared/constants/*"
+      ],
+      "@tests/*": [
+        "./src/shared/tests/*"
+      ],
+      // Convenience paths for frequently used utilities (with fallback)
+      "@/config": [
+        "./src/shared/config/index",
+        "./src/shared/config"
+      ],
+      "@/environment": [
+        "./src/shared/config/environment"
+      ],
+      "@/auth": [
+        "./src/shared/utils/auth"
+      ],
+      "@/validation": [
+        "./src/shared/utils/validation"
+      ],
+      "@/errors": [
+        "./src/shared/utils/errors"
+      ],
+      "@/logging": [
+        "./src/shared/utils/logging"
+      ],
+      "@/cache": [
+        "./src/shared/utils/cache"
+      ],
+      "@/security": [
+        "./src/shared/utils/security"
+      ],
+      "@/rate-limiting": [
+        "./src/shared/utils/rate-limiting"
+      ],
+      // Database types convenience path
+      "@/db-types": [
+        "./packages/db-types"
+      ],
+      "@/db": [
+        "./packages/db-types"
+      ]
+    },
+    "types": [
+      "vitest/globals"
+    ],
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "verbatimModuleSyntax": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "removeComments": false,
+    "importsNotUsedAsValues": "remove",
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "exactOptionalPropertyTypes": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "checkJs": false
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.jsx",
+    ".next/types/**/*.ts",
+    "src/**/*",
+    "packages/**/*",
+    "apps/**/*",
+    "scripts/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    ".turbo",
+    "coverage",
+    "test-results",
+    "docs/generated",
+    "supabase/_internal",
+    "packages/db-types/index.ts",
+    // ADDED: Exclude generated/built files to fix TS6305 errors
+    "**/*.d.ts",
+    "**/dist/**/*",
+    "**/build/**/*",
+    "**/.next/**/*",
+    "apps/web/app/*.d.ts",
+    "apps/web/lib/*.d.ts",
+    "packages/ui/dist/**/*"
+  ],
+  "references": [
+    {
+      "path": "./apps/web/tsconfig.json"
+    },
+    {
+      "path": "./packages/ui/tsconfig.json"
+    },
+    {
+      "path": "./packages/config/tsconfig.json"
+    },
+    {
+      "path": "./packages/db-types/tsconfig.json"
+    }
+  ],
+  "ts-node": {
+    "esm": true,
+    "experimentalSpecifierResolution": "node"
+  }
+}

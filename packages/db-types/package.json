@@ -1,0 +1,54 @@
+{
+  "name": "@lean-saas/db-types",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generated database types for Lean SaaS Starter",
+  "main": "./index.ts",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.ts"
+    }
+  },
+  "files": [
+    "index.ts",
+    "index.d.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "test -f index.ts && eslint \"*.{ts,js}\" || echo 'No files to lint'",
+    "lint:fix": "test -f index.ts && eslint \"*.{ts,js}\" --fix || echo 'No files to lint'",
+    "typecheck": "test -f index.ts && tsc --noEmit || echo 'No files to typecheck'",
+    "build": "echo 'DB types are generated automatically'",
+    "clean": "rimraf index.ts *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.54.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/lean-saas-starter.git",
+    "directory": "packages/db-types"
+  },
+  "keywords": [
+    "database",
+    "types",
+    "typescript",
+    "supabase"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

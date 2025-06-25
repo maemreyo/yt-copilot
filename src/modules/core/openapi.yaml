@@ -1,0 +1,1069 @@
+openapi: 3.0.0
+info:
+  title: Core Module API
+  version: 1.0.0
+  description: Core API endpoints for health checks, version information, and error reporting
+paths:
+  /v1/health:
+    get:
+      summary: Health check
+      description: Checks the health of all services
+      tags:
+        - Core
+      responses:
+        '200':
+          description: Health check successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, degraded, error]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                  environment:
+                    type: string
+                  services:
+                    type: object
+                    properties:
+                      database:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [ok, error]
+                          latency:
+                            type: number
+                      auth:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [ok, error]
+                      storage:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                            enum: [ok, error]
+        '500':
+          description: Health check failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  
+  /v1/version:
+    get:
+      summary: Version information
+      description: Gets the version information for the API
+      tags:
+        - Core
+      parameters:
+        - in: query
+          name: minimal
+          schema:
+            type: boolean
+          description: Return minimal version information
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  buildNumber:
+                    type: string
+                  buildDate:
+                    type: string
+                    format: date-time
+                  environment:
+                    type: string
+                  commit:
+                    type: string
+                  api:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                  _meta:
+                    type: object
+                    properties:
+                      timestamp:
+                        type: string
+                        format: date-time
+                      requestId:
+                        type: string
+                      responseTime:
+                        type: number
+
+  /v1/error-reporting/report:
+    post:
+      summary: Submit error report
+      description: Submit an error report for centralized logging and tracking
+      tags:
+        - Error Reporting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorReport'
+      responses:
+        '201':
+          description: Error report processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  fingerprint:
+                    type: string
+                    description: Unique identifier for grouping similar errors
+                    example: "abc123def456"
+                  message:
+                    type: string
+                    example: "Error report processed successfully"
+                  timestamp:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid error report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '500':
+          description: Failed to process error report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/error-reporting/stats:
+    get:
+      summary: Get error statistics
+      description: Retrieve error statistics for a given time range
+      tags:
+        - Error Reporting
+      parameters:
+        - in: query
+          name: start
+          schema:
+            type: string
+            format: date-time
+          description: Start time for statistics (defaults to 24 hours ago)
+        - in: query
+          name: end
+          schema:
+            type: string
+            format: date-time
+          description: End time for statistics (defaults to now)
+        - in: query
+          name: module
+          schema:
+            type: string
+          description: Filter statistics by module
+      responses:
+        '200':
+          description: Error statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats:
+                    $ref: '#/components/schemas/ErrorStats'
+                  timestamp:
+                    type: string
+                    format: date-time
+        '500':
+          description: Failed to get error statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/metrics:
+    get:
+      summary: Get application metrics
+      description: Retrieve comprehensive application metrics including system, database, cache, error, and API usage metrics
+      tags:
+        - Core
+      parameters:
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [json, prometheus]
+            default: json
+          description: Output format for metrics data
+      responses:
+        '200':
+          description: Application metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+            text/plain:
+              schema:
+                type: string
+                description: Prometheus format metrics
+              example: |
+                # HELP system_uptime_milliseconds System uptime in milliseconds
+                # TYPE system_uptime_milliseconds counter
+                system_uptime_milliseconds 120000
+                # HELP system_memory_usage_bytes Memory usage in bytes
+                # TYPE system_memory_usage_bytes gauge
+                system_memory_usage_bytes 52428800
+          headers:
+            X-Metrics-Collection-Time:
+              schema:
+                type: string
+              description: Timestamp when metrics were collected
+            X-Health-Score:
+              schema:
+                type: string
+              description: Overall health score (0-100)
+        '500':
+          description: Failed to collect metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Get aggregated errors
+      description: Retrieve aggregated error data grouped by fingerprint
+      tags:
+        - Error Reporting
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Number of aggregated errors to return
+        - in: query
+          name: module
+          schema:
+            type: string
+          description: Filter aggregated errors by module
+      responses:
+        '200':
+          description: Aggregated error data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  aggregated:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ErrorAggregation'
+                  count:
+                    type: integer
+                    description: Number of aggregated errors returned
+                  timestamp:
+                    type: string
+                    format: date-time
+        '500':
+          description: Failed to get aggregated errors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/configuration:
+    get:
+      summary: Get runtime configuration
+      description: |
+        Retrieve runtime configuration and environment variables (development only).
+        This endpoint is restricted to development environment for security.
+      tags:
+        - Core
+      responses:
+        '200':
+          description: Runtime configuration (development only)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationResponse'
+          headers:
+            X-Environment:
+              schema:
+                type: string
+              description: Current environment
+            X-Config-Version:
+              schema:
+                type: string
+              description: Application version
+            X-Warning-Count:
+              schema:
+                type: string
+              description: Number of configuration warnings
+        '403':
+          description: Access denied - endpoint only available in development
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: "ACCESS_DENIED"
+                      message:
+                        type: string
+                        example: "Configuration endpoint is only available in development environment"
+                      environment:
+                        type: string
+                        example: "production"
+                  timestamp:
+                    type: string
+                    format: date-time
+        '500':
+          description: Failed to generate configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+            stack:
+              type: string
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Invalid error report"
+            details:
+              type: array
+              items:
+                type: string
+              example: ["message is required and must be a string"]
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorReport:
+      type: object
+      required:
+        - message
+        - module
+      properties:
+        # Error details
+        message:
+          type: string
+          maxLength: 1000
+          description: Error message
+          example: "Database connection failed"
+        errorCode:
+          type: string
+          description: Error code identifier
+          example: "DB_CONN_ERROR"
+        stack:
+          type: string
+          description: Error stack trace
+        
+        # Context information
+        url:
+          type: string
+          format: uri
+          description: URL where error occurred
+        userAgent:
+          type: string
+          maxLength: 500
+          description: User agent string
+        userId:
+          type: string
+          format: uuid
+          description: User ID if authenticated
+        sessionId:
+          type: string
+          description: Session identifier
+        
+        # Application context
+        module:
+          type: string
+          maxLength: 50
+          description: Module where error occurred
+          example: "database"
+        function:
+          type: string
+          maxLength: 100
+          description: Function where error occurred
+          example: "connectToDatabase"
+        version:
+          type: string
+          description: Application version
+          example: "1.0.0"
+        environment:
+          type: string
+          enum: [development, test, production]
+          description: Environment where error occurred
+        
+        # Error metadata
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          default: medium
+          description: Error severity level
+        category:
+          type: string
+          enum: [frontend, backend, api, database, network, security, performance]
+          default: backend
+          description: Error category
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+          description: Error tags for categorization
+          example: ["database", "connection", "timeout"]
+        
+        # Additional data
+        additionalData:
+          type: object
+          description: Additional context data
+          example:
+            requestId: "req_123"
+            queryTime: 5000
+        fingerprint:
+          type: string
+          description: Custom fingerprint for grouping errors
+          example: "custom-error-group-123"
+        
+        # Client information
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error occurred
+        browserInfo:
+          type: object
+          properties:
+            name:
+              type: string
+              example: "Chrome"
+            version:
+              type: string
+              example: "91.0.4472.124"
+            platform:
+              type: string
+              example: "Windows"
+
+    ErrorStats:
+      type: object
+      properties:
+        totalErrors:
+          type: integer
+          description: Total number of errors in time range
+          example: 42
+        errorsByModule:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Error count grouped by module
+          example:
+            database: 15
+            auth: 10
+            billing: 17
+        errorsBySeverity:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Error count grouped by severity
+          example:
+            low: 5
+            medium: 20
+            high: 15
+            critical: 2
+        errorsByCategory:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Error count grouped by category
+          example:
+            backend: 25
+            frontend: 10
+            database: 7
+        timeRange:
+          type: object
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+
+    MetricsResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: When metrics were collected
+        system:
+          $ref: '#/components/schemas/SystemMetrics'
+        database:
+          $ref: '#/components/schemas/DatabaseMetrics'
+        cache:
+          $ref: '#/components/schemas/CacheMetrics'
+        errors:
+          $ref: '#/components/schemas/ErrorMetricsData'
+        api:
+          $ref: '#/components/schemas/ApiUsageMetrics'
+        health:
+          $ref: '#/components/schemas/HealthAssessment'
+
+    SystemMetrics:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        uptime:
+          type: integer
+          description: System uptime in milliseconds
+          example: 120000
+        memory:
+          type: object
+          properties:
+            used:
+              type: integer
+              description: Used memory in bytes
+              example: 52428800
+            total:
+              type: integer
+              description: Total memory in bytes
+              example: 134217728
+            percentage:
+              type: integer
+              description: Memory usage percentage
+              example: 39
+        performance:
+          type: object
+          properties:
+            responseTime:
+              type: integer
+              description: Current response time in milliseconds
+              example: 150
+            requestCount:
+              type: integer
+              description: Total requests processed
+              example: 42
+            averageResponseTime:
+              type: integer
+              description: Average response time in milliseconds
+              example: 120
+
+    DatabaseMetrics:
+      type: object
+      properties:
+        connectionHealth:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [healthy, unhealthy]
+            latency:
+              type: integer
+              description: Database connection latency in milliseconds
+              example: 25
+            connectionPool:
+              type: object
+              properties:
+                active:
+                  type: integer
+                  description: Active connections
+                  example: 3
+                idle:
+                  type: integer
+                  description: Idle connections
+                  example: 2
+                total:
+                  type: integer
+                  description: Total connections
+                  example: 5
+        queryPerformance:
+          type: object
+          properties:
+            averageQueryTime:
+              type: integer
+              description: Average query time in milliseconds
+              example: 45
+            slowQueries:
+              type: integer
+              description: Number of slow queries
+              example: 2
+            totalQueries:
+              type: integer
+              description: Total queries executed
+              example: 100
+        tables:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                example: "profiles"
+              rowCount:
+                type: integer
+                example: 150
+              size:
+                type: string
+                example: "2.5MB"
+
+    CacheMetrics:
+      type: object
+      properties:
+        stores:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              hitRate:
+                type: number
+                minimum: 0
+                maximum: 1
+                description: Cache hit rate (0-1)
+                example: 0.75
+              totalHits:
+                type: integer
+                description: Total cache hits
+                example: 30
+              totalRequests:
+                type: integer
+                description: Total cache requests
+                example: 40
+              size:
+                type: integer
+                description: Number of cached items
+                example: 150
+              memoryUsage:
+                type: integer
+                description: Memory usage in bytes
+                example: 2097152
+        global:
+          type: object
+          properties:
+            totalHitRate:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Overall cache hit rate
+              example: 0.72
+            totalCaches:
+              type: integer
+              description: Number of cache stores
+              example: 2
+            totalMemoryUsage:
+              type: integer
+              description: Total memory usage across all caches
+              example: 3145728
+
+    ErrorMetricsData:
+      type: object
+      properties:
+        rates:
+          type: object
+          properties:
+            last24h:
+              type: integer
+              description: Errors in last 24 hours
+              example: 15
+            last1h:
+              type: integer
+              description: Errors in last hour
+              example: 3
+            last15m:
+              type: integer
+              description: Errors in last 15 minutes
+              example: 1
+        byModule:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Error counts by module
+          example:
+            database: 5
+            auth: 3
+            billing: 7
+        bySeverity:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Error counts by severity
+          example:
+            low: 8
+            medium: 5
+            high: 2
+            critical: 0
+        topErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              fingerprint:
+                type: string
+                example: "db_connection_error_123"
+              message:
+                type: string
+                example: "Database connection failed"
+              count:
+                type: integer
+                example: 5
+              module:
+                type: string
+                example: "database"
+              severity:
+                type: string
+                enum: [low, medium, high, critical]
+                example: "high"
+
+    ApiUsageMetrics:
+      type: object
+      properties:
+        endpoints:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              requests:
+                type: integer
+                description: Number of requests to endpoint
+                example: 25
+              averageResponseTime:
+                type: integer
+                description: Average response time in milliseconds
+                example: 150
+              errorRate:
+                type: number
+                minimum: 0
+                maximum: 1
+                description: Error rate for endpoint (0-1)
+                example: 0.02
+              lastAccessed:
+                type: string
+                format: date-time
+                description: When endpoint was last accessed
+        authentication:
+          type: object
+          properties:
+            jwtRequests:
+              type: integer
+              description: Requests authenticated with JWT
+              example: 30
+            apiKeyRequests:
+              type: integer
+              description: Requests authenticated with API key
+              example: 15
+            publicRequests:
+              type: integer
+              description: Public requests (no authentication)
+              example: 5
+            failedAuthentications:
+              type: integer
+              description: Failed authentication attempts
+              example: 2
+        rateLimiting:
+          type: object
+          properties:
+            totalLimited:
+              type: integer
+              description: Total requests that hit rate limits
+              example: 3
+            limitsByEndpoint:
+              type: object
+              additionalProperties:
+                type: integer
+              description: Rate limit hits by endpoint
+              example:
+                "/v1/api-keys/create": 2
+                "/v1/error-reporting/report": 1
+            averageRequestRate:
+              type: number
+              description: Average requests per minute
+              example: 12.5
+
+    ConfigurationResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: When configuration was generated
+        environment:
+          type: string
+          enum: [development, test, production]
+          description: Current environment
+        version:
+          type: string
+          description: Application version
+          example: "1.0.0"
+        accessLevel:
+          type: string
+          enum: [development, production]
+          description: Access level for configuration
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigSection'
+          description: Configuration sections
+        featureFlags:
+          $ref: '#/components/schemas/FeatureFlags'
+        runtime:
+          $ref: '#/components/schemas/RuntimeInfo'
+        warnings:
+          type: array
+          items:
+            type: string
+          description: Configuration warnings
+          example:
+            - "SENTRY_DSN not configured for production error tracking"
+            - "STRIPE_PRICE_ID not configured for subscription billing"
+        _meta:
+          type: object
+          properties:
+            generatedAt:
+              type: string
+              format: date-time
+            requestId:
+              type: string
+              format: uuid
+            note:
+              type: string
+              example: "This endpoint is only available in development environment"
+
+    ConfigSection:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Section name
+          example: "Application"
+        description:
+          type: string
+          description: Section description
+          example: "Core application settings"
+        variables:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ConfigVariable'
+          description: Configuration variables in this section
+
+    ConfigVariable:
+      type: object
+      properties:
+        value:
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+          description: Variable value (may be masked if sensitive)
+          example: "development"
+        type:
+          type: string
+          enum: [string, number, boolean, url, email]
+          description: Variable data type
+        sensitive:
+          type: boolean
+          description: Whether variable contains sensitive data
+          example: false
+        source:
+          type: string
+          enum: [environment, default, computed]
+          description: Source of the variable value
+        description:
+          type: string
+          description: Variable description
+          example: "Current environment mode"
+
+    FeatureFlags:
+      type: object
+      properties:
+        development:
+          type: object
+          properties:
+            debugMode:
+              type: boolean
+              description: Debug mode enabled
+            hotReload:
+              type: boolean
+              description: Hot reload enabled
+            mockServices:
+              type: boolean
+              description: Mock services enabled
+            seedData:
+              type: boolean
+              description: Seed data available
+        features:
+          type: object
+          properties:
+            metricsEnabled:
+              type: boolean
+              description: Metrics collection enabled
+            analyticsEnabled:
+              type: boolean
+              description: Analytics tracking enabled
+            cacheEnabled:
+              type: boolean
+              description: Caching system enabled
+            rateLimitingEnabled:
+              type: boolean
+              description: Rate limiting enabled
+            errorReporting:
+              type: boolean
+              description: Error reporting enabled
+        experiments:
+          type: object
+          properties:
+            newAuthFlow:
+              type: boolean
+              description: New authentication flow experiment
+            enhancedMetrics:
+              type: boolean
+              description: Enhanced metrics experiment
+            betaFeatures:
+              type: boolean
+              description: Beta features enabled
+
+    RuntimeInfo:
+      type: object
+      properties:
+        uptime:
+          type: integer
+          description: System uptime in milliseconds
+          example: 120000
+        nodeVersion:
+          type: string
+          description: Node.js/Deno version
+          example: "1.40.0"
+        platform:
+          type: string
+          description: Operating system platform
+          example: "linux"
+        region:
+          type: string
+          description: Deployment region
+          example: "us-east-1"
+        buildInfo:
+          type: object
+          properties:
+            number:
+              type: string
+              description: Build number
+              example: "123"
+            date:
+              type: string
+              description: Build date
+              example: "2024-01-15"
+            commit:
+              type: string
+              description: Git commit hash (short)
+              example: "abc123de"
+            branch:
+              type: string
+              description: Git branch
+              example: "main"
+
+    HealthAssessment:
+      type: object
+      properties:
+        overallStatus:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          description: Overall system health status
+          example: "healthy"
+        services:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [up, down, degraded]
+          description: Status of individual services
+          example:
+            database: "up"
+            cache: "up"
+            errors: "up"
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Overall health score (0-100)
+          example: 85
+
+    ErrorAggregation:
+      type: object
+      properties:
+        fingerprint:
+          type: string
+          description: Unique fingerprint for grouping
+          example: "abc123def456"
+        count:
+          type: integer
+          description: Number of occurrences
+          example: 5
+        firstSeen:
+          type: string
+          format: date-time
+          description: When this error was first seen
+        lastSeen:
+          type: string
+          format: date-time
+          description: When this error was last seen
+        message:
+          type: string
+          description: Error message
+          example: "Database connection failed"
+        module:
+          type: string
+          description: Module where error occurred
+          example: "database"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: Error severity
+        category:
+          type: string
+          enum: [frontend, backend, api, database, network, security, performance]
+          description: Error category

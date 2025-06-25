@@ -1,0 +1,58 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "rootDir": "./",
+    "noEmit": false,
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ],
+      "@lean-saas/ui/*": [
+        "../../packages/ui/*"
+      ],
+      "@lean-saas/config/*": [
+        "../../packages/config/*"
+      ],
+      "@lean-saas/db-types/*": [
+        "../../packages/db-types/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".next",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ],
+  "references": [
+    {
+      "path": "../../packages/ui/tsconfig.json"
+    },
+    {
+      "path": "../../packages/config/tsconfig.json"
+    },
+    {
+      "path": "../../packages/db-types/tsconfig.json"
+    }
+  ]
+}

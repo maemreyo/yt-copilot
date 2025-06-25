@@ -1,0 +1,58 @@
+{
+    "zencoder.enableRepoIndexing": true,
+    "typescript.suggest.autoImports": false,
+    "typescript.validate.enable": false,
+    "typescript.preferences.quoteStyle": "single",
+    // Deno configuration for Supabase Edge Functions
+    "deno.enable": false,
+    "deno.enablePaths": [
+        "./supabase/functions",
+        "./supabase/_internal/functions"
+    ],
+    "deno.config": "./deno.json",
+    "deno.importMap": "./import_map.json",
+    "deno.lint": true,
+    "deno.unstable": false,
+    // File associations
+    "[typescript]": {
+        "editor.defaultFormatter": "denoland.vscode-deno",
+        "editor.formatOnSave": true
+    },
+    // Disable TypeScript for Deno files
+    "typescript.preferences.includePackageJsonAutoImports": "off",
+    // Configure file associations for Supabase functions
+    "files.associations": {
+        "**/supabase/**/*.ts": "typescript",
+        "**/supabase/**/*.js": "javascript"
+    },
+    // Search exclusions
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/.next": true,
+        "**/.turbo": true,
+        "**/supabase/_internal": true
+    },
+    // File watcher exclusions
+    "files.watcherExclude": {
+        "**/node_modules/**": true,
+        "**/dist/**": true,
+        "**/build/**": true,
+        "**/.next/**": true,
+        "**/.turbo/**": true,
+        "**/supabase/_internal/**": true
+    },
+    // Editor config
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    // Extensions
+    "recommendations": [
+        "denoland.vscode-deno",
+        "supabase.supabase",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode"
+    ]
+}

@@ -1,0 +1,80 @@
+{
+  "name": "@lean-saas/ui",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared UI components for Lean SaaS Starter",
+  "main": "./index.ts",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.ts"
+    },
+    "./components": {
+      "types": "./components/index.d.ts",
+      "default": "./components/index.ts"
+    }
+  },
+  "files": [
+    "*.ts",
+    "*.d.ts",
+    "*.js",
+    "components/",
+    "lib/",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "eslint \"**/*.{ts,tsx,js,jsx}\" --ignore-pattern dist",
+    "lint:fix": "eslint \"**/*.{ts,tsx,js,jsx}\" --ignore-pattern dist --fix",
+    "typecheck": "tsc --noEmit",
+    "build": "echo 'UI package uses TypeScript files directly'",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-toast": "^1.1.5",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
+    "lucide-react": "^0.294.0",
+    "tailwind-merge": "^2.0.0",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.38",
+    "@types/react-dom": "^18.2.15",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.54.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.2"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/lean-saas-starter.git",
+    "directory": "packages/ui"
+  },
+  "keywords": [
+    "ui",
+    "components",
+    "react",
+    "typescript",
+    "radix-ui",
+    "tailwindcss"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

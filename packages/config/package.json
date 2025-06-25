@@ -1,0 +1,71 @@
+{
+  "name": "@lean-saas/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared configuration utilities for Lean SaaS Starter",
+  "main": "./index.ts",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.ts"
+    },
+    "./api": {
+      "types": "./api.d.ts",
+      "default": "./api.ts"
+    },
+    "./environment": {
+      "types": "./environment.d.ts",
+      "default": "./environment.ts"
+    },
+    "./billing": {
+      "types": "./billing.d.ts",
+      "default": "./billing.ts"
+    }
+  },
+  "files": [
+    "*.ts",
+    "*.d.ts",
+    "*.js",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "eslint \"**/*.{ts,js}\" --ignore-pattern dist",
+    "lint:fix": "eslint \"**/*.{ts,js}\" --ignore-pattern dist --fix",
+    "typecheck": "tsc --noEmit",
+    "build": "echo 'Config package uses TypeScript files directly'",
+    "clean": "rimraf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "^8.54.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/lean-saas-starter.git",
+    "directory": "packages/config"
+  },
+  "keywords": [
+    "config",
+    "environment",
+    "api",
+    "typescript",
+    "zod"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

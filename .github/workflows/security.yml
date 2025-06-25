@@ -1,0 +1,60 @@
+# Regular security scanning and dependency updates
+
+name: 🛡️ Security Scanning
+
+on:
+  schedule:
+    - cron: '0 2 * * 1' # Weekly on Monday at 2 AM
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+
+jobs:
+  security-audit:
+    name: 🔐 Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: 🏗️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: 📋 Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔍 Run npm audit
+        run: |
+          echo "🔍 Running npm security audit..."
+          pnpm audit --audit-level=moderate --json > audit-results.json || true
+          
+          # Check if there are any high or critical vulnerabilities
+          HIGH_VULNS=$(cat audit-results.json | jq '.advisories | map(select(.severity == "high" or .severity == "critical")) | length')
+          
+          if [[ "$HIGH_VULNS" -gt 0 ]]; then
+            echo "🚨 Found $HIGH_VULNS high/critical vulnerabilities"
+            echo "Running automatic fix..."
+            pnpm audit --fix || true
+          else
+            echo "✅ No high/critical vulnerabilities found"
+          fi
+
+      - name: 🛡️ Upload security scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-results
+          path: audit-results.json
+          retention-days: 30

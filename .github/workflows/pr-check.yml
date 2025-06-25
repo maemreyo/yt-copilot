@@ -1,0 +1,59 @@
+# PR-specific checks and validations
+
+name: 🔍 Pull Request Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-validation:
+    name: 🔍 PR Validation
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    
+    steps:
+      - name: 📥 Checkout PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: 🔍 Validate PR title
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $PR_TITLE"
+          
+          # Check for conventional commit format
+          if [[ ! "$PR_TITLE" =~ ^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .{1,50} ]]; then
+            echo "❌ PR title should follow conventional commit format"
+            echo "Examples: feat: add new feature, fix(auth): resolve login issue"
+            exit 1
+          fi
+          
+          echo "✅ PR title follows conventional commit format"
+
+      - name: 🔍 Check for required files
+        run: |
+          # Check if tests were added for new features
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+          NEW_FUNCTIONS=$(echo "$CHANGED_FILES" | grep -E "src/modules/.*/functions/" | head -5)
+          
+          if [[ -n "$NEW_FUNCTIONS" ]]; then
+            echo "🔍 New functions detected, checking for tests..."
+            echo "$NEW_FUNCTIONS"
+            
+            # Check if corresponding test files exist or were modified
+            TEST_FILES=$(echo "$CHANGED_FILES" | grep -E "src/modules/.*/tests/.*\.test\.ts")
+            
+            if [[ -z "$TEST_FILES" ]]; then
+              echo "⚠️  Warning: New functions added but no test files found"
+              echo "Consider adding integration tests for new functionality"
+            else
+              echo "✅ Test files found"
+            fi
+          fi
