@@ -1,4 +1,3 @@
-// tsconfig.json - FIXED: Project references and exclude patterns
 {
   "compilerOptions": {
     "target": "ES2022",

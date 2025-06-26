@@ -1,0 +1,507 @@
+openapi: 3.0.3
+info:
+  title: AI Processing API
+  version: 1.0.0
+  description: |
+    AI-powered processing endpoints for the YouTube Learning Co-pilot extension.
+    Includes translation, summarization, and content analysis features.
+
+servers:
+  - url: https://your-project.supabase.co/functions/v1
+    description: Production server
+  - url: http://localhost:54321/functions/v1
+    description: Local development server
+
+paths:
+  /ai_translate:
+    post:
+      summary: Translate text
+      description: |
+        Translates text between languages with caching and optional word definitions.
+        Supports auto-detection of source language.
+      operationId: translateText
+      tags:
+        - Translation
+      security:
+        - bearerAuth: []
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateRequest'
+            examples:
+              basicTranslation:
+                summary: Basic translation
+                value:
+                  text: "Hello world"
+                  target_lang: "es"
+              withSourceLang:
+                summary: With source language
+                value:
+                  text: "Hello world"
+                  source_lang: "en"
+                  target_lang: "vi"
+              withContext:
+                summary: With context
+                value:
+                  text: "bank"
+                  target_lang: "es"
+                  context: "Financial institution"
+      responses:
+        '200':
+          description: Translation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /ai_summarize:
+    post:
+      summary: Summarize video content
+      description: |
+        Generates AI-powered summaries of video transcripts.
+        Supports multiple summary types and languages.
+      operationId: summarizeVideo
+      tags:
+        - Summarization
+      security:
+        - bearerAuth: []
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummarizeRequest'
+      responses:
+        '200':
+          description: Summary generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummarizeResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/VideoNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /ai_analyze-content:
+    post:
+      summary: Analyze video content
+      description: |
+        Performs content analysis including fact vs opinion detection,
+        sentiment analysis, and bias detection.
+      operationId: analyzeContent
+      tags:
+        - Content Analysis
+      security:
+        - bearerAuth: []
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeContentRequest'
+      responses:
+        '200':
+          description: Analysis completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeContentResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/VideoNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+components:
+  schemas:
+    TranslateRequest:
+      type: object
+      required:
+        - text
+        - target_lang
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: Text to translate
+          example: "Hello world"
+        source_lang:
+          type: string
+          pattern: '^[a-z]{2}$'
+          description: Source language ISO 639-1 code (auto-detect if not provided)
+          example: "en"
+        target_lang:
+          type: string
+          pattern: '^[a-z]{2}$'
+          description: Target language ISO 639-1 code
+          example: "es"
+        context:
+          type: string
+          maxLength: 500
+          description: Additional context for better translation
+          example: "Programming context"
+
+    TranslateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          properties:
+            original_text:
+              type: string
+            translated_text:
+              type: string
+            source_lang:
+              type: string
+            target_lang:
+              type: string
+            definitions:
+              type: array
+              items:
+                $ref: '#/components/schemas/Definition'
+            pronunciation:
+              type: string
+            cached:
+              type: boolean
+            provider:
+              type: string
+              enum: [google, libretranslate, deepl]
+
+    Definition:
+      type: object
+      properties:
+        partOfSpeech:
+          type: string
+        definition:
+          type: string
+        example:
+          type: string
+        synonyms:
+          type: array
+          items:
+            type: string
+
+    SummarizeRequest:
+      type: object
+      required:
+        - video_id
+        - summary_type
+      properties:
+        video_id:
+          type: string
+          format: uuid
+        summary_type:
+          type: string
+          enum: [brief, detailed, bullet_points]
+        language:
+          type: string
+          pattern: '^[a-z]{2}$'
+          default: "en"
+        custom_prompt:
+          type: string
+          maxLength: 500
+
+    SummarizeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          properties:
+            video_id:
+              type: string
+            summary_type:
+              type: string
+            language:
+              type: string
+            content:
+              $ref: '#/components/schemas/VideoSummaryContent'
+            tokens_used:
+              type: integer
+            cached:
+              type: boolean
+            model:
+              type: string
+
+    VideoSummaryContent:
+      type: object
+      properties:
+        summary:
+          type: string
+        key_points:
+          type: array
+          items:
+            type: string
+        topics:
+          type: array
+          items:
+            type: string
+        duration_estimate:
+          type: integer
+          description: Estimated reading time in minutes
+        generated_at:
+          type: string
+          format: date-time
+
+    AnalyzeContentRequest:
+      type: object
+      required:
+        - video_id
+        - analysis_type
+      properties:
+        video_id:
+          type: string
+          format: uuid
+        analysis_type:
+          type: string
+          enum: [fact_opinion, sentiment, bias]
+        segments:
+          type: array
+          items:
+            type: integer
+          description: Specific transcript segment indices to analyze
+
+    AnalyzeContentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          properties:
+            video_id:
+              type: string
+            analysis_type:
+              type: string
+            analysis:
+              $ref: '#/components/schemas/ContentAnalysis'
+            suggestions:
+              type: array
+              items:
+                type: string
+            tokens_used:
+              type: integer
+            cached:
+              type: boolean
+            model:
+              type: string
+
+    ContentAnalysis:
+      type: object
+      properties:
+        facts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fact'
+        opinions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Opinion'
+        sentiment:
+          $ref: '#/components/schemas/SentimentScore'
+        bias_indicators:
+          type: array
+          items:
+            $ref: '#/components/schemas/BiasIndicator'
+        confidence_score:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    Fact:
+      type: object
+      properties:
+        text:
+          type: string
+        confidence:
+          type: number
+        source_segments:
+          type: array
+          items:
+            type: integer
+        verifiable:
+          type: boolean
+
+    Opinion:
+      type: object
+      properties:
+        text:
+          type: string
+        confidence:
+          type: number
+        source_segments:
+          type: array
+          items:
+            type: integer
+        sentiment:
+          type: string
+          enum: [positive, negative, neutral]
+
+    SentimentScore:
+      type: object
+      properties:
+        overall:
+          type: string
+          enum: [positive, negative, neutral, mixed]
+        positive:
+          type: number
+        negative:
+          type: number
+        neutral:
+          type: number
+
+    BiasIndicator:
+      type: object
+      properties:
+        type:
+          type: string
+        description:
+          type: string
+        examples:
+          type: array
+          items:
+            type: string
+        severity:
+          type: string
+          enum: [low, medium, high]
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                enum: [false]
+              error:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      code:
+                        enum: [VALIDATION_ERROR, INVALID_LANGUAGE]
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                enum: [false]
+              error:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      code:
+                        enum: [UNAUTHORIZED]
+
+    VideoNotFound:
+      description: Video not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                enum: [false]
+              error:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      code:
+                        enum: [VIDEO_NOT_FOUND, TRANSCRIPT_NOT_FOUND]
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                enum: [false]
+              error:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      code:
+                        enum: [RATE_LIMIT_EXCEEDED]
+
+    ServiceUnavailable:
+      description: External service unavailable
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                enum: [false]
+              error:
+                allOf:
+                  - $ref: '#/components/schemas/Error'
+                  - properties:
+                      code:
+                        enum: [EXTERNAL_SERVICE_ERROR, MODEL_ERROR]
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for user authentication
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for machine-to-machine authentication
