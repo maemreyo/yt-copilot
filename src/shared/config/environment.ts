@@ -32,9 +32,18 @@ const createEnvironmentSchema = (env: string) => {
     RESEND_API_KEY: z.string().startsWith('re_', 'RESEND_API_KEY must start with re_'),
     RESEND_FROM_EMAIL: z.string().email().optional(),
     
+    // YouTube API Configuration
+    YOUTUBE_API_KEY: z.string().min(1, 'YOUTUBE_API_KEY is required'),
+    YOUTUBE_API_QUOTA_PER_DAY: z.coerce.number().default(10000), // Default YouTube quota
+    YOUTUBE_CACHE_TTL_SECONDS: z.coerce.number().default(86400), // 24 hours
+    
+    // Translation API Configuration (for future use)
+    GOOGLE_TRANSLATE_API_KEY: z.string().optional(),
+    GOOGLE_TRANSLATE_PROJECT_ID: z.string().optional(),
+    
     // App Configuration
     APP_URL: z.string().url('APP_URL must be a valid URL'),
-    APP_NAME: z.string().default('Lean SaaS Starter'),
+    APP_NAME: z.string().default('YouTube Learning Co-pilot'),
     APP_VERSION: z.string().default('0.1.0'),
     
     // Security Configuration
@@ -50,92 +59,78 @@ const createEnvironmentSchema = (env: string) => {
     RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000), // 1 minute
     RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS: z.coerce.boolean().default(false),
     
+    // YouTube Module Rate Limits
+    YOUTUBE_RATE_LIMIT_PER_MINUTE: z.coerce.number().default(20), // YouTube API calls per minute
+    YOUTUBE_RATE_LIMIT_PER_HOUR: z.coerce.number().default(600), // YouTube API calls per hour
+    
     // Monitoring & Observability
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default(
-      isDevelopment ? 'debug' : isProduction ? 'warn' : 'info'
+      isDevelopment ? 'debug' : isProduction ? 'error' : 'info'
     ),
     METRICS_ENABLED: z.coerce.boolean().default(isProduction),
     SENTRY_DSN: z.string().url().optional(),
-    ANALYTICS_ENABLED: z.coerce.boolean().default(isProduction),
     
     // Database Configuration
-    DATABASE_MAX_CONNECTIONS: z.coerce.number().min(1).max(100).default(10),
-    DATABASE_TIMEOUT: z.coerce.number().default(30000), // 30 seconds
+    DATABASE_MAX_CONNECTIONS: z.coerce.number().min(1).max(100).default(20),
+    DATABASE_TIMEOUT: z.coerce.number().min(1000).max(60000).default(5000),
     
-    // Cache Configuration  
-    CACHE_TTL: z.coerce.number().default(300), // 5 minutes
-    CACHE_ENABLED: z.coerce.boolean().default(!isTest),
+    // Cache Configuration
+    CACHE_ENABLED: z.coerce.boolean().default(true),
+    CACHE_TTL: z.coerce.number().min(0).default(300), // 5 minutes
+    CACHE_REDIS_URL: z.string().url().optional(),
     
-    // API Configuration
-    API_TIMEOUT: z.coerce.number().default(30000), // 30 seconds
-    API_RETRY_ATTEMPTS: z.coerce.number().min(0).max(5).default(3),
+    // Feature Flags
+    FEATURE_AUTH_ENABLED: z.coerce.boolean().default(true),
+    FEATURE_BILLING_ENABLED: z.coerce.boolean().default(true),
+    FEATURE_YOUTUBE_ENABLED: z.coerce.boolean().default(true),
+    FEATURE_TRANSLATION_ENABLED: z.coerce.boolean().default(false),
+    FEATURE_AI_SUMMARY_ENABLED: z.coerce.boolean().default(false),
     
-    // Development specific
-    ...(isDevelopment && {
-      DEBUG_MODE: z.coerce.boolean().default(true),
-      HOT_RELOAD: z.coerce.boolean().default(true),
-      MOCK_SERVICES: z.coerce.boolean().default(false),
-    }),
+    // Development Tools
+    DEV_TOOLS_ENABLED: z.coerce.boolean().default(isDevelopment),
+    DEV_SEED_DATA: z.coerce.boolean().default(isDevelopment),
+    DEV_API_LOGGING: z.coerce.boolean().default(isDevelopment),
     
-    // Test specific
-    ...(isTest && {
-      TEST_DATABASE_URL: z.string().url().optional(),
-      TEST_TIMEOUT: z.coerce.number().default(30000),
-    }),
-    
-    // Production specific
-    ...(isProduction && {
-      HEALTH_CHECK_INTERVAL: z.coerce.number().default(30000), // 30 seconds
-      BACKUP_ENABLED: z.coerce.boolean().default(true),
-      SSL_REQUIRED: z.coerce.boolean().default(true),
-    }),
+    // Test Configuration
+    TEST_USER_EMAIL: isTest ? z.string().email().default('test@example.com') : z.string().optional(),
+    TEST_USER_PASSWORD: isTest ? z.string().default('test-password') : z.string().optional(),
   });
 };
 
 /**
- * Environment validation with detailed error messages
+ * Validate environment variables
  */
 function validateEnvironment() {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const schema = createEnvironmentSchema(nodeEnv);
   
   try {
-    return schema.parse(process.env);
+    const parsed = schema.parse(process.env);
+    console.log(`✅ Environment validation passed for ${nodeEnv} environment`);
+    return parsed;
   } catch (error) {
     console.error('❌ Environment validation failed:');
-    
     if (error instanceof z.ZodError) {
-      error.errors.forEach((err) => {
-        const path = err.path.join('.');
-        console.error(`  ${path}: ${err.message}`);
+      error.errors.forEach(err => {
+        console.error(`  ${err.path.join('.')}: ${err.message}`);
       });
-      
-      console.error('\n💡 Please check your .env file and ensure all required environment variables are set.');
-      console.error('📚 See .env.example for reference.\n');
-    } else {
-      console.error(error);
     }
-    
-    process.exit(1);
+    throw new Error('Invalid environment configuration');
   }
 }
 
 /**
- * Environment detection utilities
+ * Environment utilities
  */
 export const environment = {
+  // Environment checks
   isDevelopment: () => env.NODE_ENV === 'development',
-  isTest: () => env.NODE_ENV === 'test',
   isProduction: () => env.NODE_ENV === 'production',
-  isLocal: () => env.APP_URL.includes('localhost') || env.APP_URL.includes('127.0.0.1'),
+  isTest: () => env.NODE_ENV === 'test',
   
-  // Environment-specific getters
-  getLogLevel: () => env.LOG_LEVEL,
-  isMetricsEnabled: () => env.METRICS_ENABLED,
-  isDebugMode: () => env.NODE_ENV === 'development',
-  
-  // Validation helpers
-  validateRequired: (key: string, value?: string) => {
+  // Require helper for critical configs
+  require: (key: string) => {
+    const value = (env as any)[key];
     if (!value) {
       throw new Error(`Required environment variable ${key} is not set`);
     }
@@ -168,6 +163,22 @@ export const environment = {
     projectId: env.SUPABASE_PROJECT_ID,
   }),
   
+  getYouTubeConfig: () => ({
+    apiKey: env.YOUTUBE_API_KEY,
+    quotaPerDay: env.YOUTUBE_API_QUOTA_PER_DAY,
+    cacheTtlSeconds: env.YOUTUBE_CACHE_TTL_SECONDS,
+    rateLimits: {
+      perMinute: env.YOUTUBE_RATE_LIMIT_PER_MINUTE,
+      perHour: env.YOUTUBE_RATE_LIMIT_PER_HOUR,
+    },
+  }),
+  
+  getTranslationConfig: () => ({
+    googleApiKey: env.GOOGLE_TRANSLATE_API_KEY,
+    googleProjectId: env.GOOGLE_TRANSLATE_PROJECT_ID,
+    enabled: env.FEATURE_TRANSLATION_ENABLED,
+  }),
+  
   getRateLimitConfig: () => ({
     requestsPerMinute: env.RATE_LIMIT_REQUESTS_PER_MINUTE,
     windowMs: env.RATE_LIMIT_WINDOW_MS,
@@ -189,6 +200,11 @@ export function validateRuntimeConfig() {
       name: 'Stripe configuration',
       check: () => env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET,
       message: 'Stripe configuration is incomplete',
+    },
+    {
+      name: 'YouTube API configuration',
+      check: () => env.YOUTUBE_API_KEY,
+      message: 'YouTube API key is not configured',
     },
     {
       name: 'App URL configuration',
@@ -228,16 +244,14 @@ export function printConfigSummary() {
   
   console.log('\n📋 Configuration Summary:');
   console.log(`  Environment: ${env.NODE_ENV}`);
+  console.log(`  App: ${env.APP_NAME} v${env.APP_VERSION}`);
   console.log(`  App URL: ${env.APP_URL}`);
   console.log(`  Log Level: ${env.LOG_LEVEL}`);
   console.log(`  Metrics: ${env.METRICS_ENABLED ? 'Enabled' : 'Disabled'}`);
   console.log(`  Rate Limit: ${env.RATE_LIMIT_REQUESTS_PER_MINUTE}/min`);
   console.log(`  Stripe: ${environment.getStripeConfig().isLiveMode ? 'Live' : 'Test'} mode`);
-  console.log(`  Cache: ${env.CACHE_ENABLED ? 'Enabled' : 'Disabled'}`);
-  console.log('');
-}
-
-// Auto-run configuration summary in development
-if (environment.isDevelopment() && typeof window === 'undefined') {
-  printConfigSummary();
+  console.log(`  YouTube: API configured, ${env.YOUTUBE_API_QUOTA_PER_DAY} quota/day`);
+  console.log(`  Cache: ${env.CACHE_ENABLED ? 'Enabled' : 'Disabled'} (TTL: ${env.CACHE_TTL}s)`);
+  console.log(`  Features: YouTube=${env.FEATURE_YOUTUBE_ENABLED}, Translation=${env.FEATURE_TRANSLATION_ENABLED}`);
+  console.log('\n');
 }

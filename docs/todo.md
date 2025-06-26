@@ -177,7 +177,9 @@
 **ESTIMATED TOTAL TIME**: 105 minutes (1 hour 45 minutes)
 
 ---
-# TODO: YouTube Copilot Extension - Implementation Plan
+
+
+# TODO: YouTube Learning Co-pilot Extension - Implementation Plan
 
 ## 🎯 CURRENT PROJECT STATUS
 - **✅ Layers 1-7**: 100% COMPLETED (Lean SaaS Foundation - 2000+ lines, 95% test coverage)
@@ -325,6 +327,9 @@
 - [ ] Complete API documentation
 - [ ] Ready to move to US 7.2 (Transcript Extraction)
 
+#### Priority 2: Transcript Extraction (Day 3-4) 🎯 NEXT
+**US 7.2: As a user, I want to extract and process video transcripts for interaction**
+
 - [ ] **Create API endpoint**: `POST /v1/youtube/transcript/extract`
   ```typescript
   // Expected implementation in: src/modules/youtube/functions/extract-transcript.ts
@@ -385,52 +390,41 @@
 - [ ] **Create CRUD endpoints**:
   ```typescript
   // POST /v1/youtube/history/add        - Add video to user's history
-  // GET /v1/youtube/history/list        - Get user's video history with pagination
-  // PUT /v1/youtube/history/update      - Update watching progress
-  // DELETE /v1/youtube/history/remove   - Remove video from history
-  // POST /v1/youtube/history/bookmark   - Toggle bookmark status
+  // GET /v1/youtube/history             - List user's video history
+  // PUT /v1/youtube/history/{videoId}   - Update progress/bookmark
+  // DELETE /v1/youtube/history/{videoId} - Remove from history
   ```
 
-- [ ] **Progress tracking implementation**:
-  - [ ] Update user_video_history table with watching progress
-  - [ ] Track watched duration vs total duration (completion %)
-  - [ ] Implement bookmarking functionality
-  - [ ] Add last watched timestamp with timezone support
+- [ ] **Implement privacy-focused history tracking**:
+  - [ ] Store last watched timestamp
+  - [ ] Track progress through video (percentage/seconds)
+  - [ ] Bookmark functionality
+  - [ ] Soft delete to preserve analytics
 
-- [ ] **Privacy & security**:
-  - [ ] Verify RLS policies restrict access to user's own data
-  - [ ] Implement data retention policies (configurable)
-  - [ ] Add option for users to delete/clear history
-  - [ ] Audit log all history operations for compliance
+- [ ] **RLS policies enforcement**:
+  - [ ] Ensure users can only access their own history
+  - [ ] Apply data retention policies
+  - [ ] Implement audit logging
 
-- [ ] **Advanced Features**:
-  - [ ] History search and filtering (by date, channel, completion)
-  - [ ] Export history data (JSON/CSV formats)
-  - [ ] Watch time analytics and statistics
-  - [ ] Recently watched quick access
+- [ ] **Performance optimization**:
+  - [ ] Add pagination for history listing
+  - [ ] Create indexes for frequent queries
+  - [ ] Implement efficient bulk operations
 
-- [ ] **Integration tests**:
-  - [ ] Test full CRUD operations with edge cases
-  - [ ] Test RLS policy enforcement
-  - [ ] Test progress tracking accuracy
-  - [ ] Test bookmark functionality and persistence
-  - [ ] Test concurrent access scenarios
-
-**Day 5 Success Criteria:**
-- [ ] Complete CRUD operations for video history
-- [ ] 100% data privacy compliance with RLS
-- [ ] Accurate progress tracking to the second
-- [ ] Fast retrieval for user's complete history (<200ms)
-- [ ] Export functionality working for user data portability
+**Success Criteria**:
+- [ ] Complete CRUD operations with RLS
+- [ ] Sub-100ms response times for queries
+- [ ] Full privacy compliance
+- [ ] Comprehensive test coverage
 
 ---
 
-## 📋 UPCOMING SPRINTS (Week 4-7)
+## 📅 UPCOMING SPRINTS
 
 ### Week 4: AI Processing Module (Module 8)
-- [ ] **US 8.1**: Intelligent Translation (Google Translate API)
-- [ ] **US 8.2**: Video Summarization (OpenAI GPT-4o Mini) 
-- [ ] **US 8.3**: Content Analysis (Key concepts, difficulty assessment)
+- [ ] **US 8.1**: Word/phrase translation endpoints
+- [ ] **US 8.2**: Video summarization endpoints
+- [ ] **US 8.3**: Content analysis endpoints
 
 ### Week 5: Learning Analytics Module (Module 9)
 - [ ] **US 9.1**: Vocabulary Management System
@@ -535,8 +529,8 @@
 
 ---
 
-**🚀 SPRINT GOAL**: Complete YouTube Integration Module with production-ready video analysis, transcript extraction, and history management capabilities, leveraging the proven Lean SaaS foundation.**
+**🚀 SPRINT GOAL**: Complete YouTube Integration Module with production-ready video analysis, transcript extraction, and history management capabilities, leveraging the proven Lean SaaS foundation.
 
-**📅 TIMELINE**: 5 days to complete Module 7, then 4 weeks to full backend completion**
+**📅 TIMELINE**: 5 days to complete Module 7, then 4 weeks to full backend completion
 
-**🎯 NEXT MILESTONE**: Week 4 AI Processing Module for intelligent content analysis**
+**🎯 NEXT MILESTONE**: Week 4 AI Processing Module for intelligent content analysis
