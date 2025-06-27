@@ -1,12 +1,15 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { CreateSessionSchema, UpdateSessionSchema } from '../../_shared/validators.ts';
-import type { 
+import {
+  CreateSessionSchema,
+  UpdateSessionSchema,
+} from '../../_shared/validators.ts';
+import type {
   CreateSessionRequest,
-  UpdateSessionRequest,
+  ErrorResponse,
   LearningSession,
-  SuccessResponse, 
-  ErrorResponse 
+  SuccessResponse,
+  UpdateSessionRequest,
 } from '../../_shared/types.ts';
 
 // Response headers
@@ -24,7 +27,9 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
+async function extractUser(
+  request: Request,
+): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -34,7 +39,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
     const token = authHeader.substring(7);
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -44,9 +49,9 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
     return {
       id: user.id,
-      email: user.email || ''
+      email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth error:', error);
     return null;
   }
@@ -64,16 +69,16 @@ serve(async (request: Request) => {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only POST method is allowed'
-      }
+        message: 'Only POST method is allowed',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 
@@ -85,50 +90,50 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Invalid or missing authentication token'
-        }
+          message: 'Invalid or missing authentication token',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 401,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     // Parse request body
     const body = await request.json();
-    
+
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      { auth: { persistSession: false } }
+      { auth: { persistSession: false } },
     );
 
     // Check if this is a session end request (has session_id)
     if (body.session_id) {
       // Validate update request
       const validation = UpdateSessionSchema.safeParse(body);
-      
+
       if (!validation.success) {
         const errorResponse: ErrorResponse = {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
             message: 'Invalid session update data',
-            details: validation.error.errors
-          }
+            details: validation.error.errors,
+          },
         };
-        
+
         return new Response(
           JSON.stringify(errorResponse),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
+          {
+            status: 400,
+            headers: { ...corsHeaders, ...securityHeaders },
+          },
         );
       }
 
@@ -148,28 +153,30 @@ serve(async (request: Request) => {
           success: false,
           error: {
             code: 'NOT_FOUND',
-            message: 'Active session not found'
-          }
+            message: 'Active session not found',
+          },
         };
-        
+
         return new Response(
           JSON.stringify(errorResponse),
-          { 
-            status: 404, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
+          {
+            status: 404,
+            headers: { ...corsHeaders, ...securityHeaders },
+          },
         );
       }
 
       // Calculate duration if ending session
       const startTime = new Date(existingSession.started_at).getTime();
-      const endTime = updateData.ended_at ? new Date(updateData.ended_at).getTime() : Date.now();
+      const endTime = updateData.ended_at
+        ? new Date(updateData.ended_at).getTime()
+        : Date.now();
       const duration_seconds = Math.floor((endTime - startTime) / 1000);
 
       // Update session
       const updates: any = {
         ...updateData,
-        duration_seconds
+        duration_seconds,
       };
 
       const { data: updatedSession, error: updateError } = await supabase
@@ -182,59 +189,58 @@ serve(async (request: Request) => {
 
       if (updateError) {
         console.error('Database error:', updateError);
-        
+
         const errorResponse: ErrorResponse = {
           success: false,
           error: {
             code: 'DATABASE_ERROR',
             message: 'Failed to update session',
-            details: updateError
-          }
+            details: updateError,
+          },
         };
-        
+
         return new Response(
           JSON.stringify(errorResponse),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
+          {
+            status: 500,
+            headers: { ...corsHeaders, ...securityHeaders },
+          },
         );
       }
 
       // Return success response
       const successResponse: SuccessResponse = {
         success: true,
-        data: updatedSession
+        data: updatedSession,
       };
 
       return new Response(
         JSON.stringify(successResponse),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 200,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
-
     } else {
       // This is a session start request
       const validation = CreateSessionSchema.safeParse(body);
-      
+
       if (!validation.success) {
         const errorResponse: ErrorResponse = {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
             message: 'Invalid session creation data',
-            details: validation.error.errors
-          }
+            details: validation.error.errors,
+          },
         };
-        
+
         return new Response(
           JSON.stringify(errorResponse),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
+          {
+            status: 400,
+            headers: { ...corsHeaders, ...securityHeaders },
+          },
         );
       }
 
@@ -254,7 +260,7 @@ serve(async (request: Request) => {
           .from('learning_sessions')
           .update({
             ended_at: new Date().toISOString(),
-            duration_seconds: 0 // Will be calculated in a scheduled job
+            duration_seconds: 0, // Will be calculated in a scheduled job
           })
           .eq('id', activeSession.id);
       }
@@ -272,16 +278,16 @@ serve(async (request: Request) => {
             success: false,
             error: {
               code: 'INVALID_VIDEO',
-              message: 'Video not found or not accessible'
-            }
+              message: 'Video not found or not accessible',
+            },
           };
-          
+
           return new Response(
             JSON.stringify(errorResponse),
-            { 
-              status: 400, 
-              headers: { ...corsHeaders, ...securityHeaders } 
-            }
+            {
+              status: 400,
+              headers: { ...corsHeaders, ...securityHeaders },
+            },
           );
         }
       }
@@ -297,64 +303,63 @@ serve(async (request: Request) => {
           started_at: new Date().toISOString(),
           words_learned: 0,
           notes_taken: 0,
-          translations_requested: 0
+          translations_requested: 0,
         })
         .select()
         .single();
 
       if (createError) {
         console.error('Database error:', createError);
-        
+
         const errorResponse: ErrorResponse = {
           success: false,
           error: {
             code: 'DATABASE_ERROR',
             message: 'Failed to create session',
-            details: createError
-          }
+            details: createError,
+          },
         };
-        
+
         return new Response(
           JSON.stringify(errorResponse),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
+          {
+            status: 500,
+            headers: { ...corsHeaders, ...securityHeaders },
+          },
         );
       }
 
       // Return success response
       const successResponse: SuccessResponse = {
         success: true,
-        data: newSession
+        data: newSession,
       };
 
       return new Response(
         JSON.stringify(successResponse),
-        { 
-          status: 201, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 201,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error:', error);
-    
+
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred'
-      }
+        message: 'An unexpected error occurred',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 });

@@ -1,11 +1,13 @@
-
 import { serve } from 'std/http/server.ts';
 import { z } from 'zod';
 import { createRateLimiter } from '@/rate-limiting';
 import { ErrorType } from '@/errors';
 import { AuthService } from '@/auth';
 import { TranslateRequestSchema, type TranslateResponse } from '../types';
-import { translationClient, wordsAPIClient } from '../utils/translation-client.ts';
+import {
+  translationClient,
+  wordsAPIClient,
+} from '../utils/translation-client.ts';
 import { aiCacheManager } from '../utils/cache-manager.ts';
 
 // Rate limiting configuration
@@ -14,24 +16,30 @@ const rateLimiterFree = createRateLimiter({
   maxRequests: parseInt(Deno.env.get('TRANSLATION_RATE_LIMIT_FREE') || '100'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `translate:${auth}` : `translate:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `translate:${auth}`
+      : `translate:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const rateLimiterPremium = createRateLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
-  maxRequests: parseInt(Deno.env.get('TRANSLATION_RATE_LIMIT_PREMIUM') || '500'),
+  maxRequests: parseInt(
+    Deno.env.get('TRANSLATION_RATE_LIMIT_PREMIUM') || '500',
+  ),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `translate:${auth}` : `translate:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `translate:${auth}`
+      : `translate:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const requestSchema = z.object({
   text: z.string().min(1).max(5000),
   source_lang: z.string().length(2).optional(),
   target_lang: z.string().length(2),
-  context: z.string().max(500).optional()
+  context: z.string().max(500).optional(),
 });
 
 const corsHeaders = {
@@ -42,39 +50,42 @@ const corsHeaders = {
 serve(async (request) => {
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
-      headers: corsHeaders 
+      headers: corsHeaders,
     });
   }
 
   if (request.method !== 'POST') {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'METHOD_NOT_ALLOWED', message: 'Only POST method allowed' } 
+      JSON.stringify({
+        success: false,
+        error: {
+          code: 'METHOD_NOT_ALLOWED',
+          message: 'Only POST method allowed',
+        },
       }),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   // Authenticate user
   const authService = new AuthService();
   const { user, authType } = await authService.authenticateRequest(request);
-  
+
   if (!user) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' } 
+      JSON.stringify({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
       }),
-      { 
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -82,7 +93,7 @@ serve(async (request) => {
   const body = await request.json();
   const validation = requestSchema.safeParse({
     ...body,
-    user_id: user.id
+    user_id: user.id,
   });
 
   if (!validation.success) {
@@ -92,39 +103,44 @@ serve(async (request) => {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.error.errors
-        }
+          details: validation.error.errors,
+        },
       }),
-      { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   const { text, source_lang, target_lang, context } = validation.data;
 
   // Apply rate limiting based on user tier
-  const isPremium = user.subscription_tier === 'premium' || user.subscription_tier === 'pro';
+  const isPremium = user.subscription_tier === 'premium' ||
+    user.subscription_tier === 'pro';
   const rateLimiter = isPremium ? rateLimiterPremium : rateLimiterFree;
-  
+
   try {
     await rateLimiter(request);
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: isPremium 
-            ? `Premium rate limit exceeded: ${Deno.env.get('TRANSLATION_RATE_LIMIT_PREMIUM')} translations per hour`
-            : `Free rate limit exceeded: ${Deno.env.get('TRANSLATION_RATE_LIMIT_FREE')} translations per hour`
-        }
+          message: isPremium
+            ? `Premium rate limit exceeded: ${
+              Deno.env.get('TRANSLATION_RATE_LIMIT_PREMIUM')
+            } translations per hour`
+            : `Free rate limit exceeded: ${
+              Deno.env.get('TRANSLATION_RATE_LIMIT_FREE')
+            } translations per hour`,
+        },
       }),
-      { 
-        status: 429, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -134,13 +150,13 @@ serve(async (request) => {
       text,
       source_lang || 'auto',
       target_lang,
-      'google' // Or detect provider from env
+      'google', // Or detect provider from env
     );
 
     if (cachedTranslation) {
       // Get definitions from WordsAPI if it's a single word
       const isSingleWord = text.split(' ').length === 1;
-      const definitions = isSingleWord 
+      const definitions = isSingleWord
         ? await wordsAPIClient.getDefinitions(text)
         : undefined;
       const pronunciation = isSingleWord
@@ -155,15 +171,15 @@ serve(async (request) => {
         definitions,
         pronunciation,
         cached: true,
-        provider: cachedTranslation.provider as any
+        provider: cachedTranslation.provider as any,
       };
 
       return new Response(
         JSON.stringify({ success: true, data: response }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
       );
     }
 
@@ -171,12 +187,12 @@ serve(async (request) => {
     const translationResult = await translationClient.translate(
       text,
       target_lang,
-      source_lang
+      source_lang,
     );
 
     // Get additional data for single words
     const isSingleWord = text.split(' ').length === 1;
-    const definitions = isSingleWord 
+    const definitions = isSingleWord
       ? await wordsAPIClient.getDefinitions(text)
       : undefined;
     const pronunciation = isSingleWord
@@ -191,35 +207,35 @@ serve(async (request) => {
       translationResult.detectedSourceLang || source_lang || 'auto',
       target_lang,
       translationResult.provider,
-      context
+      context,
     );
 
     const response: TranslateResponse = {
       original_text: text,
       translated_text: translationResult.translatedText,
-      source_lang: translationResult.detectedSourceLang || source_lang || 'auto',
+      source_lang: translationResult.detectedSourceLang || source_lang ||
+        'auto',
       target_lang,
       definitions,
       pronunciation,
       cached: false,
-      provider: translationResult.provider as any
+      provider: translationResult.provider as any,
     };
 
     return new Response(
       JSON.stringify({ success: true, data: response }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
-
   } catch (error: any) {
     console.error('Translation error:', error);
-    
+
     // Determine error code based on error type
     let errorCode = 'TRANSLATION_FAILED';
     let statusCode = 500;
-    
+
     if (error.type === ErrorType.EXTERNAL_SERVICE_ERROR) {
       errorCode = 'EXTERNAL_SERVICE_ERROR';
       statusCode = 503;
@@ -237,13 +253,13 @@ serve(async (request) => {
         error: {
           code: errorCode,
           message: error.message || 'Translation failed',
-          details: error.details
-        }
+          details: error.details,
+        },
       }),
-      { 
-        status: statusCode, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: statusCode,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 }, {
@@ -252,6 +268,6 @@ serve(async (request) => {
   schema: requestSchema,
   middleware: [],
   rateLimit: {
-    enabled: false // We handle rate limiting internally based on user tier
-  }
+    enabled: false, // We handle rate limiting internally based on user tier
+  },
 });

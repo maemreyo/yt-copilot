@@ -1,7 +1,11 @@
 // - Comprehensive validation utilities with Zod schemas, middleware, and common patterns
 
-import { z, ZodSchema, ZodError, ZodType } from 'zod';
-import { ValidationError, ErrorResponseFormatter, ErrorContext } from './errors';
+import { z, ZodError, ZodSchema, ZodType } from 'zod';
+import {
+  ErrorContext,
+  ErrorResponseFormatter,
+  ValidationError,
+} from './errors';
 import { environment } from '../config/environment';
 
 /**
@@ -41,57 +45,78 @@ export const commonSchemas = {
   email: z.string().email('Invalid email format').toLowerCase(),
   password: z.string()
     .min(8, 'Password must be at least 8 characters')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password must contain uppercase, lowercase, and number'),
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+      'Password must contain uppercase, lowercase, and number',
+    ),
   url: z.string().url('Invalid URL format'),
   uuid: z.string().uuid('Invalid UUID format'),
-  
+
   // API Key patterns
-  apiKeyPrefix: z.string().regex(/^[a-zA-Z0-9]{8}$/, 'API key prefix must be 8 alphanumeric characters'),
-  apiKeyName: z.string().min(1).max(50).regex(/^[a-zA-Z0-9\s\-_]+$/, 'API key name contains invalid characters'),
-  
+  apiKeyPrefix: z.string().regex(
+    /^[a-zA-Z0-9]{8}$/,
+    'API key prefix must be 8 alphanumeric characters',
+  ),
+  apiKeyName: z.string().min(1).max(50).regex(
+    /^[a-zA-Z0-9\s\-_]+$/,
+    'API key name contains invalid characters',
+  ),
+
   // Identifiers
   userId: z.string().uuid('Invalid user ID'),
-  subscriptionId: z.string().regex(/^sub_[a-zA-Z0-9]+$/, 'Invalid subscription ID format'),
-  customerId: z.string().regex(/^cus_[a-zA-Z0-9]+$/, 'Invalid customer ID format'),
+  subscriptionId: z.string().regex(
+    /^sub_[a-zA-Z0-9]+$/,
+    'Invalid subscription ID format',
+  ),
+  customerId: z.string().regex(
+    /^cus_[a-zA-Z0-9]+$/,
+    'Invalid customer ID format',
+  ),
   priceId: z.string().regex(/^price_[a-zA-Z0-9]+$/, 'Invalid price ID format'),
-  
+
   // Pagination
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
-  
+
   // Sorting
   sortField: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'Invalid sort field'),
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
-  
+
   // Timestamps
   timestamp: z.string().datetime('Invalid timestamp format'),
-  dateString: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
-  
+  dateString: z.string().regex(
+    /^\d{4}-\d{2}-\d{2}$/,
+    'Invalid date format (YYYY-MM-DD)',
+  ),
+
   // Text content
   shortText: z.string().min(1).max(255).trim(),
   mediumText: z.string().min(1).max(1000).trim(),
   longText: z.string().min(1).max(10000).trim(),
-  
+
   // Numbers
   positiveInt: z.number().int().positive(),
   nonNegativeInt: z.number().int().min(0),
   percentage: z.number().min(0).max(100),
   price: z.number().min(0).multipleOf(0.01), // Cents precision
-  
+
   // Boolean
-  booleanString: z.enum(['true', 'false']).transform(val => val === 'true'),
-  
+  booleanString: z.enum(['true', 'false']).transform((val) => val === 'true'),
+
   // Arrays
   stringArray: z.array(z.string()).default([]),
   uuidArray: z.array(z.string().uuid()).default([]),
-  
+
   // Objects
   metadata: z.record(z.unknown()).default({}),
-  
+
   // File validation
   fileName: z.string().regex(/^[a-zA-Z0-9\-_\. ]+$/, 'Invalid file name'),
-  fileSize: z.number().max(10 * 1024 * 1024, 'File size must be less than 10MB'), // 10MB
+  fileSize: z.number().max(
+    10 * 1024 * 1024,
+    'File size must be less than 10MB',
+  ), // 10MB
   mimeType: z.enum([
     'image/jpeg',
     'image/png',
@@ -202,29 +227,31 @@ export const bodySchemas = {
  */
 export const responseSchemas = {
   // Standard API response
-  apiResponse: <T extends ZodType>(dataSchema: T) => z.object({
-    data: dataSchema.optional(),
-    error: z.object({
-      code: z.string(),
-      message: z.string(),
-      details: z.unknown().optional(),
-    }).optional(),
-    timestamp: z.string(),
-    requestId: z.string().optional(),
-  }),
+  apiResponse: <T extends ZodType>(dataSchema: T) =>
+    z.object({
+      data: dataSchema.optional(),
+      error: z.object({
+        code: z.string(),
+        message: z.string(),
+        details: z.unknown().optional(),
+      }).optional(),
+      timestamp: z.string(),
+      requestId: z.string().optional(),
+    }),
 
   // Paginated response
-  paginatedResponse: <T extends ZodType>(itemSchema: T) => z.object({
-    data: z.array(itemSchema),
-    pagination: z.object({
-      page: z.number(),
-      limit: z.number(),
-      total: z.number(),
-      totalPages: z.number(),
-      hasNext: z.boolean(),
-      hasPrev: z.boolean(),
+  paginatedResponse: <T extends ZodType>(itemSchema: T) =>
+    z.object({
+      data: z.array(itemSchema),
+      pagination: z.object({
+        page: z.number(),
+        limit: z.number(),
+        total: z.number(),
+        totalPages: z.number(),
+        hasNext: z.boolean(),
+        hasPrev: z.boolean(),
+      }),
     }),
-  }),
 
   // Health check response
   healthResponse: z.object({
@@ -283,11 +310,11 @@ export class DataSanitizer {
   static sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
     const dangerous = ['__proto__', 'constructor', 'prototype'];
     const cleaned = { ...obj };
-    
+
     for (const key of dangerous) {
       delete cleaned[key];
     }
-    
+
     return cleaned;
   }
 
@@ -313,7 +340,7 @@ export class Validator {
   static validate<T>(
     schema: ZodSchema<T>,
     data: unknown,
-    options: ValidationOptions = {}
+    options: ValidationOptions = {},
   ): ValidationResult<T> {
     try {
       const result = schema.parse(data);
@@ -321,9 +348,9 @@ export class Validator {
         success: true,
         data: result,
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ZodError) {
-        const errors: ValidationErrorDetail[] = error.issues.map(issue => ({
+        const errors: ValidationErrorDetail[] = error.issues.map((issue) => ({
           field: issue.path.join('.'),
           message: issue.message,
           code: issue.code,
@@ -346,15 +373,15 @@ export class Validator {
   static validateAndThrow<T>(
     schema: ZodSchema<T>,
     data: unknown,
-    context?: ErrorContext
+    context?: ErrorContext,
   ): T {
     const result = this.validate(schema, data);
-    
+
     if (!result.success) {
       throw new ValidationError(
         'Validation failed',
         result.errors,
-        context
+        context,
       );
     }
 
@@ -367,20 +394,20 @@ export class Validator {
   static async validateRequestBody<T>(
     request: Request,
     schema: ZodSchema<T>,
-    context?: ErrorContext
+    context?: ErrorContext,
   ): Promise<T> {
     try {
       const body = await request.json();
       return this.validateAndThrow(schema, body, context);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof ValidationError) {
         throw error;
       }
-      
+
       throw new ValidationError(
         'Invalid JSON in request body',
         error,
-        context
+        context,
       );
     }
   }
@@ -391,11 +418,11 @@ export class Validator {
   static validateQueryParams<T>(
     request: Request,
     schema: ZodSchema<T>,
-    context?: ErrorContext
+    context?: ErrorContext,
   ): T {
     const url = new URL(request.url);
     const params = Object.fromEntries(url.searchParams.entries());
-    
+
     return this.validateAndThrow(schema, params, context);
   }
 
@@ -405,7 +432,7 @@ export class Validator {
   static validateHeaders<T>(
     request: Request,
     schema: ZodSchema<T>,
-    context?: ErrorContext
+    context?: ErrorContext,
   ): T {
     const headers = Object.fromEntries(request.headers.entries());
     return this.validateAndThrow(schema, headers, context);
@@ -421,7 +448,7 @@ export class Validator {
       allowedTypes?: string[];
       allowedExtensions?: string[];
     } = {},
-    context?: ErrorContext
+    context?: ErrorContext,
   ): void {
     const {
       maxSize = 10 * 1024 * 1024, // 10MB
@@ -434,7 +461,7 @@ export class Validator {
       throw new ValidationError(
         `File size exceeds maximum allowed size of ${maxSize} bytes`,
         { size: file.size, maxSize },
-        context
+        context,
       );
     }
 
@@ -443,17 +470,19 @@ export class Validator {
       throw new ValidationError(
         `File type ${file.type} is not allowed`,
         { type: file.type, allowedTypes },
-        context
+        context,
       );
     }
 
     // Check file extension
-    const extension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    const extension = file.name.toLowerCase().substring(
+      file.name.lastIndexOf('.'),
+    );
     if (!allowedExtensions.includes(extension)) {
       throw new ValidationError(
         `File extension ${extension} is not allowed`,
         { extension, allowedExtensions },
-        context
+        context,
       );
     }
   }
@@ -506,15 +535,27 @@ export class ValidationMiddleware {
       const result: any = {};
 
       if (options.body) {
-        result.body = await Validator.validateRequestBody(request, options.body, context);
+        result.body = await Validator.validateRequestBody(
+          request,
+          options.body,
+          context,
+        );
       }
 
       if (options.query) {
-        result.query = Validator.validateQueryParams(request, options.query, context);
+        result.query = Validator.validateQueryParams(
+          request,
+          options.query,
+          context,
+        );
       }
 
       if (options.headers) {
-        result.headers = Validator.validateHeaders(request, options.headers, context);
+        result.headers = Validator.validateHeaders(
+          request,
+          options.headers,
+          context,
+        );
       }
 
       return result;
@@ -559,7 +600,7 @@ export const customValidations = {
    */
   phoneNumber: z.string().regex(
     /^\+[1-9]\d{1,14}$/,
-    'Phone number must be in international format (+1234567890)'
+    'Phone number must be in international format (+1234567890)',
   ),
 
   /**
@@ -586,7 +627,7 @@ export const customValidations = {
    */
   semver: z.string().regex(
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/,
-    'Invalid semantic version format'
+    'Invalid semantic version format',
   ),
 
   /**
@@ -594,7 +635,7 @@ export const customValidations = {
    */
   slug: z.string().regex(
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-    'Slug must contain only lowercase letters, numbers, and hyphens'
+    'Slug must contain only lowercase letters, numbers, and hyphens',
   ),
 
   /**
@@ -602,7 +643,7 @@ export const customValidations = {
    */
   hexColor: z.string().regex(
     /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/,
-    'Invalid hex color format'
+    'Invalid hex color format',
   ),
 
   /**
@@ -637,7 +678,7 @@ export const validationUtils = {
   isEmail: (email: string) => commonSchemas.email.safeParse(email).success,
   isUuid: (id: string) => commonSchemas.uuid.safeParse(id).success,
   isUrl: (url: string) => commonSchemas.url.safeParse(url).success,
-  
+
   /**
    * Create validation error from Zod error
    */

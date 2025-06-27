@@ -1,8 +1,15 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
 import { CreateVocabularySchema, validateRequest } from '_shared/validators.ts';
-import { getInitialState, getNextReviewDate } from '_shared/spaced-repetition.ts';
-import type { CreateVocabularyRequest, SuccessResponse, ErrorResponse } from '_shared/types.ts';
+import {
+  getInitialState,
+  getNextReviewDate,
+} from '_shared/spaced-repetition.ts';
+import type {
+  CreateVocabularyRequest,
+  ErrorResponse,
+  SuccessResponse,
+} from '_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -19,7 +26,9 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
+async function extractUser(
+  request: Request,
+): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -29,7 +38,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
     const token = authHeader.substring(7);
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -39,9 +48,9 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
     return {
       id: user.id,
-      email: user.email || ''
+      email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth error:', error);
     return null;
   }
@@ -52,22 +61,22 @@ async function checkDuplicate(
   supabase: any,
   userId: string,
   word: string,
-  context?: string
+  context?: string,
 ): Promise<boolean> {
   const query = supabase
     .from('vocabulary_entries')
     .select('id')
     .eq('user_id', userId)
     .eq('word', word);
-  
+
   if (context) {
     query.eq('context', context);
   } else {
     query.is('context', null);
   }
-  
+
   const { data, error } = await query.single();
-  
+
   return !error && data !== null;
 }
 
@@ -75,9 +84,9 @@ async function checkDuplicate(
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
-      headers: corsHeaders 
+      headers: corsHeaders,
     });
   }
 
@@ -86,16 +95,16 @@ serve(async (req) => {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only POST method allowed'
-      }
+        message: 'Only POST method allowed',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 
@@ -107,16 +116,16 @@ serve(async (req) => {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Authentication required'
-        }
+          message: 'Authentication required',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 401,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -130,16 +139,16 @@ serve(async (req) => {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.errors?.errors
-        }
+          details: validation.errors?.errors,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -148,7 +157,7 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
 
     // Check for duplicate
@@ -156,7 +165,7 @@ serve(async (req) => {
       supabase,
       user.id,
       data.word,
-      data.context
+      data.context,
     );
 
     if (isDuplicate) {
@@ -165,16 +174,16 @@ serve(async (req) => {
         error: {
           code: 'DUPLICATE_ENTRY',
           message: 'This vocabulary entry already exists',
-          details: { word: data.word, context: data.context }
-        }
+          details: { word: data.word, context: data.context },
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 409, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 409,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -197,29 +206,29 @@ serve(async (req) => {
         next_review_at: nextReviewDate,
         review_count: 0,
         success_rate: 0,
-        learned_at: new Date().toISOString()
+        learned_at: new Date().toISOString(),
       })
       .select()
       .single();
 
     if (error) {
       console.error('Database error:', error);
-      
+
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
           message: 'Failed to create vocabulary entry',
-          details: error
-        }
+          details: error,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 500,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -237,7 +246,7 @@ serve(async (req) => {
       await supabase
         .from('learning_sessions')
         .update({
-          words_learned: activeSession.words_learned + 1
+          words_learned: activeSession.words_learned + 1,
         })
         .eq('id', activeSession.id);
     }
@@ -245,34 +254,33 @@ serve(async (req) => {
     // Return success response
     const successResponse: SuccessResponse = {
       success: true,
-      data: vocabulary
+      data: vocabulary,
     };
 
     return new Response(
       JSON.stringify(successResponse),
-      { 
-        status: 201, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 201,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error:', error);
-    
+
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred'
-      }
+        message: 'An unexpected error occurred',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 });

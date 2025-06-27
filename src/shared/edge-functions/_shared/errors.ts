@@ -45,7 +45,7 @@ export class AppError extends Error {
     type: ErrorType,
     message: string,
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message);
     this.name = 'AppError';
@@ -108,7 +108,7 @@ export function createAppError(
   type: ErrorType,
   message: string,
   details?: Record<string, unknown>,
-  requestId?: string
+  requestId?: string,
 ): AppError {
   return new AppError(type, message, details, requestId);
 }
@@ -118,7 +118,7 @@ export function createAppError(
  */
 export function handleUnknownError(
   error: unknown,
-  requestId?: string
+  requestId?: string,
 ): AppError {
   // If it's already an AppError, return as is
   if (error instanceof AppError) {
@@ -131,7 +131,7 @@ export function handleUnknownError(
       ErrorType.INTERNAL_ERROR,
       error.message,
       { originalError: error.name, stack: error.stack },
-      requestId
+      requestId,
     );
   }
 
@@ -140,7 +140,7 @@ export function handleUnknownError(
     ErrorType.INTERNAL_ERROR,
     'An unexpected error occurred',
     { originalError: String(error) },
-    requestId
+    requestId,
   );
 }
 
@@ -149,15 +149,15 @@ export function handleUnknownError(
  */
 export function createValidationErrorResponse(
   errors: string[],
-  requestId?: string
+  requestId?: string,
 ): Response {
   const error = createAppError(
     ErrorType.VALIDATION_ERROR,
     'Validation failed',
     { errors },
-    requestId
+    requestId,
   );
-  
+
   return error.toHttpResponse();
 }
 
@@ -166,15 +166,15 @@ export function createValidationErrorResponse(
  */
 export function createAuthErrorResponse(
   message: string = 'Authentication required',
-  requestId?: string
+  requestId?: string,
 ): Response {
   const error = createAppError(
     ErrorType.AUTHENTICATION_ERROR,
     message,
     undefined,
-    requestId
+    requestId,
   );
-  
+
   return error.toHttpResponse();
 }
 
@@ -184,21 +184,21 @@ export function createAuthErrorResponse(
 export function createRateLimitErrorResponse(
   limit: number,
   windowMs: number,
-  requestId?: string
+  requestId?: string,
 ): Response {
   const error = createAppError(
     ErrorType.RATE_LIMIT_ERROR,
     'Rate limit exceeded',
-    { 
+    {
       limit,
       windowMs,
       retryAfter: Math.ceil(windowMs / 1000),
     },
-    requestId
+    requestId,
   );
 
   const response = error.toHttpResponse();
-  
+
   // Add rate limit headers
   const headers = new Headers(response.headers);
   headers.set('Retry-After', Math.ceil(windowMs / 1000).toString());
@@ -216,17 +216,17 @@ export function createRateLimitErrorResponse(
  */
 export function createMethodNotAllowedResponse(
   allowedMethods: string[],
-  requestId?: string
+  requestId?: string,
 ): Response {
   const error = createAppError(
     ErrorType.VALIDATION_ERROR,
     `Method not allowed. Allowed methods: ${allowedMethods.join(', ')}`,
     { allowedMethods },
-    requestId
+    requestId,
   );
 
   const response = error.toHttpResponse();
-  
+
   // Add Allow header
   const headers = new Headers(response.headers);
   headers.set('Allow', allowedMethods.join(', '));
@@ -243,7 +243,7 @@ export function createMethodNotAllowedResponse(
 export function logError(
   error: AppError | Error,
   request?: Request,
-  additionalContext?: Record<string, unknown>
+  additionalContext?: Record<string, unknown>,
 ): void {
   const logData: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
@@ -304,10 +304,10 @@ export function logError(
 export function createErrorHandler(requestId?: string) {
   return (error: unknown, request?: Request): Response => {
     const appError = handleUnknownError(error, requestId);
-    
+
     // Log the error
     logError(appError, request);
-    
+
     return appError.toHttpResponse();
   };
 }
@@ -315,14 +315,16 @@ export function createErrorHandler(requestId?: string) {
 /**
  * Wrap function with error handling
  */
-export function withErrorHandling<T extends (...args: any[]) => Promise<Response>>(
+export function withErrorHandling<
+  T extends (...args: any[]) => Promise<Response>,
+>(
   fn: T,
-  requestId?: string
+  requestId?: string,
 ): T {
   return (async (...args: Parameters<T>): Promise<Response> => {
     try {
       return await fn(...args);
-    } catch (error) {
+    } catch (error: any) {
       const errorHandler = createErrorHandler(requestId);
       return errorHandler(error, args[0] as Request);
     }
@@ -335,7 +337,7 @@ export function withErrorHandling<T extends (...args: any[]) => Promise<Response
 export function throwValidationError(
   message: string,
   details?: Record<string, unknown>,
-  requestId?: string
+  requestId?: string,
 ): never {
   throw createAppError(ErrorType.VALIDATION_ERROR, message, details, requestId);
 }
@@ -345,9 +347,14 @@ export function throwValidationError(
  */
 export function throwAuthError(
   message: string = 'Authentication required',
-  requestId?: string
+  requestId?: string,
 ): never {
-  throw createAppError(ErrorType.AUTHENTICATION_ERROR, message, undefined, requestId);
+  throw createAppError(
+    ErrorType.AUTHENTICATION_ERROR,
+    message,
+    undefined,
+    requestId,
+  );
 }
 
 /**
@@ -355,12 +362,12 @@ export function throwAuthError(
  */
 export function throwNotFoundError(
   resource: string,
-  requestId?: string
+  requestId?: string,
 ): never {
   throw createAppError(
     ErrorType.NOT_FOUND_ERROR,
     `${resource} not found`,
     undefined,
-    requestId
+    requestId,
   );
 }

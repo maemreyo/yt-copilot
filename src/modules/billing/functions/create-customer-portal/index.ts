@@ -216,7 +216,7 @@ class CustomerPortalService {
       try {
         await this.stripe.customers.retrieve(profile.stripe_customer_id);
         return profile.stripe_customer_id;
-      } catch (error) {
+      } catch (error: any) {
         console.warn('Stripe customer not found, creating new one:', error);
       }
     }
@@ -353,7 +353,7 @@ serve(async (req) => {
     try {
       const body = await req.text();
       if (body.trim()) requestData = JSON.parse(body);
-    } catch (error) {
+    } catch (error: any) {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         'Invalid JSON in request body',
@@ -408,7 +408,7 @@ serve(async (req) => {
     return createCorsSuccessResponse(response, 200, requestId, {
       'X-RateLimit-Remaining': rateLimitResult.remaining?.toString() || '0',
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Customer portal creation error:', error);
 
     if (error instanceof AppError) {

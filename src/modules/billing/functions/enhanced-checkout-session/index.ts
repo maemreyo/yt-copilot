@@ -272,7 +272,7 @@ class EnhancedCheckoutService {
         customerId,
         message: 'Checkout session created successfully',
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating checkout session:', error);
 
       // Log checkout error
@@ -335,7 +335,7 @@ class EnhancedCheckoutService {
       }
 
       return customer.id;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting or creating customer:', error);
       throw new Error('Failed to get or create customer');
     }
@@ -355,7 +355,7 @@ class EnhancedCheckoutService {
       if (price.type !== 'recurring') {
         throw new Error('Price must be for recurring subscription');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error validating price:', error);
       throw new Error(`Invalid price ID: ${error.message}`);
     }
@@ -385,7 +385,7 @@ class EnhancedCheckoutService {
       await this.supabase
         .from('audit_logs')
         .insert(auditEntry);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to log checkout event:', error);
       // Don't throw - audit logging failure shouldn't break the operation
     }
@@ -442,7 +442,7 @@ async function extractUserFromRequest(
       userId: user.id,
       email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -548,7 +548,7 @@ serve(async (req) => {
       200,
       requestId,
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Enhanced checkout session error:', error);
 
     // Determine error type

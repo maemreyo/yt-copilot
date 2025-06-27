@@ -196,7 +196,7 @@ class SessionManagementService {
         },
         message: 'Login successful',
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating session:', error);
       throw error;
     }
@@ -248,7 +248,7 @@ class SessionManagementService {
         success: true,
         message: 'Session revoked successfully',
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error revoking session:', error);
       throw error;
     }
@@ -289,7 +289,7 @@ class SessionManagementService {
         isActive: session.is_active,
         isCurrent: session.id === currentSessionId,
       }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error listing user sessions:', error);
       throw error;
     }
@@ -419,7 +419,7 @@ class SessionManagementService {
       await this.supabase
         .from('audit_logs')
         .insert(auditEntry);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to log session event:', error);
       // Don't throw - audit logging failure shouldn't break the operation
     }
@@ -475,7 +475,7 @@ async function extractUserFromRequest(
       userId: user.id,
       sessionId: token.substring(0, 32),
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -520,7 +520,7 @@ serve(async (req) => {
         requestId,
       );
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Session management error:', error);
 
     // If it's already an AppError, return it directly
@@ -604,7 +604,7 @@ async function handleLogout(
     const result = await service.revokeSession(sessionId, req);
 
     return createCorsSuccessResponse(result, 200, requestId);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error handling logout:', error);
 
     // If it's already an AppError, return it directly
@@ -651,7 +651,7 @@ async function handleListSessions(
       200,
       requestId,
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error handling list sessions:', error);
 
     // If it's already an AppError, return it directly

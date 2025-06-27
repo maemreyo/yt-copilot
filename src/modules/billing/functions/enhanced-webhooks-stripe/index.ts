@@ -148,7 +148,7 @@ class EnhancedStripeWebhookService {
         eventType: event.type,
         processingTime,
       });
-    } catch (error) {
+    } catch (error: any) {
       // Log error with comprehensive details
       const processingTime = Date.now() - startTime;
       this.logger.error('Webhook processing failed', {
@@ -225,7 +225,7 @@ class EnhancedStripeWebhookService {
       }
 
       return event;
-    } catch (error) {
+    } catch (error: any) {
       if (error.type === 'StripeSignatureVerificationError') {
         throw createAppError(
           ErrorType.AUTHENTICATION_ERROR,

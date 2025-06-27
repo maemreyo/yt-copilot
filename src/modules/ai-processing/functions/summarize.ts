@@ -17,8 +17,10 @@ const rateLimiterFree = createRateLimiter({
   maxRequests: parseInt(Deno.env.get('SUMMARY_RATE_LIMIT_FREE') || '5'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `summarize:${auth}` : `summarize:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `summarize:${auth}`
+      : `summarize:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const rateLimiterPremium = createRateLimiter({
@@ -26,15 +28,17 @@ const rateLimiterPremium = createRateLimiter({
   maxRequests: parseInt(Deno.env.get('SUMMARY_RATE_LIMIT_PREMIUM') || '50'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `summarize:${auth}` : `summarize:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `summarize:${auth}`
+      : `summarize:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const requestSchema = z.object({
   video_id: z.string().uuid(),
   summary_type: z.enum(['brief', 'detailed', 'bullet_points']),
   language: z.string().length(2).default('en'),
-  custom_prompt: z.string().max(500).optional()
+  custom_prompt: z.string().max(500).optional(),
 });
 
 const corsHeaders = {
@@ -45,39 +49,42 @@ const corsHeaders = {
 serve(async (request) => {
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
-      headers: corsHeaders 
+      headers: corsHeaders,
     });
   }
 
   if (request.method !== 'POST') {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'METHOD_NOT_ALLOWED', message: 'Only POST method allowed' } 
+      JSON.stringify({
+        success: false,
+        error: {
+          code: 'METHOD_NOT_ALLOWED',
+          message: 'Only POST method allowed',
+        },
       }),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   // Authenticate user
   const authService = new AuthService();
   const { user, authType } = await authService.authenticateRequest(request);
-  
+
   if (!user) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' } 
+      JSON.stringify({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
       }),
-      { 
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -85,7 +92,7 @@ serve(async (request) => {
   const body = await request.json();
   const validation = requestSchema.safeParse({
     ...body,
-    user_id: user.id
+    user_id: user.id,
   });
 
   if (!validation.success) {
@@ -95,39 +102,44 @@ serve(async (request) => {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.error.errors
-        }
+          details: validation.error.errors,
+        },
       }),
-      { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   const { video_id, summary_type, language, custom_prompt } = validation.data;
 
   // Apply rate limiting based on user tier
-  const isPremium = user.subscription_tier === 'premium' || user.subscription_tier === 'pro';
+  const isPremium = user.subscription_tier === 'premium' ||
+    user.subscription_tier === 'pro';
   const rateLimiter = isPremium ? rateLimiterPremium : rateLimiterFree;
-  
+
   try {
     await rateLimiter(request);
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: isPremium 
-            ? `Premium rate limit exceeded: ${Deno.env.get('SUMMARY_RATE_LIMIT_PREMIUM')} summaries per day`
-            : `Free rate limit exceeded: ${Deno.env.get('SUMMARY_RATE_LIMIT_FREE')} summaries per day. Upgrade to premium for more.`
-        }
+          message: isPremium
+            ? `Premium rate limit exceeded: ${
+              Deno.env.get('SUMMARY_RATE_LIMIT_PREMIUM')
+            } summaries per day`
+            : `Free rate limit exceeded: ${
+              Deno.env.get('SUMMARY_RATE_LIMIT_FREE')
+            } summaries per day. Upgrade to premium for more.`,
+        },
       }),
-      { 
-        status: 429, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -138,7 +150,7 @@ serve(async (request) => {
     const cachedSummary = await aiCacheManager.getCachedSummary(
       video_id,
       summary_type,
-      language
+      language,
     );
 
     if (cachedSummary) {
@@ -149,21 +161,21 @@ serve(async (request) => {
         content: cachedSummary.content,
         tokens_used: cachedSummary.tokens_used || 0,
         cached: true,
-        model: cachedSummary.model
+        model: cachedSummary.model,
       };
 
-      logger.info('Returning cached summary', { 
-        video_id, 
-        summary_type, 
-        language 
+      logger.info('Returning cached summary', {
+        video_id,
+        summary_type,
+        language,
       });
 
       return new Response(
         JSON.stringify({ success: true, data: response }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
       );
     }
 
@@ -178,7 +190,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.NOT_FOUND,
         'Video not found',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -194,7 +206,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.AUTHORIZATION_ERROR,
         'You do not have access to this video. Please analyze the video first.',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -219,7 +231,7 @@ serve(async (request) => {
         throw createAppError(
           ErrorType.NOT_FOUND,
           'No transcript available for this video',
-          { video_id, language }
+          { video_id, language },
         );
       }
 
@@ -237,14 +249,14 @@ serve(async (request) => {
       video_id,
       summary_type,
       language,
-      transcript_length: transcriptText.length
+      transcript_length: transcriptText.length,
     });
 
     const { summary, tokensUsed } = await openAIClient.summarizeVideo(
       video.title,
       transcriptText,
       summary_type,
-      language
+      language,
     );
 
     // Cache the summary
@@ -255,7 +267,7 @@ serve(async (request) => {
       language,
       summary,
       Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
-      tokensUsed
+      tokensUsed,
     );
 
     // Log cost estimation
@@ -265,7 +277,7 @@ serve(async (request) => {
       summary_type,
       language,
       tokensUsed,
-      estimatedCost
+      estimatedCost,
     });
 
     const response: SummarizeResponse = {
@@ -275,27 +287,28 @@ serve(async (request) => {
       content: summary,
       tokens_used: tokensUsed,
       cached: false,
-      model: Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini'
+      model: Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
     };
 
     return new Response(
       JSON.stringify({ success: true, data: response }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
-
   } catch (error: any) {
     logger.error('Summarization error:', error);
-    
+
     // Determine error code and status based on error type
     let errorCode = 'SUMMARIZATION_FAILED';
     let statusCode = 500;
     let message = error.message || 'Failed to generate summary';
-    
+
     if (error.type === ErrorType.NOT_FOUND) {
-      errorCode = error.message.includes('transcript') ? 'TRANSCRIPT_NOT_FOUND' : 'VIDEO_NOT_FOUND';
+      errorCode = error.message.includes('transcript')
+        ? 'TRANSCRIPT_NOT_FOUND'
+        : 'VIDEO_NOT_FOUND';
       statusCode = 404;
     } else if (error.type === ErrorType.AUTHORIZATION_ERROR) {
       errorCode = 'UNAUTHORIZED';
@@ -316,13 +329,13 @@ serve(async (request) => {
         error: {
           code: errorCode,
           message,
-          details: error.details
-        }
+          details: error.details,
+        },
       }),
-      { 
-        status: statusCode, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: statusCode,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 }, {
@@ -331,6 +344,6 @@ serve(async (request) => {
   schema: requestSchema,
   middleware: [],
   rateLimit: {
-    enabled: false // We handle rate limiting internally based on user tier
-  }
+    enabled: false, // We handle rate limiting internally based on user tier
+  },
 });

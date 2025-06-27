@@ -61,7 +61,7 @@ export class YouTubeAPIClient {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to extract video ID', error as Error, { url });
       return null;
     }
@@ -80,7 +80,7 @@ export class YouTubeAPIClient {
       const seconds = parseInt(match[3] || '0', 10);
 
       return hours * 3600 + minutes * 60 + seconds;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to parse duration', error as Error, { duration });
       return 0;
     }
@@ -161,7 +161,7 @@ export class YouTubeAPIClient {
       });
 
       return metadata;
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       logger.error('Failed to fetch YouTube video metadata', error as Error, {
         videoId,

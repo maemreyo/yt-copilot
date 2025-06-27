@@ -1,9 +1,9 @@
 /**
  * Core Database Utilities
- * 
+ *
  * Provides connection management, query helpers, transaction wrappers,
  * and error handling for all database operations across modules.
- * 
+ *
  * Uses existing Layer 1 utilities:
  * - Error handling from @/errors
  * - Logging from @/logging
@@ -11,15 +11,19 @@
  * - Environment config from @/environment
  */
 
-import { createClient, SupabaseClient, PostgrestError } from '@supabase/supabase-js';
+import {
+  createClient,
+  PostgrestError,
+  SupabaseClient,
+} from '@supabase/supabase-js';
 import { env, environment } from '../config/environment';
 import { logger } from './logging';
-import { 
-  ApiError, 
-  DatabaseError, 
-  ValidationError,
+import {
+  ApiError,
+  DatabaseError,
   ErrorCode,
-  ErrorContext 
+  ErrorContext,
+  ValidationError,
 } from './errors';
 
 /**
@@ -83,13 +87,13 @@ class ConnectionPool {
       timeout: env.DATABASE_TIMEOUT,
       retryAttempts: env.API_RETRY_ATTEMPTS,
       retryDelay: 1000,
-      ...config
+      ...config,
     };
 
     logger.info('Database connection pool initialized', {
       url: this.config.url,
       maxConnections: this.config.maxConnections,
-      timeout: this.config.timeout
+      timeout: this.config.timeout,
     });
   }
 
@@ -98,19 +102,19 @@ class ConnectionPool {
    */
   static getAnonClient(): SupabaseClient {
     const key = 'anon';
-    
+
     if (!this.instances.has(key)) {
       const client = createClient(this.config.url, this.config.anonKey, {
         auth: {
           autoRefreshToken: false,
-          persistSession: false
+          persistSession: false,
         },
         global: {
           headers: {
             'X-Client-Type': 'database-utility',
-            'X-Operation-Timeout': this.config.timeout.toString()
-          }
-        }
+            'X-Operation-Timeout': this.config.timeout.toString(),
+          },
+        },
       });
 
       this.instances.set(key, client);
@@ -125,19 +129,19 @@ class ConnectionPool {
    */
   static getServiceClient(): SupabaseClient {
     const key = 'service';
-    
+
     if (!this.instances.has(key)) {
       const client = createClient(this.config.url, this.config.serviceRoleKey, {
         auth: {
           autoRefreshToken: false,
-          persistSession: false
+          persistSession: false,
         },
         global: {
           headers: {
             'X-Client-Type': 'database-utility-service',
-            'X-Operation-Timeout': this.config.timeout.toString()
-          }
-        }
+            'X-Operation-Timeout': this.config.timeout.toString(),
+          },
+        },
       });
 
       this.instances.set(key, client);
@@ -155,15 +159,15 @@ class ConnectionPool {
     const client = createClient(this.config.url, this.config.anonKey, {
       auth: {
         autoRefreshToken: false,
-        persistSession: false
+        persistSession: false,
       },
       global: {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Client-Type': 'database-utility-auth',
-          'X-Operation-Timeout': this.config.timeout.toString()
-        }
-      }
+          'X-Operation-Timeout': this.config.timeout.toString(),
+        },
+      },
     });
 
     return client;
@@ -178,10 +182,10 @@ class ConnectionPool {
     error?: string;
   }> {
     const startTime = Date.now();
-    
+
     try {
       const client = this.getAnonClient();
-      
+
       // Simple query to test connection
       const { error } = await client
         .from('profiles')
@@ -197,13 +201,13 @@ class ConnectionPool {
 
       return {
         status: 'healthy',
-        latency
+        latency,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: 'unhealthy',
         latency: Date.now() - startTime,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -233,8 +237,8 @@ export class QueryHelper {
    * Execute a select query with comprehensive error handling
    */
   async select<T = any>(
-    table: string, 
-    options: QueryOptions = {}
+    table: string,
+    options: QueryOptions = {},
   ): Promise<DatabaseResult<T[]>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -243,7 +247,7 @@ export class QueryHelper {
       logger.debug('Database select operation started', {
         operationId,
         table,
-        options: this.sanitizeOptions(options)
+        options: this.sanitizeOptions(options),
       });
 
       let query = this.client.from(table);
@@ -268,8 +272,8 @@ export class QueryHelper {
 
       // Apply ordering
       if (options.orderBy) {
-        query = query.order(options.orderBy, { 
-          ascending: options.ascending ?? true 
+        query = query.order(options.orderBy, {
+          ascending: options.ascending ?? true,
         });
       }
 
@@ -290,7 +294,7 @@ export class QueryHelper {
           operationId,
           table,
           error: error.message,
-          duration
+          duration,
         });
         return { data: null, error: dbError };
       }
@@ -299,24 +303,23 @@ export class QueryHelper {
         operationId,
         table,
         rowCount: data?.length || 0,
-        duration
+        duration,
       });
 
-      return { 
-        data: data as T[], 
-        error: null, 
-        count: count || data?.length || 0 
+      return {
+        data: data as T[],
+        error: null,
+        count: count || data?.length || 0,
       };
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'SELECT');
-      
+
       logger.error('Database select operation error', {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
-        duration
+        duration,
       });
 
       return { data: null, error: dbError };
@@ -327,9 +330,9 @@ export class QueryHelper {
    * Execute an insert operation
    */
   async insert<T = any>(
-    table: string, 
+    table: string,
     data: Record<string, any> | Record<string, any>[],
-    options: { select?: string; upsert?: boolean } = {}
+    options: { select?: string; upsert?: boolean } = {},
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -338,7 +341,7 @@ export class QueryHelper {
       logger.debug('Database insert operation started', {
         operationId,
         table,
-        recordCount: Array.isArray(data) ? data.length : 1
+        recordCount: Array.isArray(data) ? data.length : 1,
       });
 
       let query = this.client.from(table);
@@ -363,7 +366,7 @@ export class QueryHelper {
           operationId,
           table,
           error: error.message,
-          duration
+          duration,
         });
         return { data: null, error: dbError };
       }
@@ -371,20 +374,19 @@ export class QueryHelper {
       logger.debug('Database insert operation completed', {
         operationId,
         table,
-        duration
+        duration,
       });
 
       return { data: result as T, error: null };
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'INSERT');
-      
+
       logger.error('Database insert operation error', {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
-        duration
+        duration,
       });
 
       return { data: null, error: dbError };
@@ -398,7 +400,7 @@ export class QueryHelper {
     table: string,
     data: Record<string, any>,
     filters: Record<string, any>,
-    options: { select?: string } = {}
+    options: { select?: string } = {},
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -407,7 +409,7 @@ export class QueryHelper {
       logger.debug('Database update operation started', {
         operationId,
         table,
-        filters: this.sanitizeOptions({ filters }).filters
+        filters: this.sanitizeOptions({ filters }).filters,
       });
 
       let query = this.client.from(table).update(data);
@@ -431,7 +433,7 @@ export class QueryHelper {
           operationId,
           table,
           error: error.message,
-          duration
+          duration,
         });
         return { data: null, error: dbError };
       }
@@ -439,20 +441,19 @@ export class QueryHelper {
       logger.debug('Database update operation completed', {
         operationId,
         table,
-        duration
+        duration,
       });
 
       return { data: result as T, error: null };
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'UPDATE');
-      
+
       logger.error('Database update operation error', {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
-        duration
+        duration,
       });
 
       return { data: null, error: dbError };
@@ -465,7 +466,7 @@ export class QueryHelper {
   async delete<T = any>(
     table: string,
     filters: Record<string, any>,
-    options: { select?: string } = {}
+    options: { select?: string } = {},
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -474,7 +475,7 @@ export class QueryHelper {
       logger.debug('Database delete operation started', {
         operationId,
         table,
-        filters: this.sanitizeOptions({ filters }).filters
+        filters: this.sanitizeOptions({ filters }).filters,
       });
 
       let query = this.client.from(table).delete();
@@ -498,7 +499,7 @@ export class QueryHelper {
           operationId,
           table,
           error: error.message,
-          duration
+          duration,
         });
         return { data: null, error: dbError };
       }
@@ -506,20 +507,19 @@ export class QueryHelper {
       logger.debug('Database delete operation completed', {
         operationId,
         table,
-        duration
+        duration,
       });
 
       return { data: result as T, error: null };
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'DELETE');
-      
+
       logger.error('Database delete operation error', {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
-        duration
+        duration,
       });
 
       return { data: null, error: dbError };
@@ -531,7 +531,7 @@ export class QueryHelper {
    */
   async rpc<T = any>(
     functionName: string,
-    params: Record<string, any> = {}
+    params: Record<string, any> = {},
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -540,7 +540,7 @@ export class QueryHelper {
       logger.debug('Database RPC operation started', {
         operationId,
         functionName,
-        paramCount: Object.keys(params).length
+        paramCount: Object.keys(params).length,
       });
 
       const { data, error } = await this.client.rpc(functionName, params);
@@ -553,7 +553,7 @@ export class QueryHelper {
           operationId,
           functionName,
           error: error.message,
-          duration
+          duration,
         });
         return { data: null, error: dbError };
       }
@@ -561,20 +561,19 @@ export class QueryHelper {
       logger.debug('Database RPC operation completed', {
         operationId,
         functionName,
-        duration
+        duration,
       });
 
       return { data: data as T, error: null };
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'RPC');
-      
+
       logger.error('Database RPC operation error', {
         operationId,
         functionName,
         error: error instanceof Error ? error.message : 'Unknown error',
-        duration
+        duration,
       });
 
       return { data: null, error: dbError };
@@ -592,21 +591,21 @@ export class QueryHelper {
    * Create standardized database error
    */
   private createDatabaseError(
-    error: any, 
-    operationId: string, 
-    operation: string
+    error: any,
+    operationId: string,
+    operation: string,
   ): DatabaseError {
     const code = this.mapErrorCode(error);
     const message = error?.message || 'Database operation failed';
-    
+
     return new DatabaseError(message, {
       code,
       context: {
         ...this.context,
         operationId,
         operation,
-        originalError: error
-      }
+        originalError: error,
+      },
     });
   }
 
@@ -620,13 +619,20 @@ export class QueryHelper {
     const pgCode = error.code;
     if (pgCode) {
       switch (pgCode) {
-        case '23505': return ErrorCode.VALIDATION_ERROR; // unique_violation
-        case '23503': return ErrorCode.VALIDATION_ERROR; // foreign_key_violation
-        case '23502': return ErrorCode.VALIDATION_ERROR; // not_null_violation
-        case '42501': return ErrorCode.UNAUTHORIZED; // insufficient_privilege
-        case '42P01': return ErrorCode.DATABASE_ERROR; // undefined_table
-        case '08006': return ErrorCode.DATABASE_ERROR; // connection_failure
-        default: return ErrorCode.DATABASE_ERROR;
+        case '23505':
+          return ErrorCode.VALIDATION_ERROR; // unique_violation
+        case '23503':
+          return ErrorCode.VALIDATION_ERROR; // foreign_key_violation
+        case '23502':
+          return ErrorCode.VALIDATION_ERROR; // not_null_violation
+        case '42501':
+          return ErrorCode.UNAUTHORIZED; // insufficient_privilege
+        case '42P01':
+          return ErrorCode.DATABASE_ERROR; // undefined_table
+        case '08006':
+          return ErrorCode.DATABASE_ERROR; // connection_failure
+        default:
+          return ErrorCode.DATABASE_ERROR;
       }
     }
 
@@ -644,11 +650,13 @@ export class QueryHelper {
    */
   private sanitizeOptions(options: any): any {
     const sanitized = { ...options };
-    
+
     // Remove potentially sensitive filter values
     if (sanitized.filters) {
       sanitized.filters = Object.keys(sanitized.filters).reduce((acc, key) => {
-        acc[key] = key.toLowerCase().includes('password') ? '[REDACTED]' : sanitized.filters[key];
+        acc[key] = key.toLowerCase().includes('password')
+          ? '[REDACTED]'
+          : sanitized.filters[key];
         return acc;
       }, {} as Record<string, any>);
     }
@@ -669,16 +677,18 @@ export class TransactionManager {
    */
   static async withTransaction<T>(
     operations: (context: TransactionContext) => Promise<T>,
-    client?: SupabaseClient
+    client?: SupabaseClient,
   ): Promise<T> {
     const transactionClient = client || ConnectionPool.getServiceClient();
-    const operationId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const operationId = `txn_${Date.now()}_${
+      Math.random().toString(36).substr(2, 9)
+    }`;
     const startTime = Date.now();
 
     const context: TransactionContext = {
       client: transactionClient,
       operationId,
-      startTime
+      startTime,
     };
 
     logger.debug('Transaction started', { operationId });
@@ -690,17 +700,16 @@ export class TransactionManager {
       const duration = Date.now() - startTime;
       logger.debug('Transaction completed successfully', {
         operationId,
-        duration
+        duration,
       });
 
       return result;
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       logger.error('Transaction failed', {
         operationId,
         error: error instanceof Error ? error.message : 'Unknown error',
-        duration
+        duration,
       });
 
       throw error;
@@ -712,26 +721,29 @@ export class TransactionManager {
    */
   static async withRetry<T>(
     operation: () => Promise<T>,
-    attempts: number = TransactionManager.MAX_RETRY_ATTEMPTS
+    attempts: number = TransactionManager.MAX_RETRY_ATTEMPTS,
   ): Promise<T> {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
         return await operation();
-      } catch (error) {
+      } catch (error: any) {
         lastError = error instanceof Error ? error : new Error('Unknown error');
-        
+
         if (attempt === attempts) {
           break;
         }
 
         // Only retry on specific errors
         if (this.shouldRetry(error)) {
-          logger.warn(`Database operation failed, retrying (${attempt}/${attempts})`, {
-            error: lastError.message,
-            nextRetryDelay: TransactionManager.RETRY_DELAY_MS * attempt
-          });
+          logger.warn(
+            `Database operation failed, retrying (${attempt}/${attempts})`,
+            {
+              error: lastError.message,
+              nextRetryDelay: TransactionManager.RETRY_DELAY_MS * attempt,
+            },
+          );
 
           await this.delay(TransactionManager.RETRY_DELAY_MS * attempt);
         } else {
@@ -769,7 +781,7 @@ export class TransactionManager {
    * Delay utility for retry logic
    */
   private static delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
@@ -785,10 +797,11 @@ export const database = {
   // Connection management
   getAnonClient: () => ConnectionPool.getAnonClient(),
   getServiceClient: () => ConnectionPool.getServiceClient(),
-  getAuthenticatedClient: (token: string) => ConnectionPool.getAuthenticatedClient(token),
+  getAuthenticatedClient: (token: string) =>
+    ConnectionPool.getAuthenticatedClient(token),
 
   // Query helpers
-  createQueryHelper: (client: SupabaseClient, context?: ErrorContext) => 
+  createQueryHelper: (client: SupabaseClient, context?: ErrorContext) =>
     new QueryHelper(client, context),
 
   // Transaction management

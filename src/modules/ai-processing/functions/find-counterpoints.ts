@@ -5,7 +5,10 @@ import { createRateLimiter } from '@/rate-limiting';
 import { createAppError, ErrorType } from '@/errors';
 import { AuthService } from '@/auth';
 import { Logger } from '@/logging';
-import { FindCounterpointsRequestSchema, type FindCounterpointsResponse } from '../types';
+import {
+  FindCounterpointsRequestSchema,
+  type FindCounterpointsResponse,
+} from '../types';
 import { openAIClient } from '../utils/openai-client';
 import { aiCacheManager } from '../utils/cache-manager';
 
@@ -17,17 +20,23 @@ const rateLimiterFree = createRateLimiter({
   maxRequests: parseInt(Deno.env.get('COUNTERPOINTS_RATE_LIMIT_FREE') || '1'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `counterpoints:${auth}` : `counterpoints:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `counterpoints:${auth}`
+      : `counterpoints:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const rateLimiterPremium = createRateLimiter({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  maxRequests: parseInt(Deno.env.get('COUNTERPOINTS_RATE_LIMIT_PREMIUM') || '10'),
+  maxRequests: parseInt(
+    Deno.env.get('COUNTERPOINTS_RATE_LIMIT_PREMIUM') || '10',
+  ),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `counterpoints:${auth}` : `counterpoints:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `counterpoints:${auth}`
+      : `counterpoints:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const corsHeaders = {
@@ -38,39 +47,42 @@ const corsHeaders = {
 serve(async (request) => {
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
-      headers: corsHeaders 
+      headers: corsHeaders,
     });
   }
 
   if (request.method !== 'POST') {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'METHOD_NOT_ALLOWED', message: 'Only POST method allowed' } 
+      JSON.stringify({
+        success: false,
+        error: {
+          code: 'METHOD_NOT_ALLOWED',
+          message: 'Only POST method allowed',
+        },
       }),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   // Authenticate user
   const authService = new AuthService();
   const { user, authType } = await authService.authenticateRequest(request);
-  
+
   if (!user) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' } 
+      JSON.stringify({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
       }),
-      { 
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -78,7 +90,7 @@ serve(async (request) => {
   const body = await request.json();
   const validation = FindCounterpointsRequestSchema.safeParse({
     ...body,
-    user_id: user.id
+    user_id: user.id,
   });
 
   if (!validation.success) {
@@ -88,57 +100,64 @@ serve(async (request) => {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.error.errors
-        }
+          details: validation.error.errors,
+        },
       }),
-      { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
-  const { video_id, main_topics, original_perspective, user_id } = validation.data;
+  const { video_id, main_topics, original_perspective, user_id } =
+    validation.data;
 
   // Check if user has premium features (counter-perspective is premium-only)
-  const isPremium = user.subscription_tier === 'premium' || user.subscription_tier === 'pro';
-  
+  const isPremium = user.subscription_tier === 'premium' ||
+    user.subscription_tier === 'pro';
+
   if (!isPremium) {
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'PREMIUM_REQUIRED',
-          message: 'Counter-perspective discovery is a premium feature. Please upgrade your subscription.'
-        }
+          message:
+            'Counter-perspective discovery is a premium feature. Please upgrade your subscription.',
+        },
       }),
-      { 
-        status: 403, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   // Apply rate limiting
   const rateLimiter = isPremium ? rateLimiterPremium : rateLimiterFree;
-  
+
   try {
     await rateLimiter(request);
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: isPremium 
-            ? `Premium rate limit exceeded: ${Deno.env.get('COUNTERPOINTS_RATE_LIMIT_PREMIUM')} requests per day`
-            : `Free rate limit exceeded: ${Deno.env.get('COUNTERPOINTS_RATE_LIMIT_FREE')} request per day. Upgrade to premium for more.`
-        }
+          message: isPremium
+            ? `Premium rate limit exceeded: ${
+              Deno.env.get('COUNTERPOINTS_RATE_LIMIT_PREMIUM')
+            } requests per day`
+            : `Free rate limit exceeded: ${
+              Deno.env.get('COUNTERPOINTS_RATE_LIMIT_FREE')
+            } request per day. Upgrade to premium for more.`,
+        },
       }),
-      { 
-        status: 429, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -146,7 +165,8 @@ serve(async (request) => {
 
   try {
     // Check cache first
-    const cachedCounterpoints = await aiCacheManager.getCachedCounterPerspectives(video_id);
+    const cachedCounterpoints = await aiCacheManager
+      .getCachedCounterPerspectives(video_id);
 
     if (cachedCounterpoints) {
       const response: FindCounterpointsResponse = {
@@ -155,17 +175,17 @@ serve(async (request) => {
         search_keywords: cachedCounterpoints.search_keywords,
         tokens_used: cachedCounterpoints.tokens_used || 0,
         cached: true,
-        model: cachedCounterpoints.model
+        model: cachedCounterpoints.model,
       };
 
       logger.info('Returning cached counter-perspectives', { video_id });
 
       return new Response(
         JSON.stringify({ success: true, data: response }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
       );
     }
 
@@ -180,7 +200,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.NOT_FOUND,
         'Video not found',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -196,7 +216,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.AUTHORIZATION_ERROR,
         'You do not have access to this video. Please analyze the video first.',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -211,7 +231,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.NOT_FOUND,
         'No transcript available for this video',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -225,26 +245,27 @@ serve(async (request) => {
       video_id,
       transcript_length: transcriptText.length,
       main_topics_provided: !!main_topics,
-      original_perspective_provided: !!original_perspective
+      original_perspective_provided: !!original_perspective,
     });
 
-    const { 
-      counterPerspectives, 
-      searchKeywords, 
-      tokensUsed 
+    const {
+      counterPerspectives,
+      searchKeywords,
+      tokensUsed,
     } = await openAIClient.findCounterPerspectives(
       video.title,
       transcriptText,
       main_topics,
-      original_perspective
+      original_perspective,
     );
 
     // Extract main topics and original perspective from the response if not provided
-    const extractedMainTopics = main_topics || 
+    const extractedMainTopics = main_topics ||
       (counterPerspectives[0]?.main_topics || ['general']);
-    
-    const extractedOriginalPerspective = original_perspective || 
-      (counterPerspectives[0]?.original_perspective || 'No clear perspective detected');
+
+    const extractedOriginalPerspective = original_perspective ||
+      (counterPerspectives[0]?.original_perspective ||
+        'No clear perspective detected');
 
     // Cache the counter-perspectives
     await aiCacheManager.cacheCounterPerspectives(
@@ -255,7 +276,7 @@ serve(async (request) => {
       counterPerspectives,
       searchKeywords,
       Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
-      tokensUsed
+      tokensUsed,
     );
 
     // Log cost estimation
@@ -264,7 +285,7 @@ serve(async (request) => {
       video_id,
       tokensUsed,
       estimatedCost,
-      perspectives_found: counterPerspectives.length
+      perspectives_found: counterPerspectives.length,
     });
 
     const response: FindCounterpointsResponse = {
@@ -273,27 +294,28 @@ serve(async (request) => {
       search_keywords: searchKeywords,
       tokens_used: tokensUsed,
       cached: false,
-      model: Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini'
+      model: Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
     };
 
     return new Response(
       JSON.stringify({ success: true, data: response }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
-
   } catch (error: any) {
     logger.error('Counter-perspectives generation error:', error);
-    
+
     // Determine error code and status based on error type
     let errorCode = 'COUNTERPOINTS_FAILED';
     let statusCode = 500;
     let message = error.message || 'Failed to generate counter-perspectives';
-    
+
     if (error.type === ErrorType.NOT_FOUND) {
-      errorCode = error.message.includes('transcript') ? 'TRANSCRIPT_NOT_FOUND' : 'VIDEO_NOT_FOUND';
+      errorCode = error.message.includes('transcript')
+        ? 'TRANSCRIPT_NOT_FOUND'
+        : 'VIDEO_NOT_FOUND';
       statusCode = 404;
     } else if (error.type === ErrorType.AUTHORIZATION_ERROR) {
       errorCode = 'UNAUTHORIZED';
@@ -317,13 +339,13 @@ serve(async (request) => {
         error: {
           code: errorCode,
           message,
-          details: error.details
-        }
+          details: error.details,
+        },
       }),
-      { 
-        status: statusCode, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: statusCode,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 });

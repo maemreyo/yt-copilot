@@ -25,7 +25,7 @@ export async function setup() {
     await setupTestDatabase();
 
     console.log('✅ Test environment setup complete');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Test environment setup failed:', error);
     throw error;
   }
@@ -44,9 +44,9 @@ export async function teardown() {
 
     // Note: We don't stop Supabase here as it might be used by other processes
     // In CI/CD environments, the container will be destroyed anyway
-    
+
     console.log('✅ Test environment cleanup complete');
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Test environment cleanup failed:', error);
     // Don't throw here to avoid masking test failures
   }
@@ -58,9 +58,9 @@ export async function teardown() {
 async function checkSupabaseCLI(): Promise<void> {
   try {
     execSync('supabase --version', { stdio: 'pipe' });
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(
-      'Supabase CLI not found. Please install it with: npm install -g supabase'
+      'Supabase CLI not found. Please install it with: npm install -g supabase',
     );
   }
 }
@@ -72,14 +72,14 @@ async function startSupabase(): Promise<void> {
   try {
     // Check if Supabase is already running
     const isRunning = await checkSupabaseStatus();
-    
+
     if (isRunning) {
       console.log('📡 Supabase is already running');
       return;
     }
 
     console.log('🚀 Starting Supabase...');
-    
+
     // Change to project root directory
     const projectRoot = findProjectRoot();
     process.chdir(projectRoot);
@@ -91,7 +91,7 @@ async function startSupabase(): Promise<void> {
     });
 
     console.log('✅ Supabase started successfully');
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Failed to start Supabase: ${error}`);
   }
 }
@@ -114,14 +114,14 @@ async function checkSupabaseStatus(): Promise<boolean> {
 async function waitForSupabase(): Promise<void> {
   const maxAttempts = 30;
   const delayMs = 2000;
-  
+
   console.log('⏳ Waiting for Supabase to be ready...');
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       // Try to connect to Supabase
       const response = await fetch('http://localhost:54321/health');
-      
+
       if (response.ok) {
         console.log('✅ Supabase is ready');
         return;
@@ -134,8 +134,10 @@ async function waitForSupabase(): Promise<void> {
       throw new Error('Timeout waiting for Supabase to be ready');
     }
 
-    console.log(`⏳ Attempt ${attempt}/${maxAttempts}, retrying in ${delayMs}ms...`);
-    await new Promise(resolve => setTimeout(resolve, delayMs));
+    console.log(
+      `⏳ Attempt ${attempt}/${maxAttempts}, retrying in ${delayMs}ms...`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
 
@@ -156,7 +158,7 @@ async function setupTestDatabase(): Promise<void> {
     await seedTestData();
 
     console.log('✅ Test database setup complete');
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Failed to setup test database: ${error}`);
   }
 }
@@ -167,7 +169,7 @@ async function setupTestDatabase(): Promise<void> {
 async function seedTestData(): Promise<void> {
   try {
     const dbManager = new TestDatabaseManager();
-    
+
     // Create a few standard test users for shared use
     await dbManager.createTestUser({
       email: 'test-admin@example.com',
@@ -180,7 +182,7 @@ async function seedTestData(): Promise<void> {
     });
 
     console.log('✅ Test data seeded');
-  } catch (error) {
+  } catch (error: any) {
     console.warn('⚠️ Failed to seed test data:', error);
     // Don't throw here as this is not critical for all tests
   }
@@ -191,15 +193,17 @@ async function seedTestData(): Promise<void> {
  */
 function findProjectRoot(): string {
   let currentDir = process.cwd();
-  
+
   while (currentDir !== path.dirname(currentDir)) {
     if (existsSync(path.join(currentDir, 'supabase', 'config.toml'))) {
       return currentDir;
     }
     currentDir = path.dirname(currentDir);
   }
-  
-  throw new Error('Could not find project root (supabase/config.toml not found)');
+
+  throw new Error(
+    'Could not find project root (supabase/config.toml not found)',
+  );
 }
 
 /**
@@ -212,11 +216,15 @@ function validateTestEnvironment(): void {
     'SUPABASE_SERVICE_ROLE_KEY',
   ];
 
-  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  const missingVars = requiredEnvVars.filter((varName) =>
+    !process.env[varName]
+  );
 
   if (missingVars.length > 0) {
     throw new Error(
-      `Missing required environment variables for testing: ${missingVars.join(', ')}`
+      `Missing required environment variables for testing: ${
+        missingVars.join(', ')
+      }`,
     );
   }
 }

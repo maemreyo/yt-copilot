@@ -73,7 +73,8 @@ export class CorsHandler {
   constructor(config: Partial<CorsConfig> = {}) {
     this.config = {
       origin: config.origin || this.getDefaultOrigins(),
-      methods: config.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+      methods: config.methods ||
+        ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
       allowedHeaders: config.allowedHeaders || [
         'Origin',
         'X-Requested-With',
@@ -103,15 +104,21 @@ export class CorsHandler {
    */
   private getDefaultOrigins(): string[] {
     const origins = [env.APP_URL];
-    
+
     if (environment.isDevelopment()) {
-      origins.push('http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000');
+      origins.push(
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+      );
     }
 
     // Add additional allowed origins from environment
     const additionalOrigins = Deno.env.get('CORS_ALLOWED_ORIGINS');
     if (additionalOrigins) {
-      origins.push(...additionalOrigins.split(',').map(origin => origin.trim()));
+      origins.push(
+        ...additionalOrigins.split(',').map((origin) => origin.trim()),
+      );
     }
 
     return origins;
@@ -163,12 +170,15 @@ export class CorsHandler {
 
     // Handle allowed headers
     if (this.config.allowedHeaders.length > 0) {
-      headers['Access-Control-Allow-Headers'] = this.config.allowedHeaders.join(', ');
+      headers['Access-Control-Allow-Headers'] = this.config.allowedHeaders.join(
+        ', ',
+      );
     }
 
     // Handle exposed headers
     if (this.config.exposedHeaders.length > 0) {
-      headers['Access-Control-Expose-Headers'] = this.config.exposedHeaders.join(', ');
+      headers['Access-Control-Expose-Headers'] = this.config.exposedHeaders
+        .join(', ');
     }
 
     // Handle max age for preflight
@@ -184,7 +194,7 @@ export class CorsHandler {
    */
   handlePreflight(request: Request): Response {
     const headers = this.generateHeaders(request);
-    
+
     return new Response(null, {
       status: this.config.optionsSuccessStatus,
       headers,
@@ -211,7 +221,7 @@ export class CorsHandler {
    */
   addHeaders(request: Request, response: Response): Response {
     const corsHeaders = this.generateHeaders(request);
-    
+
     // Clone response with CORS headers
     const newHeaders = new Headers(response.headers);
     for (const [key, value] of Object.entries(corsHeaders)) {
@@ -234,18 +244,23 @@ export class SecurityHeaders {
 
   constructor(config: Partial<SecurityHeadersConfig> = {}) {
     this.config = {
-      contentSecurityPolicy: config.contentSecurityPolicy ?? this.getDefaultCSP(),
-      crossOriginEmbedderPolicy: config.crossOriginEmbedderPolicy ?? 'require-corp',
+      contentSecurityPolicy: config.contentSecurityPolicy ??
+        this.getDefaultCSP(),
+      crossOriginEmbedderPolicy: config.crossOriginEmbedderPolicy ??
+        'require-corp',
       crossOriginOpenerPolicy: config.crossOriginOpenerPolicy ?? 'same-origin',
-      crossOriginResourcePolicy: config.crossOriginResourcePolicy ?? 'same-origin',
+      crossOriginResourcePolicy: config.crossOriginResourcePolicy ??
+        'same-origin',
       originAgentCluster: config.originAgentCluster ?? true,
       referrerPolicy: config.referrerPolicy ?? 'no-referrer',
-      strictTransportSecurity: config.strictTransportSecurity ?? 'max-age=63072000; includeSubDomains; preload',
+      strictTransportSecurity: config.strictTransportSecurity ??
+        'max-age=63072000; includeSubDomains; preload',
       xContentTypeOptions: config.xContentTypeOptions ?? 'nosniff',
       xDnsPrefetchControl: config.xDnsPrefetchControl ?? 'off',
       xDownloadOptions: config.xDownloadOptions ?? 'noopen',
       xFrameOptions: config.xFrameOptions ?? 'DENY',
-      xPermittedCrossDomainPolicies: config.xPermittedCrossDomainPolicies ?? 'none',
+      xPermittedCrossDomainPolicies: config.xPermittedCrossDomainPolicies ??
+        'none',
       xPoweredBy: config.xPoweredBy ?? false,
       xXssProtection: config.xXssProtection ?? '1; mode=block',
     };
@@ -288,15 +303,18 @@ export class SecurityHeaders {
     }
 
     if (this.config.crossOriginEmbedderPolicy) {
-      headers['Cross-Origin-Embedder-Policy'] = this.config.crossOriginEmbedderPolicy;
+      headers['Cross-Origin-Embedder-Policy'] =
+        this.config.crossOriginEmbedderPolicy;
     }
 
     if (this.config.crossOriginOpenerPolicy) {
-      headers['Cross-Origin-Opener-Policy'] = this.config.crossOriginOpenerPolicy;
+      headers['Cross-Origin-Opener-Policy'] =
+        this.config.crossOriginOpenerPolicy;
     }
 
     if (this.config.crossOriginResourcePolicy) {
-      headers['Cross-Origin-Resource-Policy'] = this.config.crossOriginResourcePolicy;
+      headers['Cross-Origin-Resource-Policy'] =
+        this.config.crossOriginResourcePolicy;
     }
 
     if (this.config.originAgentCluster) {
@@ -308,7 +326,8 @@ export class SecurityHeaders {
     }
 
     if (this.config.strictTransportSecurity && !environment.isDevelopment()) {
-      headers['Strict-Transport-Security'] = this.config.strictTransportSecurity;
+      headers['Strict-Transport-Security'] =
+        this.config.strictTransportSecurity;
     }
 
     if (this.config.xContentTypeOptions) {
@@ -328,7 +347,8 @@ export class SecurityHeaders {
     }
 
     if (this.config.xPermittedCrossDomainPolicies) {
-      headers['X-Permitted-Cross-Domain-Policies'] = this.config.xPermittedCrossDomainPolicies;
+      headers['X-Permitted-Cross-Domain-Policies'] =
+        this.config.xPermittedCrossDomainPolicies;
     }
 
     if (!this.config.xPoweredBy) {
@@ -347,10 +367,10 @@ export class SecurityHeaders {
    */
   createMiddleware() {
     const securityHeaders = this.generateHeaders();
-    
+
     return (response: Response): Response => {
       const newHeaders = new Headers(response.headers);
-      
+
       for (const [key, value] of Object.entries(securityHeaders)) {
         if (value) {
           newHeaders.set(key, value);
@@ -417,8 +437,14 @@ export class RequestSanitizer {
 
     // Remove script tags
     if (this.config.removeScriptTags) {
-      sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      sanitized = sanitized.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
+      sanitized = sanitized.replace(
+        /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+        '',
+      );
+      sanitized = sanitized.replace(
+        /<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi,
+        '',
+      );
     }
 
     // Remove HTML tags (except allowed ones)
@@ -427,7 +453,10 @@ export class RequestSanitizer {
         sanitized = sanitized.replace(/<[^>]*>/g, '');
       } else {
         const allowedPattern = this.config.allowedHtmlTags.join('|');
-        const regex = new RegExp(`<(?!/?(?:${allowedPattern})(?:\\s|>))[^>]*>`, 'gi');
+        const regex = new RegExp(
+          `<(?!/?(?:${allowedPattern})(?:\\s|>))[^>]*>`,
+          'gi',
+        );
         sanitized = sanitized.replace(regex, '');
       }
     }
@@ -445,7 +474,10 @@ export class RequestSanitizer {
    */
   sanitizeObject(obj: any, depth: number = 0): any {
     if (depth > this.config.maxObjectDepth) {
-      throw new AppError(ErrorCode.VALIDATION_ERROR, 'Object depth exceeded maximum allowed');
+      throw new AppError(
+        ErrorCode.VALIDATION_ERROR,
+        'Object depth exceeded maximum allowed',
+      );
     }
 
     if (obj === null || obj === undefined) {
@@ -461,17 +493,17 @@ export class RequestSanitizer {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map(item => this.sanitizeObject(item, depth + 1));
+      return obj.map((item) => this.sanitizeObject(item, depth + 1));
     }
 
     if (typeof obj === 'object') {
       const sanitized: any = {};
-      
+
       for (const [key, value] of Object.entries(obj)) {
         const sanitizedKey = this.sanitizeString(key);
         sanitized[sanitizedKey] = this.sanitizeObject(value, depth + 1);
       }
-      
+
       return sanitized;
     }
 
@@ -487,19 +519,22 @@ export class RequestSanitizer {
         // Sanitize URL parameters
         const url = new URL(request.url);
         const sanitizedParams = new URLSearchParams();
-        
+
         for (const [key, value] of url.searchParams.entries()) {
           const sanitizedKey = this.sanitizeString(key);
           const sanitizedValue = this.sanitizeString(value);
           sanitizedParams.set(sanitizedKey, sanitizedValue);
         }
-        
+
         url.search = sanitizedParams.toString();
 
         // Sanitize headers
         const sanitizedHeaders = new Headers();
         for (const [key, value] of request.headers.entries()) {
-          if (key.toLowerCase().startsWith('x-') || ['user-agent', 'referer'].includes(key.toLowerCase())) {
+          if (
+            key.toLowerCase().startsWith('x-') ||
+            ['user-agent', 'referer'].includes(key.toLowerCase())
+          ) {
             sanitizedHeaders.set(key, this.sanitizeString(value));
           } else {
             sanitizedHeaders.set(key, value);
@@ -508,7 +543,10 @@ export class RequestSanitizer {
 
         // Sanitize body if present
         let sanitizedBody = null;
-        if (request.body && request.headers.get('content-type')?.includes('application/json')) {
+        if (
+          request.body &&
+          request.headers.get('content-type')?.includes('application/json')
+        ) {
           try {
             const bodyText = await request.text();
             const bodyJson = JSON.parse(bodyText);
@@ -527,7 +565,7 @@ export class RequestSanitizer {
           headers: sanitizedHeaders,
           body: sanitizedBody,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Request sanitization error:', error);
         return request; // Return original request if sanitization fails
       }
@@ -546,7 +584,7 @@ export class SecurityMiddleware {
   constructor(
     corsConfig: Partial<CorsConfig> = {},
     headersConfig: Partial<SecurityHeadersConfig> = {},
-    sanitizationConfig: Partial<SanitizationConfig> = {}
+    sanitizationConfig: Partial<SanitizationConfig> = {},
   ) {
     this.cors = new CorsHandler(corsConfig);
     this.headers = new SecurityHeaders(headersConfig);
@@ -566,10 +604,10 @@ export class SecurityMiddleware {
 
       // Sanitize request
       const sanitizedRequest = await this.sanitizer.createMiddleware()(request);
-      
+
       // Store sanitized request for use in handlers
       (request as any)._sanitized = sanitizedRequest;
-      
+
       return null; // Continue to next middleware
     };
   }
@@ -595,12 +633,14 @@ export const securityUtils = {
   /**
    * Create security headers handler
    */
-  createSecurityHeaders: (config?: Partial<SecurityHeadersConfig>) => new SecurityHeaders(config),
+  createSecurityHeaders: (config?: Partial<SecurityHeadersConfig>) =>
+    new SecurityHeaders(config),
 
   /**
    * Create request sanitizer
    */
-  createSanitizer: (config?: Partial<SanitizationConfig>) => new RequestSanitizer(config),
+  createSanitizer: (config?: Partial<SanitizationConfig>) =>
+    new RequestSanitizer(config),
 
   /**
    * Create combined security middleware
@@ -608,7 +648,7 @@ export const securityUtils = {
   createSecurityMiddleware: (
     corsConfig?: Partial<CorsConfig>,
     headersConfig?: Partial<SecurityHeadersConfig>,
-    sanitizationConfig?: Partial<SanitizationConfig>
+    sanitizationConfig?: Partial<SanitizationConfig>,
   ) => new SecurityMiddleware(corsConfig, headersConfig, sanitizationConfig),
 
   /**
@@ -639,7 +679,9 @@ export const securityUtils = {
   generateSecureToken: (length: number = 32): string => {
     const bytes = new Uint8Array(length);
     crypto.getRandomValues(bytes);
-    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
+      '',
+    );
   },
 
   /**
@@ -649,12 +691,12 @@ export const securityUtils = {
     if (a.length !== b.length) {
       return false;
     }
-    
+
     let result = 0;
     for (let i = 0; i < a.length; i++) {
       result |= a.charCodeAt(i) ^ b.charCodeAt(i);
     }
-    
+
     return result === 0;
   },
 };

@@ -1,12 +1,12 @@
 /**
  * Database Types Generation Utility
- * 
+ *
  * Generates TypeScript types from Supabase database schema.
  * Integrates with the build process and uses existing utilities.
- * 
+ *
  * Uses existing Layer 1 & 2 utilities:
  * - Database utilities from @/database
- * - Error handling from @/errors  
+ * - Error handling from @/errors
  * - Logging from @/logging
  * - Environment config from @/environment
  * - Migration utilities from @/migrations
@@ -18,12 +18,7 @@ import { execSync } from 'child_process';
 import { database } from './database';
 import { logger } from './logging';
 import { migrationManager } from './migrations';
-import { 
-  ApiError, 
-  ValidationError, 
-  DatabaseError,
-  ErrorCode 
-} from './errors';
+import { ApiError, DatabaseError, ErrorCode, ValidationError } from './errors';
 import { env, environment } from '../config/environment';
 
 /**
@@ -163,7 +158,7 @@ export class SchemaIntrospector {
    */
   async introspectSchema(schemas: string[] = ['public']): Promise<SchemaInfo> {
     const startTime = Date.now();
-    
+
     try {
       logger.info('Starting database schema introspection', { schemas });
 
@@ -172,7 +167,7 @@ export class SchemaIntrospector {
         this.getTables(schemas),
         this.getViews(schemas),
         this.getFunctions(schemas),
-        this.getEnums(schemas)
+        this.getEnums(schemas),
       ]);
 
       const schemaInfo: SchemaInfo = {
@@ -180,9 +175,10 @@ export class SchemaIntrospector {
         views,
         functions,
         enums,
-        totalEntities: tables.length + views.length + functions.length + enums.length,
+        totalEntities: tables.length + views.length + functions.length +
+          enums.length,
         generatedAt: new Date(),
-        schemaVersion: await this.getSchemaVersion()
+        schemaVersion: await this.getSchemaVersion(),
       };
 
       const duration = Date.now() - startTime;
@@ -192,20 +188,19 @@ export class SchemaIntrospector {
         views: views.length,
         functions: functions.length,
         enums: enums.length,
-        totalEntities: schemaInfo.totalEntities
+        totalEntities: schemaInfo.totalEntities,
       });
 
       return schemaInfo;
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       logger.error('Schema introspection failed', {
         duration,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
 
       throw new DatabaseError('Failed to introspect database schema', {
-        context: { schemas, error }
+        context: { schemas, error },
       });
     }
   }
@@ -215,7 +210,7 @@ export class SchemaIntrospector {
    */
   private async getTables(schemas: string[]): Promise<TableInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const tablesQuery = `
       SELECT 
         t.table_name,
@@ -230,12 +225,12 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: tablesQuery,
-      params: [schemas]
+      params: [schemas],
     });
 
     if (result.error) {
       throw new DatabaseError('Failed to get tables information', {
-        context: { error: result.error }
+        context: { error: result.error },
       });
     }
 
@@ -245,12 +240,27 @@ export class SchemaIntrospector {
       const tableInfo: TableInfo = {
         name: tableRow.table_name,
         schema: tableRow.table_schema,
-        columns: await this.getTableColumns(tableRow.table_schema, tableRow.table_name),
-        primaryKeys: await this.getPrimaryKeys(tableRow.table_schema, tableRow.table_name),
-        foreignKeys: await this.getForeignKeys(tableRow.table_schema, tableRow.table_name),
-        indexes: await this.getIndexes(tableRow.table_schema, tableRow.table_name),
-        policies: await this.getPolicies(tableRow.table_schema, tableRow.table_name),
-        hasRLS: await this.checkRLS(tableRow.table_schema, tableRow.table_name)
+        columns: await this.getTableColumns(
+          tableRow.table_schema,
+          tableRow.table_name,
+        ),
+        primaryKeys: await this.getPrimaryKeys(
+          tableRow.table_schema,
+          tableRow.table_name,
+        ),
+        foreignKeys: await this.getForeignKeys(
+          tableRow.table_schema,
+          tableRow.table_name,
+        ),
+        indexes: await this.getIndexes(
+          tableRow.table_schema,
+          tableRow.table_name,
+        ),
+        policies: await this.getPolicies(
+          tableRow.table_schema,
+          tableRow.table_name,
+        ),
+        hasRLS: await this.checkRLS(tableRow.table_schema, tableRow.table_name),
       };
 
       tables.push(tableInfo);
@@ -262,9 +272,12 @@ export class SchemaIntrospector {
   /**
    * Get columns for a specific table
    */
-  private async getTableColumns(schema: string, tableName: string): Promise<ColumnInfo[]> {
+  private async getTableColumns(
+    schema: string,
+    tableName: string,
+  ): Promise<ColumnInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const columnsQuery = `
       SELECT 
         c.column_name,
@@ -285,12 +298,12 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: columnsQuery,
-      params: [schema, tableName]
+      params: [schema, tableName],
     });
 
     if (result.error) {
       throw new DatabaseError('Failed to get table columns', {
-        context: { schema, tableName, error: result.error }
+        context: { schema, tableName, error: result.error },
       });
     }
 
@@ -300,16 +313,19 @@ export class SchemaIntrospector {
       nullable: col.is_nullable === 'YES',
       defaultValue: col.column_default,
       isGenerated: col.is_generated === 'ALWAYS',
-      comment: col.column_comment
+      comment: col.column_comment,
     }));
   }
 
   /**
    * Get primary keys for a table
    */
-  private async getPrimaryKeys(schema: string, tableName: string): Promise<string[]> {
+  private async getPrimaryKeys(
+    schema: string,
+    tableName: string,
+  ): Promise<string[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const pkQuery = `
       SELECT kcu.column_name
       FROM information_schema.table_constraints tc
@@ -324,7 +340,7 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: pkQuery,
-      params: [schema, tableName]
+      params: [schema, tableName],
     });
 
     return (result.data || []).map((row: any) => row.column_name);
@@ -333,9 +349,12 @@ export class SchemaIntrospector {
   /**
    * Get foreign keys for a table
    */
-  private async getForeignKeys(schema: string, tableName: string): Promise<ForeignKeyInfo[]> {
+  private async getForeignKeys(
+    schema: string,
+    tableName: string,
+  ): Promise<ForeignKeyInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const fkQuery = `
       SELECT 
         kcu.column_name,
@@ -357,7 +376,7 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: fkQuery,
-      params: [schema, tableName]
+      params: [schema, tableName],
     });
 
     return (result.data || []).map((row: any) => ({
@@ -365,16 +384,19 @@ export class SchemaIntrospector {
       referencedTable: row.referenced_table,
       referencedColumn: row.referenced_column,
       onDelete: row.delete_rule,
-      onUpdate: row.update_rule
+      onUpdate: row.update_rule,
     }));
   }
 
   /**
    * Get indexes for a table
    */
-  private async getIndexes(schema: string, tableName: string): Promise<IndexInfo[]> {
+  private async getIndexes(
+    schema: string,
+    tableName: string,
+  ): Promise<IndexInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const indexQuery = `
       SELECT 
         i.relname as index_name,
@@ -396,23 +418,26 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: indexQuery,
-      params: [schema, tableName]
+      params: [schema, tableName],
     });
 
     return (result.data || []).map((row: any) => ({
       name: row.index_name,
       columns: row.columns,
       unique: row.is_unique,
-      partial: row.partial_condition
+      partial: row.partial_condition,
     }));
   }
 
   /**
    * Get RLS policies for a table
    */
-  private async getPolicies(schema: string, tableName: string): Promise<PolicyInfo[]> {
+  private async getPolicies(
+    schema: string,
+    tableName: string,
+  ): Promise<PolicyInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const policiesQuery = `
       SELECT 
         pol.polname as policy_name,
@@ -431,7 +456,7 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: policiesQuery,
-      params: [schema, tableName]
+      params: [schema, tableName],
     });
 
     return (result.data || []).map((row: any) => ({
@@ -439,7 +464,7 @@ export class SchemaIntrospector {
       command: row.command,
       roles: row.roles || [],
       using: row.using_expression,
-      withCheck: row.with_check_expression
+      withCheck: row.with_check_expression,
     }));
   }
 
@@ -448,7 +473,7 @@ export class SchemaIntrospector {
    */
   private async checkRLS(schema: string, tableName: string): Promise<boolean> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const rlsQuery = `
       SELECT pc.relrowsecurity
       FROM pg_class pc
@@ -458,7 +483,7 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: rlsQuery,
-      params: [schema, tableName]
+      params: [schema, tableName],
     });
 
     return result.data?.[0]?.relrowsecurity || false;
@@ -469,7 +494,7 @@ export class SchemaIntrospector {
    */
   private async getViews(schemas: string[]): Promise<ViewInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const viewsQuery = `
       SELECT 
         v.table_name as view_name,
@@ -482,7 +507,7 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: viewsQuery,
-      params: [schemas]
+      params: [schemas],
     });
 
     const views: ViewInfo[] = [];
@@ -492,7 +517,10 @@ export class SchemaIntrospector {
         name: viewRow.view_name,
         schema: viewRow.table_schema,
         definition: viewRow.view_definition,
-        columns: await this.getTableColumns(viewRow.table_schema, viewRow.view_name)
+        columns: await this.getTableColumns(
+          viewRow.table_schema,
+          viewRow.view_name,
+        ),
       };
 
       views.push(viewInfo);
@@ -506,7 +534,7 @@ export class SchemaIntrospector {
    */
   private async getFunctions(schemas: string[]): Promise<FunctionInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const functionsQuery = `
       SELECT 
         p.proname as function_name,
@@ -525,7 +553,7 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: functionsQuery,
-      params: [schemas]
+      params: [schemas],
     });
 
     const functions: FunctionInfo[] = [];
@@ -535,9 +563,12 @@ export class SchemaIntrospector {
         name: funcRow.function_name,
         schema: funcRow.schema_name,
         returnType: this.mapPostgreSQLTypeToTypeScript(funcRow.return_type),
-        parameters: await this.getFunctionParameters(funcRow.schema_name, funcRow.function_name),
+        parameters: await this.getFunctionParameters(
+          funcRow.schema_name,
+          funcRow.function_name,
+        ),
         language: funcRow.language,
-        isSecurityDefiner: funcRow.is_security_definer
+        isSecurityDefiner: funcRow.is_security_definer,
       };
 
       functions.push(functionInfo);
@@ -549,9 +580,12 @@ export class SchemaIntrospector {
   /**
    * Get function parameters
    */
-  private async getFunctionParameters(schema: string, functionName: string): Promise<ParameterInfo[]> {
+  private async getFunctionParameters(
+    schema: string,
+    functionName: string,
+  ): Promise<ParameterInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const paramsQuery = `
       SELECT 
         p.parameter_name,
@@ -566,14 +600,14 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: paramsQuery,
-      params: [schema, functionName]
+      params: [schema, functionName],
     });
 
     return (result.data || []).map((param: any) => ({
       name: param.parameter_name,
       type: this.mapPostgreSQLTypeToTypeScript(param.data_type),
       mode: param.parameter_mode as 'IN' | 'OUT' | 'INOUT',
-      defaultValue: param.parameter_default
+      defaultValue: param.parameter_default,
     }));
   }
 
@@ -582,7 +616,7 @@ export class SchemaIntrospector {
    */
   private async getEnums(schemas: string[]): Promise<EnumInfo[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const enumsQuery = `
       SELECT 
         t.typname as enum_name,
@@ -599,13 +633,13 @@ export class SchemaIntrospector {
 
     const result = await helper.rpc<any>('execute_sql', {
       sql: enumsQuery,
-      params: [schemas]
+      params: [schemas],
     });
 
     return (result.data || []).map((enumRow: any) => ({
       name: enumRow.enum_name,
       schema: enumRow.schema_name,
-      values: enumRow.enum_values
+      values: enumRow.enum_values,
     }));
   }
 
@@ -616,12 +650,12 @@ export class SchemaIntrospector {
     try {
       // Use migration manager to get the latest applied migration
       const summary = await migrationManager.getMigrationSummary(
-        path.join(process.cwd(), 'src', 'modules')
+        path.join(process.cwd(), 'src', 'modules'),
       );
-      
+
       const totalApplied = summary.overall.applied;
       const timestamp = new Date().toISOString().split('T')[0];
-      
+
       return `v${totalApplied}_${timestamp}`;
     } catch {
       return `v1_${new Date().toISOString().split('T')[0]}`;
@@ -631,7 +665,10 @@ export class SchemaIntrospector {
   /**
    * Map PostgreSQL types to TypeScript types
    */
-  private mapPostgreSQLTypeToTypeScript(pgType: string, udtName?: string): string {
+  private mapPostgreSQLTypeToTypeScript(
+    pgType: string,
+    udtName?: string,
+  ): string {
     // Handle array types
     if (pgType.endsWith('[]')) {
       const baseType = this.mapPostgreSQLTypeToTypeScript(pgType.slice(0, -2));
@@ -655,18 +692,18 @@ export class SchemaIntrospector {
       'double precision': 'number',
       'serial': 'number',
       'bigserial': 'number',
-      
+
       // Strings
       'text': 'string',
       'varchar': 'string',
       'character varying': 'string',
       'character': 'string',
       'char': 'string',
-      
+
       // Booleans
       'boolean': 'boolean',
       'bool': 'boolean',
-      
+
       // Dates
       'timestamp': 'string',
       'timestamptz': 'string',
@@ -676,25 +713,25 @@ export class SchemaIntrospector {
       'time': 'string',
       'timetz': 'string',
       'interval': 'string',
-      
+
       // JSON
       'json': 'any',
       'jsonb': 'any',
-      
+
       // UUID
       'uuid': 'string',
-      
+
       // Network
       'inet': 'string',
       'cidr': 'string',
       'macaddr': 'string',
-      
+
       // Arrays
       'ARRAY': 'any[]',
-      
+
       // Others
       'bytea': 'string',
-      'money': 'string'
+      'money': 'string',
     };
 
     return typeMap[pgType.toLowerCase()] || 'any';
@@ -707,7 +744,7 @@ export class SchemaIntrospector {
     return str
       .replace(/[^a-zA-Z0-9]/g, '_')
       .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
   }
 }
@@ -781,14 +818,17 @@ export class TypesGenerator {
    * Generate enum types
    */
   private generateEnums(enums: EnumInfo[]): string {
-    const enumTypes = enums.map(enumInfo => {
-      const values = enumInfo.values.map(value => `  '${value}' = '${value}'`).join(',\n');
-      
+    const enumTypes = enums.map((enumInfo) => {
+      const values = enumInfo.values.map((value) => `  '${value}' = '${value}'`)
+        .join(',\n');
+
       return `export enum ${this.pascalCase(enumInfo.name)} {
 ${values}
 }
 
-export type ${this.pascalCase(enumInfo.name)}Type = \`\${${this.pascalCase(enumInfo.name)}}\`;`;
+export type ${this.pascalCase(enumInfo.name)}Type = \`\${${
+        this.pascalCase(enumInfo.name)
+      }}\`;`;
     });
 
     return `// Enums\n${enumTypes.join('\n\n')}`;
@@ -797,33 +837,37 @@ export type ${this.pascalCase(enumInfo.name)}Type = \`\${${this.pascalCase(enumI
   /**
    * Generate table interfaces
    */
-  private generateTableInterfaces(tables: TableInfo[], config: TypesGenerationConfig): string {
-    const interfaces = tables.map(table => {
+  private generateTableInterfaces(
+    tables: TableInfo[],
+    config: TypesGenerationConfig,
+  ): string {
+    const interfaces = tables.map((table) => {
       const tableName = this.pascalCase(table.name);
-      
+
       // Generate table row interface
-      const columns = table.columns.map(col => {
+      const columns = table.columns.map((col) => {
         const optional = col.nullable || col.defaultValue ? '?' : '';
-        const comment = config.generateComments && col.comment ? 
-          `  /** ${col.comment} */\n` : '';
-        
+        const comment = config.generateComments && col.comment
+          ? `  /** ${col.comment} */\n`
+          : '';
+
         return `${comment}  ${col.name}${optional}: ${col.type}`;
       }).join('\n');
 
       // Generate insert interface (all optional except required fields)
       const insertColumns = table.columns
-        .filter(col => !col.isGenerated)
-        .map(col => {
+        .filter((col) => !col.isGenerated)
+        .map((col) => {
           const required = !col.nullable && !col.defaultValue;
           const optional = required ? '' : '?';
-          
+
           return `  ${col.name}${optional}: ${col.type}`;
         }).join('\n');
 
       // Generate update interface (all optional)
       const updateColumns = table.columns
-        .filter(col => !col.isGenerated)
-        .map(col => {
+        .filter((col) => !col.isGenerated)
+        .map((col) => {
           return `  ${col.name}?: ${col.type}`;
         }).join('\n');
 
@@ -847,15 +891,19 @@ ${updateColumns}
   /**
    * Generate view interfaces
    */
-  private generateViewInterfaces(views: ViewInfo[], config: TypesGenerationConfig): string {
-    const interfaces = views.map(view => {
+  private generateViewInterfaces(
+    views: ViewInfo[],
+    config: TypesGenerationConfig,
+  ): string {
+    const interfaces = views.map((view) => {
       const viewName = this.pascalCase(view.name);
-      
-      const columns = view.columns.map(col => {
+
+      const columns = view.columns.map((col) => {
         const optional = col.nullable ? '?' : '';
-        const comment = config.generateComments && col.comment ? 
-          `  /** ${col.comment} */\n` : '';
-        
+        const comment = config.generateComments && col.comment
+          ? `  /** ${col.comment} */\n`
+          : '';
+
         return `${comment}  ${col.name}${optional}: ${col.type}`;
       }).join('\n');
 
@@ -871,13 +919,16 @@ ${columns}
   /**
    * Generate function types
    */
-  private generateFunctionTypes(functions: FunctionInfo[], config: TypesGenerationConfig): string {
-    const functionTypes = functions.map(func => {
+  private generateFunctionTypes(
+    functions: FunctionInfo[],
+    config: TypesGenerationConfig,
+  ): string {
+    const functionTypes = functions.map((func) => {
       const funcName = this.pascalCase(func.name);
-      
+
       const params = func.parameters
-        .filter(p => p.mode === 'IN' || p.mode === 'INOUT')
-        .map(p => {
+        .filter((p) => p.mode === 'IN' || p.mode === 'INOUT')
+        .map((p) => {
           const optional = p.defaultValue ? '?' : '';
           return `  ${p.name}${optional}: ${p.type}`;
         }).join('\n');
@@ -897,7 +948,7 @@ export type ${funcName}Return = ${func.returnType};`;
    * Generate main database interface
    */
   private generateDatabaseInterface(schema: SchemaInfo): string {
-    const tableTypes = schema.tables.map(table => {
+    const tableTypes = schema.tables.map((table) => {
       const tableName = this.pascalCase(table.name);
       return `    ${table.name}: {
       Row: ${tableName}
@@ -906,14 +957,14 @@ export type ${funcName}Return = ${func.returnType};`;
     }`;
     }).join('\n');
 
-    const viewTypes = schema.views.map(view => {
+    const viewTypes = schema.views.map((view) => {
       const viewName = this.pascalCase(view.name);
       return `    ${view.name}: {
       Row: ${viewName}
     }`;
     }).join('\n');
 
-    const functionTypes = schema.functions.map(func => {
+    const functionTypes = schema.functions.map((func) => {
       const funcName = this.pascalCase(func.name);
       return `    ${func.name}: {
       Args: ${funcName}Params
@@ -934,7 +985,10 @@ ${viewTypes}
 ${functionTypes}
     }
     Enums: {
-${schema.enums.map(e => `      ${e.name}: ${this.pascalCase(e.name)}Type`).join('\n')}
+${
+      schema.enums.map((e) => `      ${e.name}: ${this.pascalCase(e.name)}Type`)
+        .join('\n')
+    }
     }
   }
 }`;
@@ -960,7 +1014,7 @@ export const DatabaseMetadata = {
     return str
       .replace(/[^a-zA-Z0-9]/g, '_')
       .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
   }
 }
@@ -977,11 +1031,11 @@ export class TypesGenerationManager {
    */
   async generateAndWrite(config: TypesGenerationConfig): Promise<void> {
     const startTime = Date.now();
-    
+
     try {
       logger.info('Starting database types generation', {
         outputPath: config.outputPath,
-        schemas: config.schemas
+        schemas: config.schemas,
       });
 
       // Ensure output directory exists
@@ -1010,18 +1064,17 @@ export class TypesGenerationManager {
         outputPath: config.outputPath,
         schemaVersion: schema.schemaVersion,
         totalEntities: schema.totalEntities,
-        duration
+        duration,
       });
-
-    } catch (error) {
+    } catch (error: any) {
       const duration = Date.now() - startTime;
       logger.error('Database types generation failed', {
         duration,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
 
       throw new ValidationError('Failed to generate database types', {
-        context: { config, error }
+        context: { config, error },
       });
     }
   }
@@ -1034,15 +1087,14 @@ export class TypesGenerationManager {
       // Use TypeScript compiler to validate
       execSync(`npx tsc --noEmit --skipLibCheck ${filePath}`, {
         stdio: 'pipe',
-        cwd: process.cwd()
+        cwd: process.cwd(),
       });
 
       logger.debug('Generated types validation passed', { filePath });
-
-    } catch (error) {
+    } catch (error: any) {
       logger.warn('Generated types validation failed', {
         filePath,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
 
       // Don't throw, just warn as the types might still be usable
@@ -1061,7 +1113,7 @@ export class TypesGenerationManager {
       includeEnums: true,
       generateComments: true,
       generateMetadata: true,
-      validateAfterGeneration: environment.isDevelopment()
+      validateAfterGeneration: environment.isDevelopment(),
     };
   }
 }

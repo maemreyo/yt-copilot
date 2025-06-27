@@ -1,9 +1,9 @@
 /**
  * Migration System Utilities
- * 
+ *
  * Provides validation, dependency checking, and management for database migrations.
  * Works with the existing sync-supabase.mjs script to ensure migration integrity.
- * 
+ *
  * Uses existing Layer 1 utilities:
  * - Database utilities from @/database
  * - Error handling from @/errors
@@ -14,7 +14,7 @@ import fs from 'fs';
 import path from 'path';
 import { logger } from './logging';
 import { database, DatabaseResult } from './database';
-import { ApiError, ValidationError, DatabaseError, ErrorCode } from './errors';
+import { ApiError, DatabaseError, ErrorCode, ValidationError } from './errors';
 
 /**
  * Migration file interface
@@ -75,7 +75,9 @@ export class MigrationDiscovery {
   /**
    * Discover all migration files from modules
    */
-  static async discoverMigrations(modulesDir: string): Promise<MigrationFile[]> {
+  static async discoverMigrations(
+    modulesDir: string,
+  ): Promise<MigrationFile[]> {
     const migrations: MigrationFile[] = [];
 
     try {
@@ -85,28 +87,30 @@ export class MigrationDiscovery {
       }
 
       const modules = fs.readdirSync(modulesDir, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => dirent.name);
+        .filter((dirent) => dirent.isDirectory())
+        .map((dirent) => dirent.name);
 
       for (const module of modules) {
-        const moduleMigrations = await this.discoverModuleMigrations(modulesDir, module);
+        const moduleMigrations = await this.discoverModuleMigrations(
+          modulesDir,
+          module,
+        );
         migrations.push(...moduleMigrations);
       }
 
       logger.info('Migration discovery completed', {
         totalMigrations: migrations.length,
-        modules: modules.length
+        modules: modules.length,
       });
 
       return migrations;
-
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Migration discovery failed', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        modulesDir
+        modulesDir,
       });
       throw new ValidationError('Failed to discover migrations', {
-        context: { modulesDir, error }
+        context: { modulesDir, error },
       });
     }
   }
@@ -115,8 +119,8 @@ export class MigrationDiscovery {
    * Discover migrations for a specific module
    */
   private static async discoverModuleMigrations(
-    modulesDir: string, 
-    module: string
+    modulesDir: string,
+    module: string,
   ): Promise<MigrationFile[]> {
     const migrations: MigrationFile[] = [];
     const migrationsDir = path.join(modulesDir, module, 'migrations');
@@ -127,18 +131,22 @@ export class MigrationDiscovery {
     }
 
     const files = fs.readdirSync(migrationsDir)
-      .filter(file => this.MIGRATION_PATTERN.test(file))
+      .filter((file) => this.MIGRATION_PATTERN.test(file))
       .sort(); // Sort by filename to ensure correct order
 
     for (const filename of files) {
       try {
-        const migration = await this.parseMigrationFile(migrationsDir, module, filename);
+        const migration = await this.parseMigrationFile(
+          migrationsDir,
+          module,
+          filename,
+        );
         migrations.push(migration);
-      } catch (error) {
+      } catch (error: any) {
         logger.error('Failed to parse migration file', {
           module,
           filename,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
         // Continue with other migrations even if one fails
       }
@@ -146,7 +154,7 @@ export class MigrationDiscovery {
 
     logger.debug('Module migrations discovered', {
       module,
-      count: migrations.length
+      count: migrations.length,
     });
 
     return migrations;
@@ -158,24 +166,24 @@ export class MigrationDiscovery {
   private static async parseMigrationFile(
     migrationsDir: string,
     module: string,
-    filename: string
+    filename: string,
   ): Promise<MigrationFile> {
     const fullPath = path.join(migrationsDir, filename);
     const content = fs.readFileSync(fullPath, 'utf-8');
-    
+
     // Extract sequence number from filename
     const sequenceMatch = filename.match(/^(\d{3})/);
     const sequence = sequenceMatch ? parseInt(sequenceMatch[1], 10) : 999;
-    
+
     // Extract dependencies
     const dependencies = this.extractDependencies(content);
-    
+
     // Extract description
     const description = this.extractDescription(content) || filename;
-    
+
     // Generate checksum
     const checksum = this.generateChecksum(content);
-    
+
     // Generate unique ID
     const id = `${module}_${filename.replace('.sql', '')}`;
 
@@ -188,7 +196,7 @@ export class MigrationDiscovery {
       dependencies,
       description,
       content,
-      checksum
+      checksum,
     };
   }
 
@@ -200,7 +208,7 @@ export class MigrationDiscovery {
     let match;
 
     while ((match = this.DEPENDENCY_PATTERN.exec(content)) !== null) {
-      const deps = match[1].split(',').map(dep => dep.trim());
+      const deps = match[1].split(',').map((dep) => dep.trim());
       dependencies.push(...deps);
     }
 
@@ -258,7 +266,7 @@ export class DependencyResolver {
    */
   private static topologicalSort(
     nodes: Map<string, MigrationFile>,
-    edges: Map<string, string[]>
+    edges: Map<string, string[]>,
   ): string[] {
     const visited = new Set<string>();
     const visiting = new Set<string>();
@@ -266,7 +274,9 @@ export class DependencyResolver {
 
     const visit = (nodeId: string) => {
       if (visiting.has(nodeId)) {
-        throw new ValidationError(`Circular dependency detected involving migration: ${nodeId}`);
+        throw new ValidationError(
+          `Circular dependency detected involving migration: ${nodeId}`,
+        );
       }
 
       if (visited.has(nodeId)) {
@@ -315,10 +325,12 @@ export class DependencyResolver {
     for (const [nodeId, dependencies] of graph.edges) {
       for (const depId of dependencies) {
         if (!graph.nodes.has(depId)) {
-          errors.push(new ValidationError(
-            `Migration ${nodeId} depends on missing migration ${depId}`,
-            { context: { nodeId, dependency: depId } }
-          ));
+          errors.push(
+            new ValidationError(
+              `Migration ${nodeId} depends on missing migration ${depId}`,
+              { context: { nodeId, dependency: depId } },
+            ),
+          );
         }
       }
     }
@@ -359,7 +371,7 @@ export class MigrationTracker {
 
     if (result.error) {
       throw new DatabaseError('Failed to initialize migration tracking', {
-        context: { error: result.error }
+        context: { error: result.error },
       });
     }
 
@@ -369,15 +381,17 @@ export class MigrationTracker {
   /**
    * Get migration status for all migrations
    */
-  async getMigrationStatus(migrations: MigrationFile[]): Promise<MigrationStatus[]> {
+  async getMigrationStatus(
+    migrations: MigrationFile[],
+  ): Promise<MigrationStatus[]> {
     const helper = database.createQueryHelper(this.client);
-    
+
     // Get applied migrations
     const appliedResult = await helper.select<any>('migration_history');
-    
+
     if (appliedResult.error) {
       throw new DatabaseError('Failed to get migration history', {
-        context: { error: appliedResult.error }
+        context: { error: appliedResult.error },
       });
     }
 
@@ -388,10 +402,10 @@ export class MigrationTracker {
 
     // Build status for each migration
     const statuses: MigrationStatus[] = [];
-    
+
     for (const migration of migrations) {
       const applied = appliedMap.get(migration.id);
-      
+
       if (applied) {
         // Check if checksum matches
         if (applied.checksum !== migration.checksum) {
@@ -402,7 +416,7 @@ export class MigrationTracker {
             status: 'failed',
             appliedAt: new Date(applied.applied_at),
             checksum: applied.checksum,
-            error: 'Checksum mismatch - migration content has changed'
+            error: 'Checksum mismatch - migration content has changed',
           });
         } else {
           statuses.push({
@@ -412,7 +426,7 @@ export class MigrationTracker {
             status: applied.success ? 'applied' : 'failed',
             appliedAt: new Date(applied.applied_at),
             checksum: applied.checksum,
-            error: applied.error_message
+            error: applied.error_message,
           });
         }
       } else {
@@ -420,7 +434,7 @@ export class MigrationTracker {
           id: migration.id,
           module: migration.module,
           filename: migration.filename,
-          status: 'pending'
+          status: 'pending',
         });
       }
     }
@@ -433,7 +447,7 @@ export class MigrationTracker {
    */
   async recordMigration(result: MigrationResult): Promise<void> {
     const helper = database.createQueryHelper(this.client);
-    
+
     const insertResult = await helper.insert('migration_history', {
       id: result.id,
       module: result.id.split('_')[0],
@@ -442,13 +456,13 @@ export class MigrationTracker {
       applied_at: result.appliedAt.toISOString(),
       execution_time_ms: result.executionTime,
       success: result.success,
-      error_message: result.error
+      error_message: result.error,
     });
 
     if (insertResult.error) {
       logger.error('Failed to record migration result', {
         migrationId: result.id,
-        error: insertResult.error.message
+        error: insertResult.error.message,
       });
     }
   }
@@ -476,7 +490,9 @@ export class MigrationManager {
       await this.tracker.initializeTracking();
 
       // Discover migrations
-      const migrations = await MigrationDiscovery.discoverMigrations(modulesDir);
+      const migrations = await MigrationDiscovery.discoverMigrations(
+        modulesDir,
+      );
 
       // Build dependency graph
       const graph = DependencyResolver.buildDependencyGraph(migrations);
@@ -488,12 +504,14 @@ export class MigrationManager {
       const statuses = await this.tracker.getMigrationStatus(migrations);
 
       // Check for failed migrations
-      const failedMigrations = statuses.filter(s => s.status === 'failed');
+      const failedMigrations = statuses.filter((s) => s.status === 'failed');
       for (const failed of failedMigrations) {
-        errors.push(new ValidationError(
-          `Migration ${failed.id} has failed: ${failed.error}`,
-          { context: failed }
-        ));
+        errors.push(
+          new ValidationError(
+            `Migration ${failed.id} has failed: ${failed.error}`,
+            { context: failed },
+          ),
+        );
       }
 
       const success = errors.length === 0;
@@ -501,26 +519,29 @@ export class MigrationManager {
       logger.info('Migration validation completed', {
         success,
         totalMigrations: migrations.length,
-        pendingMigrations: statuses.filter(s => s.status === 'pending').length,
-        appliedMigrations: statuses.filter(s => s.status === 'applied').length,
-        failedMigrations: statuses.filter(s => s.status === 'failed').length,
-        errors: errors.length
+        pendingMigrations: statuses.filter((s) =>
+          s.status === 'pending'
+        ).length,
+        appliedMigrations: statuses.filter((s) =>
+          s.status === 'applied'
+        ).length,
+        failedMigrations: statuses.filter((s) => s.status === 'failed').length,
+        errors: errors.length,
       });
 
       return {
         success,
         migrations,
         errors,
-        graph
+        graph,
       };
-
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Migration validation failed', {
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
 
       throw new ValidationError('Migration validation failed', {
-        context: { error }
+        context: { error },
       });
     }
   }
@@ -550,12 +571,17 @@ export class MigrationManager {
 
     for (const status of statuses) {
       if (!modules[status.module]) {
-        modules[status.module] = { total: 0, pending: 0, applied: 0, failed: 0 };
+        modules[status.module] = {
+          total: 0,
+          pending: 0,
+          applied: 0,
+          failed: 0,
+        };
       }
 
       modules[status.module].total++;
       modules[status.module][status.status]++;
-      
+
       overall.total++;
       overall[status.status]++;
     }

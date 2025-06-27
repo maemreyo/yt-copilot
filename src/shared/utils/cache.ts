@@ -72,7 +72,7 @@ export class JsonSerializer implements CacheSerializer {
   serialize(value: unknown): string {
     try {
       return JSON.stringify(value);
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Cache serialization failed', error as Error, { value });
       throw new Error('Failed to serialize cache value');
     }
@@ -81,7 +81,7 @@ export class JsonSerializer implements CacheSerializer {
   deserialize<T>(value: string): T {
     try {
       return JSON.parse(value) as T;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Cache deserialization failed', error as Error, { value });
       throw new Error('Failed to deserialize cache value');
     }
@@ -159,7 +159,10 @@ export class MemoryCacheStore implements CacheStore {
     };
 
     // Check size limit
-    if (this.config.maxSize && this.store.size >= this.config.maxSize && !this.store.has(namespacedKey)) {
+    if (
+      this.config.maxSize && this.store.size >= this.config.maxSize &&
+      !this.store.has(namespacedKey)
+    ) {
       await this.evictOldest();
     }
 
@@ -171,12 +174,12 @@ export class MemoryCacheStore implements CacheStore {
   async delete(key: string): Promise<boolean> {
     const namespacedKey = this.namespaceKey(key);
     const deleted = this.store.delete(namespacedKey);
-    
+
     if (deleted) {
       this.updateStats('delete');
       this.config.onDelete(key);
     }
-    
+
     return deleted;
   }
 
@@ -188,7 +191,7 @@ export class MemoryCacheStore implements CacheStore {
   async has(key: string): Promise<boolean> {
     const namespacedKey = this.namespaceKey(key);
     const entry = this.store.get(namespacedKey);
-    
+
     if (!entry) {
       return false;
     }
@@ -204,15 +207,15 @@ export class MemoryCacheStore implements CacheStore {
 
   async keys(pattern?: string): Promise<string[]> {
     const allKeys = Array.from(this.store.keys());
-    
+
     if (!pattern) {
-      return allKeys.map(key => this.stripNamespace(key));
+      return allKeys.map((key) => this.stripNamespace(key));
     }
 
     const regex = new RegExp(pattern);
     return allKeys
-      .filter(key => regex.test(key))
-      .map(key => this.stripNamespace(key));
+      .filter((key) => regex.test(key))
+      .map((key) => this.stripNamespace(key));
   }
 
   async size(): Promise<number> {
@@ -223,8 +226,8 @@ export class MemoryCacheStore implements CacheStore {
     return {
       ...this.stats,
       size: this.store.size,
-      hitRate: this.stats.hits + this.stats.misses > 0 
-        ? this.stats.hits / (this.stats.hits + this.stats.misses) 
+      hitRate: this.stats.hits + this.stats.misses > 0
+        ? this.stats.hits / (this.stats.hits + this.stats.misses)
         : 0,
     };
   }
@@ -240,8 +243,17 @@ export class MemoryCacheStore implements CacheStore {
 
   private updateStats(operation: 'hit' | 'miss' | 'set' | 'delete'): void {
     if (!this.config.enableStats) return;
-    
-    this.stats[operation === 'hit' ? 'hits' : operation === 'miss' ? 'misses' : operation === 'set' ? 'sets' : 'deletes']++;
+
+    this
+      .stats[
+        operation === 'hit'
+          ? 'hits'
+          : operation === 'miss'
+          ? 'misses'
+          : operation === 'set'
+          ? 'sets'
+          : 'deletes'
+      ]++;
   }
 
   private resetStats(): void {
@@ -290,7 +302,9 @@ export class MemoryCacheStore implements CacheStore {
     }
 
     if (expiredKeys.length > 0) {
-      logger.debug(`Cache cleanup: removed ${expiredKeys.length} expired entries`);
+      logger.debug(
+        `Cache cleanup: removed ${expiredKeys.length} expired entries`,
+      );
     }
   }
 
@@ -347,7 +361,7 @@ export class RedisCacheStore implements CacheStore {
       this.updateStats('hit');
       this.config.onHit(key);
       return this.config.serializer.deserialize<T>(value);
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Redis cache get error', error as Error, { key });
       this.updateStats('miss');
       return null;
@@ -366,7 +380,7 @@ export class RedisCacheStore implements CacheStore {
       await this.redis.setex(namespacedKey, ttlSeconds, serialized);
       this.updateStats('set');
       this.config.onSet(key, value);
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Redis cache set error', error as Error, { key, value });
       throw error;
     }
@@ -377,14 +391,14 @@ export class RedisCacheStore implements CacheStore {
       const namespacedKey = this.namespaceKey(key);
       const result = await this.redis.del(namespacedKey);
       const deleted = result > 0;
-      
+
       if (deleted) {
         this.updateStats('delete');
         this.config.onDelete(key);
       }
-      
+
       return deleted;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Redis cache delete error', error as Error, { key });
       return false;
     }
@@ -394,13 +408,13 @@ export class RedisCacheStore implements CacheStore {
     try {
       const pattern = `${this.config.namespace}:*`;
       const keys = await this.redis.keys(pattern);
-      
+
       if (keys.length > 0) {
         await this.redis.del(...keys);
       }
-      
+
       this.resetStats();
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Redis cache clear error', error as Error);
       throw error;
     }
@@ -411,7 +425,7 @@ export class RedisCacheStore implements CacheStore {
       const namespacedKey = this.namespaceKey(key);
       const exists = await this.redis.exists(namespacedKey);
       return exists === 1;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Redis cache has error', error as Error, { key });
       return false;
     }
@@ -419,13 +433,13 @@ export class RedisCacheStore implements CacheStore {
 
   async keys(pattern?: string): Promise<string[]> {
     try {
-      const searchPattern = pattern 
+      const searchPattern = pattern
         ? `${this.config.namespace}:${pattern}`
         : `${this.config.namespace}:*`;
-      
+
       const keys = await this.redis.keys(searchPattern);
       return keys.map((key: string) => this.stripNamespace(key));
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Redis cache keys error', error as Error, { pattern });
       return [];
     }
@@ -435,7 +449,7 @@ export class RedisCacheStore implements CacheStore {
     try {
       const keys = await this.keys();
       return keys.length;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Redis cache size error', error as Error);
       return 0;
     }
@@ -446,8 +460,8 @@ export class RedisCacheStore implements CacheStore {
     return {
       ...this.localStats,
       size,
-      hitRate: this.localStats.hits + this.localStats.misses > 0 
-        ? this.localStats.hits / (this.localStats.hits + this.localStats.misses) 
+      hitRate: this.localStats.hits + this.localStats.misses > 0
+        ? this.localStats.hits / (this.localStats.hits + this.localStats.misses)
         : 0,
     };
   }
@@ -463,8 +477,17 @@ export class RedisCacheStore implements CacheStore {
 
   private updateStats(operation: 'hit' | 'miss' | 'set' | 'delete'): void {
     if (!this.config.enableStats) return;
-    
-    this.localStats[operation === 'hit' ? 'hits' : operation === 'miss' ? 'misses' : operation === 'set' ? 'sets' : 'deletes']++;
+
+    this
+      .localStats[
+        operation === 'hit'
+          ? 'hits'
+          : operation === 'miss'
+          ? 'misses'
+          : operation === 'set'
+          ? 'sets'
+          : 'deletes'
+      ]++;
   }
 
   private resetStats(): void {
@@ -493,7 +516,7 @@ export class CacheManager {
   constructor(
     primary: CacheStore,
     fallback?: CacheStore,
-    config: { enableFallback?: boolean; syncWrites?: boolean } = {}
+    config: { enableFallback?: boolean; syncWrites?: boolean } = {},
   ) {
     this.primary = primary;
     this.fallback = fallback;
@@ -509,24 +532,28 @@ export class CacheManager {
       if (value !== null) {
         return value;
       }
-    } catch (error) {
-      logger.warn('Primary cache get failed, trying fallback', error as Error, { key });
+    } catch (error: any) {
+      logger.warn('Primary cache get failed, trying fallback', error as Error, {
+        key,
+      });
     }
 
     // Try fallback if enabled and available
     if (this.config.enableFallback && this.fallback) {
       try {
         const value = await this.fallback.get<T>(key);
-        
+
         // Populate primary cache with fallback value
         if (value !== null) {
-          this.primary.set(key, value).catch(err => {
-            logger.warn('Failed to populate primary cache from fallback', err, { key });
+          this.primary.set(key, value).catch((err) => {
+            logger.warn('Failed to populate primary cache from fallback', err, {
+              key,
+            });
           });
         }
-        
+
         return value;
-      } catch (error) {
+      } catch (error: any) {
         logger.warn('Fallback cache get failed', error as Error, { key });
       }
     }
@@ -547,7 +574,7 @@ export class CacheManager {
 
     try {
       await Promise.all(promises);
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Cache set failed', error as Error, { key });
       throw error;
     }
@@ -564,8 +591,8 @@ export class CacheManager {
 
     try {
       const results = await Promise.all(promises);
-      return results.some(result => result);
-    } catch (error) {
+      return results.some((result) => result);
+    } catch (error: any) {
       logger.error('Cache delete failed', error as Error, { key });
       return false;
     }
@@ -586,7 +613,7 @@ export class CacheManager {
   async getStats(): Promise<{ primary: CacheStats; fallback?: CacheStats }> {
     const primary = await this.primary.getStats();
     const fallback = this.fallback ? await this.fallback.getStats() : undefined;
-    
+
     return { primary, fallback };
   }
 }
@@ -614,7 +641,7 @@ export class CacheMiddleware {
       }
 
       const cacheKey = this.generateCacheKey(request);
-      
+
       try {
         // Try to get cached response
         const cached = await this.cache.get<{
@@ -625,7 +652,7 @@ export class CacheMiddleware {
 
         if (cached) {
           logger.debug('Cache hit', { cacheKey });
-          
+
           return new Response(cached.body, {
             status: cached.status,
             headers: {
@@ -638,7 +665,7 @@ export class CacheMiddleware {
 
         logger.debug('Cache miss', { cacheKey });
         return null; // Continue to actual handler
-      } catch (error) {
+      } catch (error: any) {
         logger.warn('Cache middleware error', error as Error, { cacheKey });
         return null; // Continue to actual handler
       }
@@ -648,19 +675,23 @@ export class CacheMiddleware {
   /**
    * Cache response
    */
-  async cacheResponse(request: Request, response: Response, ttl?: number): Promise<Response> {
+  async cacheResponse(
+    request: Request,
+    response: Response,
+    ttl?: number,
+  ): Promise<Response> {
     // Only cache successful GET responses
     if (request.method !== 'GET' || response.status >= 400) {
       return response;
     }
 
     const cacheKey = this.generateCacheKey(request);
-    
+
     try {
       // Clone response to read body
       const responseClone = response.clone();
       const body = await responseClone.text();
-      
+
       // Extract headers
       const headers: Record<string, string> = {};
       for (const [key, value] of response.headers.entries()) {
@@ -675,10 +706,13 @@ export class CacheMiddleware {
           headers,
           body,
         },
-        ttl ?? this.defaultTtl
+        ttl ?? this.defaultTtl,
       );
 
-      logger.debug('Response cached', { cacheKey, ttl: ttl ?? this.defaultTtl });
+      logger.debug('Response cached', {
+        cacheKey,
+        ttl: ttl ?? this.defaultTtl,
+      });
 
       // Return response with cache headers
       const newHeaders = new Headers(response.headers);
@@ -690,7 +724,7 @@ export class CacheMiddleware {
         statusText: response.statusText,
         headers: newHeaders,
       });
-    } catch (error) {
+    } catch (error: any) {
       logger.warn('Failed to cache response', error as Error, { cacheKey });
       return response;
     }
@@ -701,10 +735,10 @@ export class CacheMiddleware {
     const path = url.pathname;
     const query = url.search;
     const auth = request.headers.get('Authorization');
-    
+
     // Include user context in cache key
     const userContext = auth ? auth.substring(0, 20) : 'anonymous';
-    
+
     return `api:${path}${query}:${userContext}`;
   }
 }
@@ -720,32 +754,37 @@ export class GlobalCaches {
       const store = environment.isProduction() && env.CACHE_ENABLED
         ? new MemoryCacheStore() // Would use Redis in production with actual Redis client
         : new MemoryCacheStore();
-      
+
       this.instances.set(name, store);
     }
 
     return this.instances.get(name)!;
   }
 
-  static createManager(primaryName: string = 'default', fallbackName?: string): CacheManager {
+  static createManager(
+    primaryName: string = 'default',
+    fallbackName?: string,
+  ): CacheManager {
     const primary = this.getCache(primaryName);
     const fallback = fallbackName ? this.getCache(fallbackName) : undefined;
-    
+
     return new CacheManager(primary, fallback);
   }
 
   static async clearAll(): Promise<void> {
-    const promises = Array.from(this.instances.values()).map(cache => cache.clear());
+    const promises = Array.from(this.instances.values()).map((cache) =>
+      cache.clear()
+    );
     await Promise.all(promises);
   }
 
   static async getGlobalStats(): Promise<Record<string, CacheStats>> {
     const stats: Record<string, CacheStats> = {};
-    
+
     for (const [name, cache] of this.instances.entries()) {
       stats[name] = await cache.getStats();
     }
-    
+
     return stats;
   }
 }
@@ -757,22 +796,26 @@ export const cacheUtils = {
   /**
    * Create memory cache store
    */
-  createMemoryStore: (config?: Partial<CacheConfig>) => new MemoryCacheStore(config),
+  createMemoryStore: (config?: Partial<CacheConfig>) =>
+    new MemoryCacheStore(config),
 
   /**
    * Create Redis cache store
    */
-  createRedisStore: (redisClient: any, config?: Partial<CacheConfig>) => new RedisCacheStore(redisClient, config),
+  createRedisStore: (redisClient: any, config?: Partial<CacheConfig>) =>
+    new RedisCacheStore(redisClient, config),
 
   /**
    * Create cache manager
    */
-  createManager: (primary: CacheStore, fallback?: CacheStore) => new CacheManager(primary, fallback),
+  createManager: (primary: CacheStore, fallback?: CacheStore) =>
+    new CacheManager(primary, fallback),
 
   /**
    * Create cache middleware
    */
-  createMiddleware: (cache: CacheStore, defaultTtl?: number) => new CacheMiddleware(cache, defaultTtl),
+  createMiddleware: (cache: CacheStore, defaultTtl?: number) =>
+    new CacheMiddleware(cache, defaultTtl),
 
   /**
    * Global caches
@@ -790,7 +833,7 @@ export const cacheUtils = {
    * Generate cache key
    */
   generateKey: (...parts: (string | number)[]): string => {
-    return parts.map(part => String(part)).join(':');
+    return parts.map((part) => String(part)).join(':');
   },
 
   /**

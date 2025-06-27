@@ -1,7 +1,7 @@
 // - API key revocation with proper authorization, audit logging, and validation
 
 import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   corsHeaders,
   createCorsErrorResponse,
@@ -160,13 +160,17 @@ class RevocationRateLimiter {
  * API Key revocation service
  */
 class ApiKeyRevocationService {
-  private supabase: any;
+  private supabase: SupabaseClient;
 
   constructor() {
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
+  }
+
+  async getUser(token: string) {
+    return await this.supabase.auth.getUser(token);
   }
 
   /**
@@ -369,7 +373,7 @@ serve(async (req) => {
 
     // Verify JWT and get user
     const { data: { user }, error: userError } = await revocationService
-      .supabase.auth.getUser(token);
+      .getUser(token);
 
     if (userError || !user) {
       return new Response(
@@ -422,7 +426,7 @@ serve(async (req) => {
     let requestData: RevokeApiKeyRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch (error: any) {
       return new Response(
         JSON.stringify({
           error: {
@@ -493,7 +497,7 @@ serve(async (req) => {
             result.apiKey.name,
             validation.sanitized.keyPrefix,
           );
-        } catch (error) {
+        } catch (error: any) {
           console.warn('Failed to send revocation notification:', error);
         }
       }
@@ -524,7 +528,7 @@ serve(async (req) => {
           },
         },
       );
-    } catch (error) {
+    } catch (error: any) {
       // Handle specific errors
       if (error.message === 'API key not found') {
         return new Response(
@@ -563,7 +567,7 @@ serve(async (req) => {
 
       throw error; // Re-throw other errors
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('API key revocation error:', error);
 
     return new Response(

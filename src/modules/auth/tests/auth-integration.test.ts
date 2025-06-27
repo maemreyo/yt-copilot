@@ -1,6 +1,6 @@
 // - Comprehensive integration tests for Auth module
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { request } from 'supertest';
 
 const BASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
@@ -17,7 +17,7 @@ describe('Auth Module Integration Tests', () => {
       email: 'auth-integration@example.com',
       name: 'Auth Integration User',
       role: 'user',
-      password: 'TestPassword123!'
+      password: 'TestPassword123!',
     });
 
     // Get user token for authenticated requests
@@ -44,7 +44,7 @@ describe('Auth Module Integration Tests', () => {
         .send({
           name: 'Integration Test Key',
           permissions: ['api-keys:read', 'profile:read'],
-          expiresIn: '30d'
+          expiresIn: '30d',
         })
         .expect(201);
 
@@ -52,7 +52,10 @@ describe('Auth Module Integration Tests', () => {
       expect(createResponse.body.apiKey).toBeDefined();
       expect(createResponse.body.keyPrefix).toBeDefined();
       expect(createResponse.body.name).toBe('Integration Test Key');
-      expect(createResponse.body.permissions).toEqual(['api-keys:read', 'profile:read']);
+      expect(createResponse.body.permissions).toEqual([
+        'api-keys:read',
+        'profile:read',
+      ]);
 
       testApiKey = createResponse.body.apiKey;
       testApiKeyPrefix = createResponse.body.keyPrefix;
@@ -74,8 +77,10 @@ describe('Auth Module Integration Tests', () => {
 
       expect(listResponse.body.keys).toBeInstanceOf(Array);
       expect(listResponse.body.keys.length).toBeGreaterThan(0);
-      
-      const createdKey = listResponse.body.keys.find((key: any) => key.prefix === testApiKeyPrefix);
+
+      const createdKey = listResponse.body.keys.find((key: any) =>
+        key.prefix === testApiKeyPrefix
+      );
       expect(createdKey).toBeDefined();
       expect(createdKey.name).toBe('Integration Test Key');
       expect(createdKey.permissions).toEqual(['api-keys:read', 'profile:read']);
@@ -86,7 +91,7 @@ describe('Auth Module Integration Tests', () => {
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           keyPrefix: testApiKeyPrefix,
-          reason: 'Integration test cleanup'
+          reason: 'Integration test cleanup',
         })
         .expect(200);
 
@@ -105,7 +110,9 @@ describe('Auth Module Integration Tests', () => {
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 
-      const revokedKey = finalListResponse.body.keys.find((key: any) => key.prefix === testApiKeyPrefix);
+      const revokedKey = finalListResponse.body.keys.find((key: any) =>
+        key.prefix === testApiKeyPrefix
+      );
       expect(revokedKey.isActive).toBe(false);
       expect(revokedKey.revokedAt).toBeDefined();
     });
@@ -116,7 +123,7 @@ describe('Auth Module Integration Tests', () => {
         .post('/auth_create-api-key')
         .send({
           name: 'Unauthorized Key',
-          permissions: ['api-keys:read']
+          permissions: ['api-keys:read'],
         })
         .expect(401);
 
@@ -129,7 +136,7 @@ describe('Auth Module Integration Tests', () => {
       await request(`${BASE_URL}/functions/v1`)
         .delete('/auth_revoke-api-key')
         .send({
-          keyPrefix: 'fakepfx1'
+          keyPrefix: 'fakepfx1',
         })
         .expect(401);
     });
@@ -141,7 +148,7 @@ describe('Auth Module Integration Tests', () => {
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           name: '', // Empty name
-          permissions: ['api-keys:read']
+          permissions: ['api-keys:read'],
         })
         .expect(400);
 
@@ -151,7 +158,7 @@ describe('Auth Module Integration Tests', () => {
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           name: 'Test Key',
-          permissions: ['invalid:permission']
+          permissions: ['invalid:permission'],
         })
         .expect(400);
 
@@ -162,7 +169,7 @@ describe('Auth Module Integration Tests', () => {
         .send({
           name: 'Test Key',
           permissions: ['api-keys:read'],
-          expiresIn: 'invalid'
+          expiresIn: 'invalid',
         })
         .expect(400);
     });
@@ -210,7 +217,7 @@ describe('Auth Module Integration Tests', () => {
         .set('X-API-Key', testApiKey)
         .send({
           name: 'Unauthorized Key Creation',
-          permissions: ['profile:read']
+          permissions: ['profile:read'],
         })
         .expect(403);
     });
@@ -218,13 +225,13 @@ describe('Auth Module Integration Tests', () => {
     it('should prevent permission escalation', async () => {
       // User should not be able to create API key with more permissions than they have
       const adminPermissions = ['admin:all', 'users:delete', 'system:modify'];
-      
+
       await request(`${BASE_URL}/functions/v1`)
         .post('/auth_create-api-key')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           name: 'Escalation Attempt',
-          permissions: adminPermissions
+          permissions: adminPermissions,
         })
         .expect(403);
     });
@@ -232,7 +239,7 @@ describe('Auth Module Integration Tests', () => {
     it('should validate subscription requirements', async () => {
       // If user doesn't have premium subscription, should not access premium features
       // This would be tested if we had subscription-gated features
-      
+
       const response = await request(`${BASE_URL}/functions/v1`)
         .get('/auth_profile-management/profile')
         .set('Authorization', `Bearer ${testUserToken}`)
@@ -250,7 +257,7 @@ describe('Auth Module Integration Tests', () => {
   describe('Rate Limiting Tests', () => {
     it('should apply rate limiting to API key creation', async () => {
       const promises = [];
-      
+
       // Try to create many API keys rapidly
       for (let i = 0; i < 10; i++) {
         promises.push(
@@ -259,38 +266,46 @@ describe('Auth Module Integration Tests', () => {
             .set('Authorization', `Bearer ${testUserToken}`)
             .send({
               name: `Rate Limit Test Key ${i}`,
-              permissions: ['profile:read']
-            })
+              permissions: ['profile:read'],
+            }),
         );
       }
 
       const responses = await Promise.all(promises);
-      
+
       // Some requests should be rate limited
-      const statusCodes = responses.map(r => r.status);
-      const rateLimitedCount = statusCodes.filter(code => code === 429).length;
-      const successCount = statusCodes.filter(code => code === 201).length;
+      const statusCodes = responses.map((r: { status: any }) => r.status);
+      const rateLimitedCount =
+        statusCodes.filter((code: number) => code === 429).length;
+      const successCount =
+        statusCodes.filter((code: number) => code === 201).length;
 
       // Should have some successful requests and possibly some rate limited
       expect(successCount).toBeGreaterThan(0);
-      
+
       if (rateLimitedCount > 0) {
         // If rate limiting is active, verify proper headers
-        const rateLimitedResponse = responses.find(r => r.status === 429);
+        const rateLimitedResponse = responses.find((r: { status: number }) =>
+          r.status === 429
+        );
         expect(rateLimitedResponse?.headers).toHaveProperty('retry-after');
       }
     });
 
     it('should apply different rate limits for different endpoints', async () => {
       // Profile read should have higher rate limit than API key creation
-      const profileRequests = Array.from({ length: 5 }, () =>
-        request(`${BASE_URL}/functions/v1`)
-          .get('/auth_profile-management/profile')
-          .set('Authorization', `Bearer ${testUserToken}`)
+      const profileRequests = Array.from(
+        { length: 5 },
+        () =>
+          request(`${BASE_URL}/functions/v1`)
+            .get('/auth_profile-management/profile')
+            .set('Authorization', `Bearer ${testUserToken}`),
       );
 
       const profileResponses = await Promise.all(profileRequests);
-      const profileSuccessCount = profileResponses.filter(r => r.status === 200).length;
+      const profileSuccessCount =
+        profileResponses.filter((r: { status: number }) => r.status === 200)
+          .length;
 
       // Profile reads should mostly succeed (higher rate limit)
       expect(profileSuccessCount).toBeGreaterThanOrEqual(3);
@@ -299,18 +314,18 @@ describe('Auth Module Integration Tests', () => {
     it('should reset rate limits after time window', async () => {
       // This test would require waiting for rate limit window to reset
       // For now, we just verify rate limiting structure exists
-      
+
       const response = await request(`${BASE_URL}/functions/v1`)
         .post('/auth_create-api-key')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           name: 'Rate Reset Test Key',
-          permissions: ['profile:read']
+          permissions: ['profile:read'],
         });
 
       // Should either succeed or be rate limited with proper headers
       expect([201, 429]).toContain(response.status);
-      
+
       if (response.status === 429) {
         expect(response.headers).toHaveProperty('retry-after');
         const retryAfter = parseInt(response.headers['retry-after']);
@@ -324,10 +339,10 @@ describe('Auth Module Integration Tests', () => {
       // Test malformed JWT tokens
       const malformedTokens = [
         'Bearer invalid.jwt.token',
-        'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid',  
+        'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid',
         'Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.',
         'malformed-header-format',
-        ''
+        '',
       ];
 
       for (const token of malformedTokens) {
@@ -347,7 +362,7 @@ describe('Auth Module Integration Tests', () => {
         'null',
         'undefined',
         '',
-        ' '.repeat(32)
+        ' '.repeat(32),
       ];
 
       for (const apiKey of malformedApiKeys) {
@@ -365,7 +380,7 @@ describe('Auth Module Integration Tests', () => {
         '"><script>alert("xss")</script>',
         'javascript:alert("xss")',
         '<img src=x onerror=alert("xss")>',
-        '${alert("xss")}'
+        '${alert("xss")}',
       ];
 
       for (const payload of xssPayloads) {
@@ -374,7 +389,7 @@ describe('Auth Module Integration Tests', () => {
           .set('Authorization', `Bearer ${testUserToken}`)
           .send({
             name: payload,
-            permissions: ['profile:read']
+            permissions: ['profile:read'],
           });
 
         // Should either reject with validation error or sanitize
@@ -395,7 +410,7 @@ describe('Auth Module Integration Tests', () => {
         "'; DROP TABLE api_keys; --",
         "' OR '1'='1",
         "1; DELETE FROM profiles WHERE id='1'",
-        "' UNION SELECT * FROM auth.users --"
+        "' UNION SELECT * FROM auth.users --",
       ];
 
       for (const payload of sqlPayloads) {
@@ -405,7 +420,7 @@ describe('Auth Module Integration Tests', () => {
           .set('Authorization', `Bearer ${testUserToken}`)
           .send({
             name: payload,
-            permissions: ['profile:read']
+            permissions: ['profile:read'],
           });
 
         // Should not succeed with SQL injection
@@ -428,7 +443,7 @@ describe('Auth Module Integration Tests', () => {
         .post('/auth_session-management/login')
         .send({
           email: nonExistentEmail,
-          password: 'wrongpassword'
+          password: 'wrongpassword',
         });
       const time1 = Date.now() - startTime1;
 
@@ -437,7 +452,7 @@ describe('Auth Module Integration Tests', () => {
         .post('/auth_session-management/login')
         .send({
           email: existingEmail,
-          password: 'wrongpassword'
+          password: 'wrongpassword',
         });
       const time2 = Date.now() - startTime2;
 
@@ -453,13 +468,27 @@ describe('Auth Module Integration Tests', () => {
 
     it('should include security headers in all auth responses', async () => {
       const endpoints = [
-        { method: 'GET', path: '/auth_profile-management/profile', auth: `Bearer ${testUserToken}` },
-        { method: 'POST', path: '/auth_create-api-key', auth: `Bearer ${testUserToken}`, body: { name: 'Test', permissions: ['profile:read'] } },
-        { method: 'GET', path: '/auth_list-api-keys', auth: `Bearer ${testUserToken}` }
+        {
+          method: 'GET',
+          path: '/auth_profile-management/profile',
+          auth: `Bearer ${testUserToken}`,
+        },
+        {
+          method: 'POST',
+          path: '/auth_create-api-key',
+          auth: `Bearer ${testUserToken}`,
+          body: { name: 'Test', permissions: ['profile:read'] },
+        },
+        {
+          method: 'GET',
+          path: '/auth_list-api-keys',
+          auth: `Bearer ${testUserToken}`,
+        },
       ];
 
       for (const endpoint of endpoints) {
-        const req = request(`${BASE_URL}/functions/v1`)[endpoint.method.toLowerCase() as 'get' | 'post'](endpoint.path)
+        const req = request(`${BASE_URL}/functions/v1`)
+          [endpoint.method.toLowerCase() as 'get' | 'post'](endpoint.path)
           .set('Authorization', endpoint.auth);
 
         if (endpoint.body) {
@@ -469,9 +498,15 @@ describe('Auth Module Integration Tests', () => {
         const response = await req;
 
         // Verify security headers regardless of response status
-        expect(response.headers).toHaveProperty('x-content-type-options', 'nosniff');
+        expect(response.headers).toHaveProperty(
+          'x-content-type-options',
+          'nosniff',
+        );
         expect(response.headers).toHaveProperty('x-frame-options', 'DENY');
-        expect(response.headers).toHaveProperty('x-xss-protection', '1; mode=block');
+        expect(response.headers).toHaveProperty(
+          'x-xss-protection',
+          '1; mode=block',
+        );
         expect(response.headers).toHaveProperty('strict-transport-security');
       }
     });
@@ -490,8 +525,8 @@ describe('Auth Module Integration Tests', () => {
             name: 'Test Device',
             type: 'desktop',
             browser: 'Chrome',
-            os: 'Linux'
-          }
+            os: 'Linux',
+          },
         })
         .expect(200);
 
@@ -511,7 +546,9 @@ describe('Auth Module Integration Tests', () => {
       expect(sessionsResponse.body.sessions).toBeInstanceOf(Array);
       expect(sessionsResponse.body.sessions.length).toBeGreaterThan(0);
 
-      const currentSession = sessionsResponse.body.sessions.find((s: any) => s.isCurrent);
+      const currentSession = sessionsResponse.body.sessions.find((s: any) =>
+        s.isCurrent
+      );
       expect(currentSession).toBeDefined();
       expect(currentSession.userId).toBe(testUser.id);
 
@@ -536,7 +573,7 @@ describe('Auth Module Integration Tests', () => {
         .post('/auth_session-management/login')
         .send({
           email: testUser.email,
-          password: 'WrongPassword'
+          password: 'WrongPassword',
         })
         .expect(401);
 
@@ -545,7 +582,7 @@ describe('Auth Module Integration Tests', () => {
         .post('/auth_session-management/login')
         .send({
           email: 'nonexistent@example.com',
-          password: 'AnyPassword'
+          password: 'AnyPassword',
         })
         .expect(401);
 
@@ -554,7 +591,7 @@ describe('Auth Module Integration Tests', () => {
         .post('/auth_session-management/login')
         .send({
           email: 'invalid-email',
-          password: 'AnyPassword'
+          password: 'AnyPassword',
         })
         .expect(400);
     });
@@ -576,7 +613,7 @@ describe('Auth Module Integration Tests', () => {
         name: 'Updated Integration User',
         metadata: {
           testField: 'testValue',
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         },
         preferences: {
           theme: 'dark' as const,
@@ -584,9 +621,9 @@ describe('Auth Module Integration Tests', () => {
           notifications: {
             email: true,
             push: false,
-            marketing: false
-          }
-        }
+            marketing: false,
+          },
+        },
       };
 
       const updateResponse = await request(`${BASE_URL}/functions/v1`)
@@ -615,7 +652,7 @@ describe('Auth Module Integration Tests', () => {
         .put('/auth_profile-management/profile')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
-          name: 'a'.repeat(101)
+          name: 'a'.repeat(101),
         })
         .expect(400);
 
@@ -624,7 +661,7 @@ describe('Auth Module Integration Tests', () => {
         .put('/auth_profile-management/profile')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
-          avatar_url: 'not-a-valid-url'
+          avatar_url: 'not-a-valid-url',
         })
         .expect(400);
 
@@ -634,8 +671,8 @@ describe('Auth Module Integration Tests', () => {
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           preferences: {
-            theme: 'invalid-theme'
-          }
+            theme: 'invalid-theme',
+          },
         })
         .expect(400);
     });
@@ -655,7 +692,9 @@ describe('Auth Module Integration Tests', () => {
         .expect(200);
 
       // Should have some error data (auth failures might be tracked)
-      expect(errorStatsResponse.body.stats.totalErrors).toBeGreaterThanOrEqual(0);
+      expect(errorStatsResponse.body.stats.totalErrors).toBeGreaterThanOrEqual(
+        0,
+      );
     });
 
     it('should show up in metrics collection', async () => {
@@ -672,7 +711,8 @@ describe('Auth Module Integration Tests', () => {
 
       // Should track API usage
       expect(metricsResponse.body.api.authentication).toBeDefined();
-      expect(metricsResponse.body.api.authentication.jwtRequests).toBeGreaterThanOrEqual(0);
+      expect(metricsResponse.body.api.authentication.jwtRequests)
+        .toBeGreaterThanOrEqual(0);
     });
   });
 });

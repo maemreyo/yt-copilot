@@ -260,7 +260,7 @@ serve(async (req: Request) => {
     let requestData;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch (error: any) {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         'Invalid JSON in request body',
@@ -293,7 +293,7 @@ serve(async (req: Request) => {
     );
 
     return createCorsSuccessResponse(sessionResponse, 200, requestId);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in create-checkout-session:', error);
 
     if (error instanceof AppError) {

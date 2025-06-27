@@ -5,10 +5,19 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
 // Import Layer 1 utilities
-import { createAppError, ErrorType, handleUnknownError, AppError } from '@/shared-errors';
-import { createCorsErrorResponse, createCorsResponse, createCorsSuccessResponse } from '@/cors';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
+import {
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
 import { Logger } from '@/logging';
-import { GlobalCaches, CacheManager } from '@/cache';
+import { CacheManager, GlobalCaches } from '@/cache';
 import { createRateLimiter } from '@/rate-limiting';
 
 // Import Layer 2 utilities
@@ -50,21 +59,21 @@ class EnhancedSubscriptionService {
     this.stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
-    
+
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
-    
+
     this.logger = new Logger({
       service: 'subscription-service',
       level: 'info',
-      enablePerformanceTracking: true
+      enablePerformanceTracking: true,
     });
-    
+
     this.database = new DatabaseService();
     this.auditLogger = new AuditLogger();
-    
+
     // Initialize cache with 5-minute TTL for subscription data
     this.cacheManager = GlobalCaches.createManager('subscriptions');
   }
@@ -76,7 +85,9 @@ class EnhancedSubscriptionService {
     try {
       const { data: profile, error } = await this.supabase
         .from('profiles')
-        .select('stripe_customer_id, stripe_subscription_id, stripe_subscription_status')
+        .select(
+          'stripe_customer_id, stripe_subscription_id, stripe_subscription_status',
+        )
         .eq('id', userId)
         .single();
 
@@ -84,7 +95,7 @@ class EnhancedSubscriptionService {
         throw createAppError(
           ErrorType.DATABASE_ERROR,
           'Failed to fetch user profile',
-          { error: error.message, userId }
+          { error: error.message, userId },
         );
       }
 
@@ -92,16 +103,16 @@ class EnhancedSubscriptionService {
         throw createAppError(
           ErrorType.NOT_FOUND_ERROR,
           'User profile not found',
-          { userId }
+          { userId },
         );
       }
 
       return profile;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to get user profile', {
         requestId,
         userId,
-        error: error.message
+        error: error.message,
       });
       throw error;
     }
@@ -110,22 +121,28 @@ class EnhancedSubscriptionService {
   /**
    * Get cached subscription data
    */
-  async getCachedSubscription(cacheKey: string, requestId: string): Promise<SubscriptionData | null> {
+  async getCachedSubscription(
+    cacheKey: string,
+    requestId: string,
+  ): Promise<SubscriptionData | null> {
     try {
       const cached = await this.cacheManager.get<SubscriptionData>(cacheKey);
-      
+
       if (cached) {
-        this.logger.debug('Cache hit for subscription', { requestId, cacheKey });
+        this.logger.debug('Cache hit for subscription', {
+          requestId,
+          cacheKey,
+        });
         return cached;
       }
-      
+
       this.logger.debug('Cache miss for subscription', { requestId, cacheKey });
       return null;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('Cache retrieval failed', {
         requestId,
         cacheKey,
-        error: error.message
+        error: error.message,
       });
       return null; // Continue without cache
     }
@@ -134,20 +151,27 @@ class EnhancedSubscriptionService {
   /**
    * Get subscription from Stripe
    */
-  async getStripeSubscription(subscriptionId: string, requestId: string): Promise<SubscriptionData> {
+  async getStripeSubscription(
+    subscriptionId: string,
+    requestId: string,
+  ): Promise<SubscriptionData> {
     try {
-      const subscription = await this.stripe.subscriptions.retrieve(subscriptionId, {
-        expand: ['default_payment_method', 'items.data.price.product']
-      });
+      const subscription = await this.stripe.subscriptions.retrieve(
+        subscriptionId,
+        {
+          expand: ['default_payment_method', 'items.data.price.product'],
+        },
+      );
 
       // Extract product information
       const priceItem = subscription.items.data[0];
       const product = priceItem?.price?.product;
-      
+
       const subscriptionData: SubscriptionData = {
         id: subscription.id,
         status: subscription.status,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000)
+          .toISOString(),
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         priceId: priceItem?.price?.id || '',
         customerId: subscription.customer as string,
@@ -155,36 +179,40 @@ class EnhancedSubscriptionService {
         amount: priceItem?.price?.unit_amount || undefined,
         currency: priceItem?.price?.currency,
         interval: priceItem?.price?.recurring?.interval,
-        trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-        canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : null
+        trialEnd: subscription.trial_end
+          ? new Date(subscription.trial_end * 1000).toISOString()
+          : null,
+        canceledAt: subscription.canceled_at
+          ? new Date(subscription.canceled_at * 1000).toISOString()
+          : null,
       };
 
       this.logger.debug('Stripe subscription retrieved', {
         requestId,
         subscriptionId,
-        status: subscription.status
+        status: subscription.status,
       });
 
       return subscriptionData;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to retrieve Stripe subscription', {
         requestId,
         subscriptionId,
-        error: error.message
+        error: error.message,
       });
 
       if (error.type === 'StripeInvalidRequestError') {
         throw createAppError(
           ErrorType.NOT_FOUND_ERROR,
           'Subscription not found',
-          { subscriptionId }
+          { subscriptionId },
         );
       }
 
       throw createAppError(
         ErrorType.EXTERNAL_SERVICE_ERROR,
         'Failed to retrieve subscription from Stripe',
-        { subscriptionId, originalError: error.message }
+        { subscriptionId, originalError: error.message },
       );
     }
   }
@@ -192,24 +220,28 @@ class EnhancedSubscriptionService {
   /**
    * Cache subscription data
    */
-  private async cacheSubscription(cacheKey: string, subscription: SubscriptionData, requestId: string): Promise<void> {
+  private async cacheSubscription(
+    cacheKey: string,
+    subscription: SubscriptionData,
+    requestId: string,
+  ): Promise<void> {
     try {
       // Cache for 5 minutes (subscription data changes infrequently)
       const cacheTtl = 5 * 60 * 1000; // 5 minutes
-      
+
       await this.cacheManager.set(cacheKey, subscription, cacheTtl);
-      
+
       this.logger.debug('Subscription cached', {
         requestId,
         cacheKey,
         ttl: cacheTtl,
-        subscriptionId: subscription.id
+        subscriptionId: subscription.id,
       });
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('Failed to cache subscription', {
         requestId,
         cacheKey,
-        error: error.message
+        error: error.message,
       });
       // Don't throw - caching failure shouldn't break the request
     }
@@ -221,7 +253,7 @@ const subscriptionService = new EnhancedSubscriptionService();
 const rateLimiter = createRateLimiter({
   windowMs: 60000,
   maxRequests: 20,
-  identifier: 'user'
+  identifier: 'user',
 });
 
 serve(async (req: Request) => {
@@ -264,7 +296,9 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await supabase.auth.getUser(
+      token,
+    );
 
     if (userError || !user) {
       throw createAppError(
@@ -278,42 +312,64 @@ serve(async (req: Request) => {
     // Apply rate limiting
     await rateLimiter(req);
 
-    const profile = await subscriptionService.getUserProfile(user.id, requestId);
+    const profile = await subscriptionService.getUserProfile(
+      user.id,
+      requestId,
+    );
 
     // Check if user has subscription
     if (!profile.stripe_subscription_id) {
-      return createCorsSuccessResponse({
-        subscription: null,
-        message: 'No active subscription found'
-      }, 200, requestId);
+      return createCorsSuccessResponse(
+        {
+          subscription: null,
+          message: 'No active subscription found',
+        },
+        200,
+        requestId,
+      );
     }
 
     // Try to get from cache first
     const cacheKey = `subscription:${profile.stripe_subscription_id}`;
-    const cachedSubscription = await subscriptionService.getCachedSubscription(cacheKey, requestId);
+    const cachedSubscription = await subscriptionService.getCachedSubscription(
+      cacheKey,
+      requestId,
+    );
 
     if (cachedSubscription) {
-      return createCorsSuccessResponse({
-        subscription: cachedSubscription,
-        cached: true,
-        cacheKey
-      }, 200, requestId);
+      return createCorsSuccessResponse(
+        {
+          subscription: cachedSubscription,
+          cached: true,
+          cacheKey,
+        },
+        200,
+        requestId,
+      );
     }
 
     // Get fresh data from Stripe
     const subscription = await subscriptionService.getStripeSubscription(
       profile.stripe_subscription_id,
-      requestId
+      requestId,
     );
 
     // Cache the subscription data
-    await subscriptionService.cacheSubscription(cacheKey, subscription, requestId);
-
-    return createCorsSuccessResponse({
+    await subscriptionService.cacheSubscription(
+      cacheKey,
       subscription,
-      cached: false
-    }, 200, requestId);
-  } catch (error) {
+      requestId,
+    );
+
+    return createCorsSuccessResponse(
+      {
+        subscription,
+        cached: false,
+      },
+      200,
+      requestId,
+    );
+  } catch (error: any) {
     console.error('Subscription retrieval failed:', error);
 
     if (error instanceof AppError) {

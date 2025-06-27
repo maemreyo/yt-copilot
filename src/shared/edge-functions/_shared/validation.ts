@@ -21,7 +21,8 @@ export function validateEmail(email: string): boolean {
  * Validate UUID format
  */
 export function validateUUID(uuid: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(uuid);
 }
 
@@ -41,14 +42,16 @@ export function validateUrl(url: string): boolean {
  * Validate Stripe price ID
  */
 export function validateStripePriceId(priceId: string): boolean {
-  return typeof priceId === 'string' && priceId.startsWith('price_') && priceId.length > 6;
+  return typeof priceId === 'string' && priceId.startsWith('price_') &&
+    priceId.length > 6;
 }
 
 /**
  * Validate Stripe customer ID
  */
 export function validateStripeCustomerId(customerId: string): boolean {
-  return typeof customerId === 'string' && customerId.startsWith('cus_') && customerId.length > 4;
+  return typeof customerId === 'string' && customerId.startsWith('cus_') &&
+    customerId.length > 4;
 }
 
 /**
@@ -56,7 +59,7 @@ export function validateStripeCustomerId(customerId: string): boolean {
  */
 export function validateRequestBody<T>(
   body: unknown,
-  schema: ValidationSchema<T>
+  schema: ValidationSchema<T>,
 ): ValidationResult {
   const errors: string[] = [];
   const sanitized: Partial<T> = {};
@@ -95,7 +98,9 @@ export function validateRequestBody<T>(
     if (fieldRules.validate) {
       const customResult = fieldRules.validate(value);
       if (!customResult.isValid) {
-        errors.push(...customResult.errors.map(err => `Field '${field}': ${err}`));
+        errors.push(
+          ...customResult.errors.map((err) => `Field '${field}': ${err}`),
+        );
         continue;
       }
     }
@@ -145,7 +150,8 @@ function validateFieldType(value: unknown, expectedType: string): boolean {
     case 'boolean':
       return typeof value === 'boolean';
     case 'object':
-      return value !== null && typeof value === 'object' && !Array.isArray(value);
+      return value !== null && typeof value === 'object' &&
+        !Array.isArray(value);
     case 'array':
       return Array.isArray(value);
     default:
@@ -289,13 +295,13 @@ export function createValidationMiddleware<T>(schema: ValidationSchema<T>) {
     try {
       const body = await request.json();
       const result = validateRequestBody<T>(body, schema);
-      
+
       return {
         isValid: result.isValid,
         data: result.sanitized,
         errors: result.errors,
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         isValid: false,
         errors: ['Invalid JSON in request body'],

@@ -67,7 +67,7 @@ async function extractUserFromRequest(
     }
 
     return user.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -171,7 +171,7 @@ serve(async (req) => {
     let requestData: AddToHistoryRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch (error: any) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -323,7 +323,7 @@ serve(async (req) => {
         headers: { ...securityHeaders, ...corsHeaders },
       },
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Request failed:', error);
 
     return new Response(

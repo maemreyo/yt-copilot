@@ -1,7 +1,7 @@
 // - API key listing with pagination, filtering, and comprehensive metadata (secure - no plain text keys)
 
 import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   corsHeaders,
   createCorsErrorResponse,
@@ -192,13 +192,17 @@ class QueryValidator {
  * API Key listing service
  */
 class ApiKeyListingService {
-  private supabase: any;
+  private supabase: SupabaseClient;
 
   constructor() {
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
+  }
+
+  async getUser(token: string) {
+    return await this.supabase.auth.getUser(token);
   }
 
   /**
@@ -381,7 +385,7 @@ class ApiKeyListingService {
     }
 
     // Transform to metadata objects
-    const transformedKeys = (apiKeys || []).map((key) =>
+    const transformedKeys = (apiKeys || []).map((key: any) =>
       this.transformToMetadata(key)
     );
 
@@ -452,8 +456,9 @@ serve(async (req) => {
     const token = authHeader.substring(7);
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await listingService.supabase
-      .auth.getUser(token);
+    const { data: { user }, error: userError } = await listingService.getUser(
+      token,
+    );
 
     if (userError || !user) {
       throw createAppError(
@@ -506,7 +511,7 @@ serve(async (req) => {
         'X-Per-Page': result.pagination.limit.toString(),
       },
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('API key listing error:', error);
 
     // If it's already an AppError, return it directly

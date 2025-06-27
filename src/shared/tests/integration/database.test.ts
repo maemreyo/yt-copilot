@@ -1,6 +1,6 @@
 /**
  * Database Utilities Integration Test
- * 
+ *
  * Tests the complete database foundation:
  * - Connection management và pooling
  * - Query helpers với error handling
@@ -9,27 +9,32 @@
  * - Integration với Layer 1 utilities (errors, logging)
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { database, DatabaseResult, QueryHelper, TransactionManager } from '@/database';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  database,
+  DatabaseResult,
+  QueryHelper,
+  TransactionManager,
+} from '@/database';
 import { logger } from '@/logging';
 import { ApiError, DatabaseError, ValidationError } from '@/errors';
 
 describe('Database Utilities Integration', () => {
   let queryHelper: QueryHelper;
-  
+
   beforeAll(async () => {
     // Initialize database connection pool
     database.init({
       maxConnections: 5,
       timeout: 10000,
-      retryAttempts: 2
+      retryAttempts: 2,
     });
-    
+
     // Create query helper với service client
     const serviceClient = database.getServiceClient();
     queryHelper = database.createQueryHelper(serviceClient, {
       module: 'test',
-      operation: 'integration-test'
+      operation: 'integration-test',
     });
   });
 
@@ -41,7 +46,7 @@ describe('Database Utilities Integration', () => {
   describe('Connection Management', () => {
     it('should provide healthy database connection', async () => {
       const health = await database.healthCheck();
-      
+
       expect(health.status).toBe('healthy');
       expect(health.latency).toBeGreaterThan(0);
       expect(health.latency).toBeLessThan(5000); // Should be under 5 seconds
@@ -51,11 +56,11 @@ describe('Database Utilities Integration', () => {
       const anonClient = database.getAnonClient();
       const serviceClient = database.getServiceClient();
       const authClient = database.getAuthenticatedClient('fake-token');
-      
+
       expect(anonClient).toBeDefined();
       expect(serviceClient).toBeDefined();
       expect(authClient).toBeDefined();
-      
+
       // Clients should be different instances for security
       expect(anonClient).not.toBe(serviceClient);
       expect(serviceClient).not.toBe(authClient);
@@ -78,14 +83,14 @@ describe('Database Utilities Integration', () => {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `;
-      
+
       await queryHelper.rpc('exec', { sql: createTableSQL });
     });
 
     afterAll(async () => {
       // Clean up test table
-      await queryHelper.rpc('exec', { 
-        sql: `DROP TABLE IF EXISTS public.${testTableName}` 
+      await queryHelper.rpc('exec', {
+        sql: `DROP TABLE IF EXISTS public.${testTableName}`,
       });
     });
 
@@ -95,11 +100,11 @@ describe('Database Utilities Integration', () => {
         name: 'Test User',
         email: 'test@example.com',
         age: 30,
-        metadata: { role: 'test', preferences: { theme: 'dark' } }
+        metadata: { role: 'test', preferences: { theme: 'dark' } },
       };
 
       const insertResult = await queryHelper.insert(testTableName, insertData, {
-        select: '*'
+        select: '*',
       });
 
       expect(insertResult.error).toBeNull();
@@ -114,7 +119,7 @@ describe('Database Utilities Integration', () => {
       // READ - Select operation
       const selectResult = await queryHelper.select(testTableName, {
         filters: { id: insertedId },
-        limit: 1
+        limit: 1,
       });
 
       expect(selectResult.error).toBeNull();
@@ -126,14 +131,14 @@ describe('Database Utilities Integration', () => {
       const updateData = {
         name: 'Updated Test User',
         age: 31,
-        metadata: { role: 'test', updated: true }
+        metadata: { role: 'test', updated: true },
       };
 
       const updateResult = await queryHelper.update(
         testTableName,
         updateData,
         { id: insertedId },
-        { select: '*' }
+        { select: '*' },
       );
 
       expect(updateResult.error).toBeNull();
@@ -144,7 +149,7 @@ describe('Database Utilities Integration', () => {
       // READ - Verify update
       const verifyResult = await queryHelper.select(testTableName, {
         filters: { id: insertedId },
-        limit: 1
+        limit: 1,
       });
 
       expect(verifyResult.data[0].name).toBe('Updated Test User');
@@ -154,7 +159,7 @@ describe('Database Utilities Integration', () => {
       const deleteResult = await queryHelper.delete(
         testTableName,
         { id: insertedId },
-        { select: 'id' }
+        { select: 'id' },
       );
 
       expect(deleteResult.error).toBeNull();
@@ -164,7 +169,7 @@ describe('Database Utilities Integration', () => {
       // Verify deletion
       const verifyDeleteResult = await queryHelper.select(testTableName, {
         filters: { id: insertedId },
-        limit: 1
+        limit: 1,
       });
 
       expect(verifyDeleteResult.data).toHaveLength(0);
@@ -173,7 +178,7 @@ describe('Database Utilities Integration', () => {
     it('should handle query errors properly', async () => {
       // Test với invalid table name
       const invalidResult = await queryHelper.select('non_existent_table');
-      
+
       expect(invalidResult.error).toBeInstanceOf(DatabaseError);
       expect(invalidResult.data).toBeNull();
       expect(invalidResult.error?.message).toContain('non_existent_table');
@@ -181,20 +186,22 @@ describe('Database Utilities Integration', () => {
       // Test với duplicate email
       const firstInsert = await queryHelper.insert(testTableName, {
         name: 'User 1',
-        email: 'duplicate@example.com'
+        email: 'duplicate@example.com',
       });
       expect(firstInsert.error).toBeNull();
 
       const secondInsert = await queryHelper.insert(testTableName, {
-        name: 'User 2', 
-        email: 'duplicate@example.com' // Same email, should fail
+        name: 'User 2',
+        email: 'duplicate@example.com', // Same email, should fail
       });
-      
+
       expect(secondInsert.error).toBeInstanceOf(DatabaseError);
       expect(secondInsert.data).toBeNull();
 
       // Cleanup
-      await queryHelper.delete(testTableName, { email: 'duplicate@example.com' });
+      await queryHelper.delete(testTableName, {
+        email: 'duplicate@example.com',
+      });
     });
 
     it('should support advanced querying features', async () => {
@@ -203,21 +210,21 @@ describe('Database Utilities Integration', () => {
         { name: 'Alice', email: 'alice@example.com', age: 25 },
         { name: 'Bob', email: 'bob@example.com', age: 30 },
         { name: 'Charlie', email: 'charlie@example.com', age: 35 },
-        { name: 'Diana', email: 'diana@example.com', age: 28 }
+        { name: 'Diana', email: 'diana@example.com', age: 28 },
       ];
 
       // Bulk insert
       const insertResults = await Promise.all(
-        testUsers.map(user => queryHelper.insert(testTableName, user))
+        testUsers.map((user) => queryHelper.insert(testTableName, user)),
       );
 
-      insertResults.forEach(result => {
+      insertResults.forEach((result) => {
         expect(result.error).toBeNull();
       });
 
       // Test filtering
       const filterResult = await queryHelper.select(testTableName, {
-        filters: { age: 30 }
+        filters: { age: 30 },
       });
 
       expect(filterResult.error).toBeNull();
@@ -227,19 +234,21 @@ describe('Database Utilities Integration', () => {
       // Test ordering
       const orderResult = await queryHelper.select(testTableName, {
         orderBy: 'age',
-        ascending: true
+        ascending: true,
       });
 
       expect(orderResult.error).toBeNull();
       expect(orderResult.data.length).toBeGreaterThanOrEqual(4);
-      expect(orderResult.data[0].age).toBeLessThanOrEqual(orderResult.data[1].age);
+      expect(orderResult.data[0].age).toBeLessThanOrEqual(
+        orderResult.data[1].age,
+      );
 
       // Test pagination
       const paginationResult = await queryHelper.select(testTableName, {
         limit: 2,
         offset: 1,
         orderBy: 'name',
-        ascending: true
+        ascending: true,
       });
 
       expect(paginationResult.error).toBeNull();
@@ -262,51 +271,53 @@ describe('Database Utilities Integration', () => {
           created_at TIMESTAMPTZ DEFAULT NOW()
         );
       `;
-      
+
       await queryHelper.rpc('exec', { sql: createTableSQL });
     });
 
     afterAll(async () => {
-      await queryHelper.rpc('exec', { 
-        sql: `DROP TABLE IF EXISTS public.${testTableName}` 
+      await queryHelper.rpc('exec', {
+        sql: `DROP TABLE IF EXISTS public.${testTableName}`,
       });
     });
 
     it('should handle successful transactions', async () => {
-      const result = await TransactionManager.withTransaction(async (context) => {
-        const txHelper = database.createQueryHelper(context.client, {
-          operationId: context.operationId
-        });
+      const result = await TransactionManager.withTransaction(
+        async (context) => {
+          const txHelper = database.createQueryHelper(context.client, {
+            operationId: context.operationId,
+          });
 
-        // Insert user
-        const userResult = await txHelper.insert(testTableName, {
-          name: 'Transaction User',
-          balance: 100
-        }, { select: '*' });
+          // Insert user
+          const userResult = await txHelper.insert(testTableName, {
+            name: 'Transaction User',
+            balance: 100,
+          }, { select: '*' });
 
-        if (userResult.error) {
-          throw userResult.error;
-        }
+          if (userResult.error) {
+            throw userResult.error;
+          }
 
-        const userId = userResult.data.id;
+          const userId = userResult.data.id;
 
-        // Update balance
-        const updateResult = await txHelper.update(
-          testTableName,
-          { balance: 200 },
-          { id: userId },
-          { select: '*' }
-        );
+          // Update balance
+          const updateResult = await txHelper.update(
+            testTableName,
+            { balance: 200 },
+            { id: userId },
+            { select: '*' },
+          );
 
-        if (updateResult.error) {
-          throw updateResult.error;
-        }
+          if (updateResult.error) {
+            throw updateResult.error;
+          }
 
-        return {
-          userId,
-          finalBalance: updateResult.data.balance
-        };
-      });
+          return {
+            userId,
+            finalBalance: updateResult.data.balance,
+          };
+        },
+      );
 
       expect(result).toBeDefined();
       expect(result.userId).toBeValidUuid();
@@ -314,7 +325,7 @@ describe('Database Utilities Integration', () => {
 
       // Verify transaction was committed
       const verifyResult = await queryHelper.select(testTableName, {
-        filters: { id: result.userId }
+        filters: { id: result.userId },
       });
 
       expect(verifyResult.data).toHaveLength(1);
@@ -330,13 +341,13 @@ describe('Database Utilities Integration', () => {
       try {
         await TransactionManager.withTransaction(async (context) => {
           const txHelper = database.createQueryHelper(context.client, {
-            operationId: context.operationId
+            operationId: context.operationId,
           });
 
           // Insert user
           const userResult = await txHelper.insert(testTableName, {
             name: 'Rollback User',
-            balance: 100
+            balance: 100,
           }, { select: '*' });
 
           if (userResult.error) {
@@ -351,8 +362,7 @@ describe('Database Utilities Integration', () => {
 
         // Should not reach here
         expect.fail('Transaction should have thrown an error');
-
-      } catch (error) {
+      } catch (error: any) {
         expect(error).toBeInstanceOf(Error);
         expect((error as Error).message).toContain('Intentional error');
       }
@@ -360,7 +370,7 @@ describe('Database Utilities Integration', () => {
       // Verify transaction was rolled back - user should not exist
       if (userId) {
         const verifyResult = await queryHelper.select(testTableName, {
-          filters: { id: userId }
+          filters: { id: userId },
         });
 
         expect(verifyResult.data).toHaveLength(0);
@@ -372,7 +382,7 @@ describe('Database Utilities Integration', () => {
 
       const result = await TransactionManager.withRetry(async () => {
         attemptCount++;
-        
+
         if (attemptCount < 3) {
           // Simulate a retryable error
           throw new Error('Connection timeout');
@@ -381,7 +391,7 @@ describe('Database Utilities Integration', () => {
         // Success on third attempt
         const insertResult = await queryHelper.insert(testTableName, {
           name: 'Retry User',
-          balance: 50
+          balance: 50,
         }, { select: '*' });
 
         if (insertResult.error) {
@@ -405,7 +415,7 @@ describe('Database Utilities Integration', () => {
     it('should execute stored procedures successfully', async () => {
       // Test với built-in PostgreSQL function
       const result = await queryHelper.rpc('current_timestamp', {});
-      
+
       expect(result.error).toBeNull();
       expect(result.data).toBeDefined();
       expect(typeof result.data).toBe('string');
@@ -414,7 +424,7 @@ describe('Database Utilities Integration', () => {
 
     it('should handle RPC errors properly', async () => {
       const result = await queryHelper.rpc('non_existent_function', {});
-      
+
       expect(result.error).toBeInstanceOf(DatabaseError);
       expect(result.data).toBeNull();
     });
@@ -426,7 +436,7 @@ describe('Database Utilities Integration', () => {
 
       // Execute a simple query
       const result = await queryHelper.select('profiles', {
-        limit: 1
+        limit: 1,
       });
 
       const endTime = Date.now();
@@ -439,11 +449,13 @@ describe('Database Utilities Integration', () => {
 
     it('should handle connection pooling correctly', async () => {
       // Execute multiple queries concurrently để test connection pooling
-      const promises = Array.from({ length: 10 }, (_, i) => 
-        queryHelper.select('profiles', {
-          limit: 1,
-          filters: { id: `test-${i}` } // Different filters to avoid caching
-        })
+      const promises = Array.from(
+        { length: 10 },
+        (_, i) =>
+          queryHelper.select('profiles', {
+            limit: 1,
+            filters: { id: `test-${i}` }, // Different filters to avoid caching
+          }),
       );
 
       const results = await Promise.all(promises);
@@ -475,7 +487,7 @@ describe('Database Utilities Integration', () => {
 
       // Verify that database operations are being logged
       expect(logSpy).toHaveBeenCalled();
-      
+
       logSpy.mockRestore();
     });
 
@@ -483,7 +495,7 @@ describe('Database Utilities Integration', () => {
       // Test that database utilities work với global test utilities
       const testUser = await globalThis.testDb.createTestUser({
         email: 'db-integration@example.com',
-        name: 'DB Integration User'
+        name: 'DB Integration User',
       });
 
       expect(testUser).toBeDefined();
@@ -492,7 +504,7 @@ describe('Database Utilities Integration', () => {
 
       // Verify user exists in database using our query helper
       const userResult = await queryHelper.select('profiles', {
-        filters: { id: testUser.id }
+        filters: { id: testUser.id },
       });
 
       expect(userResult.error).toBeNull();

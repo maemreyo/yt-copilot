@@ -36,7 +36,7 @@ export class TestDatabaseManager {
   constructor() {
     this.supabase = createClient(
       process.env.SUPABASE_URL || 'http://localhost:54321',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key'
+      process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key',
     );
   }
 
@@ -49,20 +49,22 @@ export class TestDatabaseManager {
     name: string;
     role: string;
   }> = {}): Promise<TestUser> {
-    const email = overrides.email || `test-${randomBytes(8).toString('hex')}@example.com`;
+    const email = overrides.email ||
+      `test-${randomBytes(8).toString('hex')}@example.com`;
     const password = overrides.password || 'TestPassword123!';
     const name = overrides.name || 'Test User';
 
     // Create user via Supabase Auth
-    const { data: authData, error: signUpError } = await this.supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        name,
-        role: overrides.role || 'user',
-      },
-    });
+    const { data: authData, error: signUpError } = await this.supabase.auth
+      .admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          name,
+          role: overrides.role || 'user',
+        },
+      });
 
     if (signUpError || !authData.user) {
       throw new Error(`Failed to create test user: ${signUpError?.message}`);
@@ -85,13 +87,16 @@ export class TestDatabaseManager {
     }
 
     // Generate auth token
-    const { data: sessionData, error: sessionError } = await this.supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email,
-    });
+    const { data: sessionData, error: sessionError } = await this.supabase.auth
+      .admin.generateLink({
+        type: 'magiclink',
+        email,
+      });
 
     if (sessionError) {
-      throw new Error(`Failed to generate session for test user: ${sessionError.message}`);
+      throw new Error(
+        `Failed to generate session for test user: ${sessionError.message}`,
+      );
     }
 
     // Extract token from the magic link (this is a simplified approach for testing)
@@ -122,7 +127,8 @@ export class TestDatabaseManager {
     const keyHash = `hashed_${apiKey}`;
 
     const expiresAt = overrides.expiresInDays
-      ? new Date(Date.now() + overrides.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+      ? new Date(Date.now() + overrides.expiresInDays * 24 * 60 * 60 * 1000)
+        .toISOString()
       : null;
 
     const { data, error } = await this.supabase
@@ -133,7 +139,9 @@ export class TestDatabaseManager {
         key_prefix: prefix,
         name,
         expires_at: expiresAt,
-        permissions: overrides.permissions ? JSON.stringify(overrides.permissions) : null,
+        permissions: overrides.permissions
+          ? JSON.stringify(overrides.permissions)
+          : null,
       })
       .select('id')
       .single();
@@ -156,7 +164,10 @@ export class TestDatabaseManager {
   /**
    * Create test subscription for user
    */
-  async createTestSubscription(userId: string, status: string = 'active'): Promise<void> {
+  async createTestSubscription(
+    userId: string,
+    status: string = 'active',
+  ): Promise<void> {
     const customerId = `cus_test_${randomBytes(8).toString('hex')}`;
     const subscriptionId = `sub_test_${randomBytes(8).toString('hex')}`;
 
@@ -197,7 +208,7 @@ export class TestDatabaseManager {
       // Reset tracking arrays
       this.createdUsers = [];
       this.createdApiKeys = [];
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during test cleanup:', error);
     }
   }
@@ -207,7 +218,7 @@ export class TestDatabaseManager {
    */
   async reset(): Promise<void> {
     await this.cleanup();
-    
+
     // Additional cleanup if needed
     // This could include truncating specific tables or resetting sequences
   }
@@ -256,7 +267,9 @@ export class HttpTestHelpers {
   /**
    * Combine headers
    */
-  static combineHeaders(...headerObjects: Record<string, string>[]): Record<string, string> {
+  static combineHeaders(
+    ...headerObjects: Record<string, string>[]
+  ): Record<string, string> {
     return Object.assign({}, ...headerObjects);
   }
 }
@@ -278,10 +291,10 @@ export class TestDataFactory {
   static generateName(): string {
     const firstNames = ['John', 'Jane', 'Bob', 'Alice', 'Charlie', 'Diana'];
     const lastNames = ['Smith', 'Johnson', 'Brown', 'Davis', 'Wilson', 'Moore'];
-    
+
     const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
     const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
-    
+
     return `${firstName} ${lastName}`;
   }
 
@@ -342,7 +355,7 @@ export class TestEnvironment {
    * Wait for a specified amount of time
    */
   static async wait(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -351,16 +364,16 @@ export class TestEnvironment {
   static async retry<T>(
     fn: () => Promise<T>,
     maxAttempts: number = 3,
-    delay: number = 1000
+    delay: number = 1000,
   ): Promise<T> {
     let lastError: Error;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return await fn();
-      } catch (error) {
+      } catch (error: any) {
         lastError = error as Error;
-        
+
         if (attempt < maxAttempts) {
           await this.wait(delay);
         }
@@ -406,14 +419,20 @@ export class TestAssertions {
    */
   static assertPaginatedResponse(response: any): void {
     this.assertApiResponse(response, ['data', 'pagination']);
-    this.assertApiResponse(response.pagination, ['page', 'limit', 'total', 'totalPages']);
+    this.assertApiResponse(response.pagination, [
+      'page',
+      'limit',
+      'total',
+      'totalPages',
+    ]);
   }
 
   /**
    * Assert UUID format
    */
   static assertUuid(value: string): void {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(value)) {
       throw new Error(`Expected UUID format, got: ${value}`);
     }

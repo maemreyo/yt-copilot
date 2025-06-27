@@ -1,7 +1,7 @@
-import type { 
-  VideoSummaryContent, 
+import type {
   ContentAnalysis,
-  Definition 
+  Definition,
+  VideoSummaryContent,
 } from './types.ts';
 
 /**
@@ -14,9 +14,9 @@ import type {
 // ============================================
 
 export async function translateWithGoogle(
-  text: string, 
-  sourceLang: string | undefined, 
-  targetLang: string
+  text: string,
+  sourceLang: string | undefined,
+  targetLang: string,
 ): Promise<{
   translatedText: string;
   detectedSourceLang?: string;
@@ -30,9 +30,9 @@ export async function translateWithGoogle(
   const params = new URLSearchParams({
     q: text,
     target: targetLang,
-    key: apiKey
+    key: apiKey,
   });
-  
+
   if (sourceLang && sourceLang !== 'auto') {
     params.append('source', sourceLang);
   }
@@ -43,29 +43,31 @@ export async function translateWithGoogle(
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-      }
-    }
+      },
+    },
   );
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(`Google Translate error: ${error.error?.message || response.statusText}`);
+    throw new Error(
+      `Google Translate error: ${error.error?.message || response.statusText}`,
+    );
   }
 
   const data = await response.json();
   const translation = data.data.translations[0];
-  
+
   return {
     translatedText: translation.translatedText,
     detectedSourceLang: translation.detectedSourceLanguage,
-    provider: 'google'
+    provider: 'google',
   };
 }
 
 export async function translateWithLibre(
   text: string,
   sourceLang: string | undefined,
-  targetLang: string
+  targetLang: string,
 ): Promise<{
   translatedText: string;
   detectedSourceLang?: string;
@@ -77,7 +79,7 @@ export async function translateWithLibre(
   const body: any = {
     q: text,
     target: targetLang,
-    format: 'text'
+    format: 'text',
   };
 
   if (sourceLang && sourceLang !== 'auto') {
@@ -95,20 +97,22 @@ export async function translateWithLibre(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(`LibreTranslate error: ${error.error || response.statusText}`);
+    throw new Error(
+      `LibreTranslate error: ${error.error || response.statusText}`,
+    );
   }
 
   const data = await response.json();
-  
+
   return {
     translatedText: data.translatedText,
     detectedSourceLang: data.detectedLanguage?.language,
-    provider: 'libretranslate'
+    provider: 'libretranslate',
   };
 }
 
@@ -116,7 +120,9 @@ export async function translateWithLibre(
 // WordsAPI Integration (Optional)
 // ============================================
 
-export async function getWordDefinitions(word: string): Promise<Definition[] | undefined> {
+export async function getWordDefinitions(
+  word: string,
+): Promise<Definition[] | undefined> {
   const apiKey = Deno.env.get('WORDSAPI_KEY');
   if (!apiKey) {
     return undefined;
@@ -128,9 +134,9 @@ export async function getWordDefinitions(word: string): Promise<Definition[] | u
       {
         headers: {
           'X-RapidAPI-Key': apiKey,
-          'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com'
-        }
-      }
+          'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com',
+        },
+      },
     );
 
     if (!response.ok) {
@@ -139,7 +145,7 @@ export async function getWordDefinitions(word: string): Promise<Definition[] | u
     }
 
     const data = await response.json();
-    
+
     if (!data.results || data.results.length === 0) {
       return undefined;
     }
@@ -148,15 +154,17 @@ export async function getWordDefinitions(word: string): Promise<Definition[] | u
       partOfSpeech: result.partOfSpeech || 'unknown',
       definition: result.definition,
       example: result.examples?.[0],
-      synonyms: result.synonyms?.slice(0, 5)
+      synonyms: result.synonyms?.slice(0, 5),
     }));
-  } catch (error) {
+  } catch (error: any) {
     console.error('WordsAPI error:', error);
     return undefined;
   }
 }
 
-export async function getWordPronunciation(word: string): Promise<string | undefined> {
+export async function getWordPronunciation(
+  word: string,
+): Promise<string | undefined> {
   const apiKey = Deno.env.get('WORDSAPI_KEY');
   if (!apiKey) {
     return undefined;
@@ -164,13 +172,15 @@ export async function getWordPronunciation(word: string): Promise<string | undef
 
   try {
     const response = await fetch(
-      `https://wordsapiv1.p.rapidapi.com/words/${encodeURIComponent(word)}/pronunciation`,
+      `https://wordsapiv1.p.rapidapi.com/words/${
+        encodeURIComponent(word)
+      }/pronunciation`,
       {
         headers: {
           'X-RapidAPI-Key': apiKey,
-          'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com'
-        }
-      }
+          'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com',
+        },
+      },
     );
 
     if (!response.ok) {
@@ -179,7 +189,7 @@ export async function getWordPronunciation(word: string): Promise<string | undef
 
     const data = await response.json();
     return data.pronunciation?.all || data.pronunciation;
-  } catch (error) {
+  } catch (error: any) {
     console.error('WordsAPI pronunciation error:', error);
     return undefined;
   }
@@ -196,7 +206,7 @@ export async function callOpenAI(
     maxTokens?: number;
     model?: string;
     responseFormat?: { type: 'json_object' };
-  } = {}
+  } = {},
 ): Promise<{ response: string; tokensUsed: number }> {
   const apiKey = Deno.env.get('OPENAI_API_KEY');
   if (!apiKey) {
@@ -204,16 +214,18 @@ export async function callOpenAI(
   }
 
   const model = options.model || Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini';
-  const maxTokens = options.maxTokens || parseInt(Deno.env.get('OPENAI_MAX_TOKENS') || '2000');
-  const temperature = options.temperature || parseFloat(Deno.env.get('OPENAI_TEMPERATURE') || '0.7');
+  const maxTokens = options.maxTokens ||
+    parseInt(Deno.env.get('OPENAI_MAX_TOKENS') || '2000');
+  const temperature = options.temperature ||
+    parseFloat(Deno.env.get('OPENAI_TEMPERATURE') || '0.7');
 
   const body: any = {
     model,
     messages,
     temperature,
-    max_tokens: maxTokens
+    max_tokens: maxTokens,
   };
-  
+
   if (options.responseFormat) {
     body.response_format = options.responseFormat;
   }
@@ -222,21 +234,23 @@ export async function callOpenAI(
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(`OpenAI API error: ${error.error?.message || response.statusText}`);
+    throw new Error(
+      `OpenAI API error: ${error.error?.message || response.statusText}`,
+    );
   }
 
   const data = await response.json();
-  
+
   return {
     response: data.choices[0].message.content,
-    tokensUsed: data.usage?.total_tokens || 0
+    tokensUsed: data.usage?.total_tokens || 0,
   };
 }
 
@@ -248,11 +262,12 @@ export async function summarizeWithOpenAI(
   title: string,
   transcript: string,
   summaryType: 'brief' | 'detailed' | 'bullet_points',
-  language: string = 'en'
+  language: string = 'en',
 ): Promise<{ summary: VideoSummaryContent; tokensUsed: number }> {
   const languageName = language === 'vi' ? 'Vietnamese' : 'English';
-  
-  const systemPrompt = `You are an expert video content summarizer. Create summaries in ${languageName}.
+
+  const systemPrompt =
+    `You are an expert video content summarizer. Create summaries in ${languageName}.
 Always respond with valid JSON matching this structure:
 {
   "summary": "main summary text",
@@ -261,12 +276,24 @@ Always respond with valid JSON matching this structure:
   "duration_estimate": <reading time in minutes>
 }
 
-${summaryType === 'brief' ? 'Create a concise 2-3 sentence summary capturing the main idea.' : ''}
-${summaryType === 'detailed' ? 'Create a comprehensive summary with context and important details.' : ''}
-${summaryType === 'bullet_points' ? 'Focus on creating detailed bullet points for key_points field.' : ''}`;
+${
+      summaryType === 'brief'
+        ? 'Create a concise 2-3 sentence summary capturing the main idea.'
+        : ''
+    }
+${
+      summaryType === 'detailed'
+        ? 'Create a comprehensive summary with context and important details.'
+        : ''
+    }
+${
+      summaryType === 'bullet_points'
+        ? 'Focus on creating detailed bullet points for key_points field.'
+        : ''
+    }`;
 
   const maxLength = summaryType === 'brief' ? 5000 : 10000;
-  const truncatedTranscript = transcript.length > maxLength 
+  const truncatedTranscript = transcript.length > maxLength
     ? transcript.substring(0, maxLength) + '...[truncated]'
     : transcript;
 
@@ -280,28 +307,29 @@ Create a ${summaryType} summary of this video content.`;
   const { response, tokensUsed } = await callOpenAI(
     [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
+      { role: 'user', content: userPrompt },
     ],
     {
       temperature: 0.5,
       maxTokens: summaryType === 'brief' ? 500 : 2000,
-      responseFormat: { type: 'json_object' }
-    }
+      responseFormat: { type: 'json_object' },
+    },
   );
 
   try {
     const parsed = JSON.parse(response);
-    
+
     const summary: VideoSummaryContent = {
       summary: parsed.summary || '',
       key_points: parsed.key_points || [],
       topics: parsed.topics || [],
-      duration_estimate: parsed.duration_estimate || Math.ceil(parsed.summary.split(' ').length / 200),
-      generated_at: new Date().toISOString()
+      duration_estimate: parsed.duration_estimate ||
+        Math.ceil(parsed.summary.split(' ').length / 200),
+      generated_at: new Date().toISOString(),
     };
-    
+
     return { summary, tokensUsed };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to parse summary response:', error);
     throw new Error('Failed to parse AI summary response');
   }
@@ -314,7 +342,7 @@ Create a ${summaryType} summary of this video content.`;
 export async function analyzeContentWithOpenAI(
   transcript: string,
   analysisType: 'fact_opinion' | 'sentiment' | 'bias',
-  segments?: number[]
+  segments?: number[],
 ): Promise<{ analysis: ContentAnalysis; tokensUsed: number }> {
   const systemPrompts = {
     fact_opinion: `Identify and separate facts from opinions in the content.
@@ -325,7 +353,7 @@ Response structure:
   "sentiment": {"overall": "neutral", "positive": 0.3, "negative": 0.2, "neutral": 0.5},
   "confidence_score": 0.85
 }`,
-    
+
     sentiment: `Analyze the overall sentiment and emotional tone.
 Response structure:
 {
@@ -334,7 +362,7 @@ Response structure:
   "sentiment": {"overall": "positive|negative|neutral|mixed", "positive": 0.4, "negative": 0.1, "neutral": 0.5},
   "confidence_score": 0.9
 }`,
-    
+
     bias: `Identify potential biases and one-sided arguments.
 Response structure:
 {
@@ -343,20 +371,23 @@ Response structure:
   "sentiment": {"overall": "neutral", "positive": 0, "negative": 0, "neutral": 1},
   "bias_indicators": [{"type": "confirmation_bias", "description": "...", "examples": ["..."], "severity": "medium"}],
   "confidence_score": 0.75
-}`
+}`,
   };
 
-  const systemPrompt = `You are an expert content analyst specializing in critical thinking and media literacy.
+  const systemPrompt =
+    `You are an expert content analyst specializing in critical thinking and media literacy.
 Always respond with valid JSON.
 ${systemPrompts[analysisType]}`;
 
   const maxLength = 8000;
   let content = transcript;
-  
+
   if (segments && segments.length > 0) {
-    content = `[Analyzing specific segments: ${segments.join(', ')}]\n${transcript}`;
+    content = `[Analyzing specific segments: ${
+      segments.join(', ')
+    }]\n${transcript}`;
   }
-  
+
   if (content.length > maxLength) {
     content = content.substring(0, maxLength) + '...[truncated]';
   }
@@ -364,28 +395,33 @@ ${systemPrompts[analysisType]}`;
   const { response, tokensUsed } = await callOpenAI(
     [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Analyze the following content for ${analysisType}:\n\n${content}` }
+      {
+        role: 'user',
+        content:
+          `Analyze the following content for ${analysisType}:\n\n${content}`,
+      },
     ],
     {
       temperature: 0.3,
       maxTokens: 3000,
-      responseFormat: { type: 'json_object' }
-    }
+      responseFormat: { type: 'json_object' },
+    },
   );
 
   try {
     const parsed = JSON.parse(response);
-    
+
     const analysis: ContentAnalysis = {
       facts: parsed.facts || [],
       opinions: parsed.opinions || [],
-      sentiment: parsed.sentiment || { overall: 'neutral', positive: 0, negative: 0, neutral: 1 },
+      sentiment: parsed.sentiment ||
+        { overall: 'neutral', positive: 0, negative: 0, neutral: 1 },
       bias_indicators: parsed.bias_indicators,
-      confidence_score: parsed.confidence_score || 0.7
+      confidence_score: parsed.confidence_score || 0.7,
     };
-    
+
     return { analysis, tokensUsed };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to parse analysis response:', error);
     throw new Error('Failed to parse AI analysis response');
   }

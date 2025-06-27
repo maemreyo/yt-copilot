@@ -1,11 +1,11 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
 import { UpdateNoteSchema } from '../../_shared/validators.ts';
-import type { 
+import type {
+  ErrorResponse,
+  SuccessResponse,
   UpdateNoteRequest,
   VideoNote,
-  SuccessResponse, 
-  ErrorResponse 
 } from '../../_shared/types.ts';
 
 // Response headers
@@ -23,7 +23,9 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
+async function extractUser(
+  request: Request,
+): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -33,7 +35,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
     const token = authHeader.substring(7);
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -43,9 +45,9 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
     return {
       id: user.id,
-      email: user.email || ''
+      email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth error:', error);
     return null;
   }
@@ -69,16 +71,16 @@ serve(async (request: Request) => {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only PUT method is allowed'
-      }
+        message: 'Only PUT method is allowed',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 
@@ -90,16 +92,16 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'INVALID_ID',
-          message: 'Invalid note ID format'
-        }
+          message: 'Invalid note ID format',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -110,49 +112,49 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Invalid or missing authentication token'
-        }
+          message: 'Invalid or missing authentication token',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 401,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     // Parse and validate request body
     const body = await request.json();
     const validation = UpdateNoteSchema.safeParse(body);
-    
+
     if (!validation.success) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.error.errors
-        }
+          details: validation.error.errors,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     const updateData = validation.data;
-    
+
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      { auth: { persistSession: false } }
+      { auth: { persistSession: false } },
     );
 
     // Get existing note
@@ -169,37 +171,37 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Note not found'
-        }
+          message: 'Note not found',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 404,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     // Prepare update object
     const updates: any = {
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     // Update fields if provided
     if (updateData.content !== undefined) {
       updates.content = updateData.content;
     }
-    
+
     if (updateData.tags !== undefined) {
       updates.tags = updateData.tags;
     }
-    
+
     if (updateData.is_private !== undefined) {
       updates.is_private = updateData.is_private;
     }
-    
+
     if (updateData.formatting !== undefined) {
       updates.formatting = updateData.formatting;
     }
@@ -224,56 +226,55 @@ serve(async (request: Request) => {
 
     if (updateError) {
       console.error('Database error:', updateError);
-      
+
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
           message: 'Failed to update note',
-          details: updateError
-        }
+          details: updateError,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 500,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     // Return success response
     const successResponse: SuccessResponse = {
       success: true,
-      data: updated
+      data: updated,
     };
 
     return new Response(
       JSON.stringify(successResponse),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 200,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error:', error);
-    
+
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred'
-      }
+        message: 'An unexpected error occurred',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 });

@@ -110,7 +110,7 @@ serve(async (req) => {
     const subscription = await subscriptionService.getSubscription(user.id);
 
     return createCorsSuccessResponse({ subscription }, 200, requestId);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in get-subscription:', error);
 
     if (error instanceof AppError) {

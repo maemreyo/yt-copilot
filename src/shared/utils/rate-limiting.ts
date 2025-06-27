@@ -1,6 +1,6 @@
 // Complete rate limiting implementation with sliding window, Redis support, and comprehensive middleware
 
-import { observabilityConfig, env, environment } from '../config/environment';
+import { env, environment, observabilityConfig } from '../config/environment';
 import { AppError, ErrorCode } from './errors';
 
 /**
@@ -73,7 +73,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
 
   async set(key: string, value: RateLimitRecord, ttlMs: number): Promise<void> {
     this.store.set(key, value);
-    
+
     // Auto-expire after TTL
     setTimeout(() => {
       this.store.delete(key);
@@ -83,7 +83,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
   async increment(key: string, windowMs: number): Promise<number> {
     const now = Date.now();
     const windowStart = now - windowMs;
-    
+
     const record = this.store.get(key) || {
       count: 0,
       resetTime: now + windowMs,
@@ -91,12 +91,14 @@ export class MemoryRateLimitStore implements RateLimitStore {
     };
 
     // Remove requests outside the sliding window
-    record.requests = record.requests.filter(timestamp => timestamp > windowStart);
-    
+    record.requests = record.requests.filter((timestamp) =>
+      timestamp > windowStart
+    );
+
     // Add current request
     record.requests.push(now);
     record.count = record.requests.length;
-    
+
     // Update reset time if window has shifted
     if (now > record.resetTime) {
       record.resetTime = now + windowMs;
@@ -108,7 +110,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
 
   async cleanup(): Promise<void> {
     const now = Date.now();
-    
+
     for (const [key, record] of this.store.entries()) {
       if (record.resetTime < now) {
         this.store.delete(key);
@@ -129,10 +131,10 @@ export class MemoryRateLimitStore implements RateLimitStore {
  */
 export class RedisRateLimitStore implements RateLimitStore {
   private redis: any; // Redis client would be injected
-  
+
   constructor(redisClient?: any) {
     this.redis = redisClient;
-    
+
     if (!this.redis && environment.isProduction()) {
       console.warn('Redis client not provided for rate limiting in production');
     }
@@ -140,11 +142,11 @@ export class RedisRateLimitStore implements RateLimitStore {
 
   async get(key: string): Promise<RateLimitRecord | null> {
     if (!this.redis) return null;
-    
+
     try {
       const data = await this.redis.get(key);
       return data ? JSON.parse(data) : null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Redis get error:', error);
       return null;
     }
@@ -152,10 +154,14 @@ export class RedisRateLimitStore implements RateLimitStore {
 
   async set(key: string, value: RateLimitRecord, ttlMs: number): Promise<void> {
     if (!this.redis) return;
-    
+
     try {
-      await this.redis.setex(key, Math.ceil(ttlMs / 1000), JSON.stringify(value));
-    } catch (error) {
+      await this.redis.setex(
+        key,
+        Math.ceil(ttlMs / 1000),
+        JSON.stringify(value),
+      );
+    } catch (error: any) {
       console.error('Redis set error:', error);
     }
   }
@@ -188,7 +194,7 @@ export class RedisRateLimitStore implements RateLimitStore {
 
       const count = await this.redis.eval(lua, 1, key, windowMs, Date.now());
       return parseInt(count, 10);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Redis increment error:', error);
       // Fallback to simple increment
       return await this.redis.incr(key);
@@ -209,10 +215,11 @@ export class RateLimiter {
 
   constructor(
     config: Partial<RateLimitConfig> = {},
-    store?: RateLimitStore
+    store?: RateLimitStore,
   ) {
     this.config = {
-      requestsPerMinute: config.requestsPerMinute || observabilityConfig.rateLimiting.requestsPerMinute,
+      requestsPerMinute: config.requestsPerMinute ||
+        observabilityConfig.rateLimiting.requestsPerMinute,
       windowMs: config.windowMs || observabilityConfig.rateLimiting.windowMs,
       keyGenerator: config.keyGenerator || ((id: string) => `rate_limit:${id}`),
       skipSuccessful: config.skipSuccessful || false,
@@ -229,11 +236,17 @@ export class RateLimiter {
   async checkLimit(identifier: string): Promise<RateLimitResult> {
     const key = this.config.keyGenerator(identifier);
     const now = Date.now();
-    
+
     try {
-      const currentCount = await this.store.increment(key, this.config.windowMs);
+      const currentCount = await this.store.increment(
+        key,
+        this.config.windowMs,
+      );
       const resetTime = now + this.config.windowMs;
-      const remaining = Math.max(0, this.config.requestsPerMinute - currentCount);
+      const remaining = Math.max(
+        0,
+        this.config.requestsPerMinute - currentCount,
+      );
       const allowed = currentCount <= this.config.requestsPerMinute;
 
       const info: RateLimitInfo = {
@@ -249,9 +262,9 @@ export class RateLimiter {
       }
 
       return { allowed, info };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Rate limit check error:', error);
-      
+
       // Fail open - allow request if rate limiting fails
       return {
         allowed: true,
@@ -286,7 +299,7 @@ export class RateLimiter {
               retryAfter: result.info.retryAfter,
             },
             retryable: true,
-          }
+          },
         );
       }
     };
@@ -312,7 +325,7 @@ export class RateLimiter {
     const forwarded = request.headers.get('x-forwarded-for');
     const realIp = request.headers.get('x-real-ip');
     const cfIp = request.headers.get('cf-connecting-ip');
-    
+
     const ip = cfIp || realIp || forwarded?.split(',')[0] || 'unknown';
     return `ip:${ip}`;
   }
@@ -334,15 +347,18 @@ export class GlobalRateLimiters {
   /**
    * Get or create rate limiter for specific use case
    */
-  static getLimiter(name: string, config?: Partial<RateLimitConfig>): RateLimiter {
+  static getLimiter(
+    name: string,
+    config?: Partial<RateLimitConfig>,
+  ): RateLimiter {
     if (!this.limiters.has(name)) {
-      const store = environment.isProduction() 
+      const store = environment.isProduction()
         ? new RedisRateLimitStore() // Would inject Redis client in production
         : new MemoryRateLimitStore();
-        
+
       this.limiters.set(name, new RateLimiter(config, store));
     }
-    
+
     return this.limiters.get(name)!;
   }
 
@@ -399,17 +415,21 @@ export class GlobalRateLimiters {
  * Rate limiting decorator for functions
  */
 export function rateLimit(config: Partial<RateLimitConfig> = {}) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor,
+  ) {
     const originalMethod = descriptor.value;
     const limiter = new RateLimiter(config);
 
     descriptor.value = async function (...args: any[]) {
       const [request] = args;
-      
+
       if (request && typeof request === 'object' && 'headers' in request) {
         await limiter.createMiddleware()(request);
       }
-      
+
       return originalMethod.apply(this, args);
     };
 
@@ -465,25 +485,28 @@ export const rateLimitingUtils = {
    * Check if error is rate limit error
    */
   isRateLimitError: (error: any): boolean => {
-    return error instanceof AppError && error.code === ErrorCode.RATE_LIMIT_EXCEEDED;
+    return error instanceof AppError &&
+      error.code === ErrorCode.RATE_LIMIT_EXCEEDED;
   },
 };
 
 /**
  * Express-style middleware factory
  */
-export function createRateLimitMiddleware(config: Partial<RateLimitConfig> = {}) {
+export function createRateLimitMiddleware(
+  config: Partial<RateLimitConfig> = {},
+) {
   const limiter = new RateLimiter(config);
-  
+
   return async (req: Request): Promise<Response | void> => {
     try {
       await limiter.createMiddleware()(req);
       return; // No rate limit exceeded, continue
-    } catch (error) {
+    } catch (error: any) {
       if (rateLimitingUtils.isRateLimitError(error)) {
         const appError = error as AppError;
         const headers = rateLimitingUtils.createRateLimitHeaders(
-          appError.details as RateLimitInfo
+          appError.details as RateLimitInfo,
         );
 
         return new Response(
@@ -494,7 +517,7 @@ export function createRateLimitMiddleware(config: Partial<RateLimitConfig> = {})
               'Content-Type': 'application/json',
               ...headers,
             },
-          }
+          },
         );
       }
       throw error;
@@ -507,7 +530,7 @@ export function createRateLimitMiddleware(config: Partial<RateLimitConfig> = {})
  */
 export function createRateLimiter(config: Partial<RateLimitConfig> = {}) {
   const limiter = new RateLimiter(config);
-  
+
   return async (req: Request): Promise<void> => {
     await limiter.createMiddleware()(req);
     // If no error is thrown, the request is allowed

@@ -28,7 +28,7 @@ class WebhookService {
     });
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
   }
 
@@ -53,21 +53,31 @@ class WebhookService {
   async handleEvent(event: Stripe.Event): Promise<void> {
     switch (event.type) {
       case 'checkout.session.completed':
-        await this.handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+        await this.handleCheckoutSessionCompleted(
+          event.data.object as Stripe.Checkout.Session,
+        );
         break;
       case 'customer.subscription.updated':
-        await this.handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+        await this.handleSubscriptionUpdated(
+          event.data.object as Stripe.Subscription,
+        );
         break;
       case 'customer.subscription.deleted':
-        await this.handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+        await this.handleSubscriptionDeleted(
+          event.data.object as Stripe.Subscription,
+        );
         break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
   }
 
-  private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-    const subscription = await this.stripe.subscriptions.retrieve(session.subscription as string);
+  private async handleCheckoutSessionCompleted(
+    session: Stripe.Checkout.Session,
+  ) {
+    const subscription = await this.stripe.subscriptions.retrieve(
+      session.subscription as string,
+    );
     const { error } = await this.supabase
       .from('profiles')
       .update({
@@ -123,7 +133,12 @@ serve(async (req) => {
 
     const signature = req.headers.get('stripe-signature');
     if (!signature) {
-      throw createAppError(ErrorType.VALIDATION_ERROR, 'Missing Stripe signature', { code: 'INVALID_WEBHOOK' }, requestId);
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        'Missing Stripe signature',
+        { code: 'INVALID_WEBHOOK' },
+        requestId,
+      );
     }
 
     const body = await req.text();
@@ -131,9 +146,12 @@ serve(async (req) => {
 
     await webhookService.handleEvent(event);
 
-    return createCorsSuccessResponse({ received: true, eventType: event.type }, 200, requestId);
-
-  } catch (error) {
+    return createCorsSuccessResponse(
+      { received: true, eventType: event.type },
+      200,
+      requestId,
+    );
+  } catch (error: any) {
     console.error('Error in webhook handler:', error);
 
     if (error instanceof AppError) {
@@ -141,11 +159,16 @@ serve(async (req) => {
     }
 
     if (error.type === 'StripeSignatureVerificationError') {
-        const appError = createAppError(ErrorType.AUTHENTICATION_ERROR, 'Webhook signature verification failed', {
-            code: 'INVALID_SIGNATURE',
-            details: error.message,
-        }, requestId);
-        return appError.toHttpResponse();
+      const appError = createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        'Webhook signature verification failed',
+        {
+          code: 'INVALID_SIGNATURE',
+          details: error.message,
+        },
+        requestId,
+      );
+      return appError.toHttpResponse();
     }
 
     const appError = handleUnknownError(error, requestId);

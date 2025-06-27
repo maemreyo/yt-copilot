@@ -1,7 +1,7 @@
 // - Enhanced API key creation with proper validation, rate limiting, and security
 
 import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { hash } from 'https://deno.land/x/bcrypt@v0.4.1/mod.ts';
 import {
   createCorsErrorResponse,
@@ -69,7 +69,7 @@ class ApiKeyGenerator {
    */
   static async hashApiKey(apiKey: string): Promise<string> {
     const saltRounds = 12;
-    return await hash(apiKey, saltRounds);
+    return await hash(String(apiKey), String(saltRounds));
   }
 
   /**
@@ -232,13 +232,17 @@ class RateLimiter {
  * API Key service
  */
 class ApiKeyService {
-  private supabase: any;
+  private supabase: SupabaseClient;
 
   constructor() {
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
+  }
+
+  async getUser(token: string) {
+    return await this.supabase.auth.getUser(token);
   }
 
   /**
@@ -370,8 +374,9 @@ serve(async (req) => {
     const token = authHeader.substring(7);
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await apiKeyService.supabase
-      .auth.getUser(token);
+    const { data: { user }, error: userError } = await apiKeyService.getUser(
+      token,
+    );
 
     if (userError || !user) {
       throw createAppError(
@@ -405,7 +410,7 @@ serve(async (req) => {
     let requestData: CreateApiKeyRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch (error: any) {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         'Invalid JSON in request body',
@@ -491,7 +496,7 @@ serve(async (req) => {
         'X-RateLimit-Remaining': rateLimitResult.remaining?.toString() || '0',
       },
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('API key creation error:', error);
 
     // If it's already an AppError, return it directly

@@ -179,7 +179,7 @@ async function getCachedTranscript(
     }
 
     return transcript;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Cache lookup failed:', error);
     return null;
   }
@@ -232,7 +232,7 @@ async function saveTranscript(
     if (error) {
       console.error('Failed to save transcript:', error);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Save transcript failed:', error);
   }
 }
@@ -392,7 +392,7 @@ serve(async (req) => {
     let requestData: ExtractTranscriptRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch (error: any) {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         'Invalid JSON in request body',
@@ -485,7 +485,7 @@ serve(async (req) => {
       200,
       requestId,
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Request failed:', error);
 
     // If it's already an AppError, return it directly

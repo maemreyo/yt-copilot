@@ -1,7 +1,16 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { CreateNoteSchema, validateRequest, sanitizeTags } from '_shared/validators.ts';
-import type { CreateNoteRequest, VideoNote, SuccessResponse, ErrorResponse } from '_shared/types.ts';
+import {
+  CreateNoteSchema,
+  sanitizeTags,
+  validateRequest,
+} from '_shared/validators.ts';
+import type {
+  CreateNoteRequest,
+  ErrorResponse,
+  SuccessResponse,
+  VideoNote,
+} from '_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -18,7 +27,9 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
+async function extractUser(
+  request: Request,
+): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -28,7 +39,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
     const token = authHeader.substring(7);
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -38,9 +49,9 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
     return {
       id: user.id,
-      email: user.email || ''
+      email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth error:', error);
     return null;
   }
@@ -50,7 +61,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 async function verifyVideoAccess(
   supabase: any,
   userId: string,
-  videoId: string
+  videoId: string,
 ): Promise<boolean> {
   // Check if video exists
   const { data: video, error: videoError } = await supabase
@@ -58,11 +69,11 @@ async function verifyVideoAccess(
     .select('id')
     .eq('id', videoId)
     .single();
-  
+
   if (videoError || !video) {
     return false;
   }
-  
+
   // Check if user has access (through video history)
   const { data: history, error: historyError } = await supabase
     .from('user_video_history')
@@ -70,7 +81,7 @@ async function verifyVideoAccess(
     .eq('user_id', userId)
     .eq('video_id', videoId)
     .single();
-  
+
   return !historyError && history !== null;
 }
 
@@ -78,9 +89,9 @@ async function verifyVideoAccess(
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
-      headers: corsHeaders 
+      headers: corsHeaders,
     });
   }
 
@@ -89,16 +100,16 @@ serve(async (req) => {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only POST method allowed'
-      }
+        message: 'Only POST method allowed',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 
@@ -110,16 +121,16 @@ serve(async (req) => {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Authentication required'
-        }
+          message: 'Authentication required',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 401,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -133,16 +144,16 @@ serve(async (req) => {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.errors?.errors
-        }
+          details: validation.errors?.errors,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -151,28 +162,28 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
 
     // Verify video access
     const hasAccess = await verifyVideoAccess(supabase, user.id, data.video_id);
-    
+
     if (!hasAccess) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'FORBIDDEN',
           message: 'You do not have access to this video',
-          details: { video_id: data.video_id }
-        }
+          details: { video_id: data.video_id },
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 403, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 403,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -189,29 +200,29 @@ serve(async (req) => {
         timestamp: data.timestamp,
         tags: sanitizedTags,
         is_private: data.is_private ?? true,
-        formatting: data.formatting || { type: 'plain' }
+        formatting: data.formatting || { type: 'plain' },
       })
       .select()
       .single();
 
     if (error) {
       console.error('Database error:', error);
-      
+
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
           message: 'Failed to create note',
-          details: error
-        }
+          details: error,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 500,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -229,7 +240,7 @@ serve(async (req) => {
       await supabase
         .from('learning_sessions')
         .update({
-          notes_taken: activeSession.notes_taken + 1
+          notes_taken: activeSession.notes_taken + 1,
         })
         .eq('id', activeSession.id);
     }
@@ -237,34 +248,33 @@ serve(async (req) => {
     // Return success response
     const successResponse: SuccessResponse<VideoNote> = {
       success: true,
-      data: note
+      data: note,
     };
 
     return new Response(
       JSON.stringify(successResponse),
-      { 
-        status: 201, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 201,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error:', error);
-    
+
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred'
-      }
+        message: 'An unexpected error occurred',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 });

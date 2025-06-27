@@ -1,12 +1,15 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
 import { UpdateVocabularySchema } from '../../_shared/validators.ts';
-import { calculateNextReview, getNextReviewDate } from '../../_shared/spaced-repetition.ts';
-import type { 
-  UpdateVocabularyRequest, 
+import {
+  calculateNextReview,
+  getNextReviewDate,
+} from '../../_shared/spaced-repetition.ts';
+import type {
+  ErrorResponse,
+  SuccessResponse,
+  UpdateVocabularyRequest,
   VocabularyEntry,
-  SuccessResponse, 
-  ErrorResponse 
 } from '../../_shared/types.ts';
 
 // Response headers
@@ -24,7 +27,9 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
+async function extractUser(
+  request: Request,
+): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -34,7 +39,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
     const token = authHeader.substring(7);
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -44,9 +49,9 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
     return {
       id: user.id,
-      email: user.email || ''
+      email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth error:', error);
     return null;
   }
@@ -70,16 +75,16 @@ serve(async (request: Request) => {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only PUT method is allowed'
-      }
+        message: 'Only PUT method is allowed',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 
@@ -91,16 +96,16 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'INVALID_ID',
-          message: 'Invalid vocabulary ID format'
-        }
+          message: 'Invalid vocabulary ID format',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -111,49 +116,49 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Invalid or missing authentication token'
-        }
+          message: 'Invalid or missing authentication token',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 401,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     // Parse and validate request body
     const body = await request.json();
     const validation = UpdateVocabularySchema.safeParse(body);
-    
+
     if (!validation.success) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.error.errors
-        }
+          details: validation.error.errors,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     const updateData = validation.data;
-    
+
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      { auth: { persistSession: false } }
+      { auth: { persistSession: false } },
     );
 
     // Get existing vocabulary entry
@@ -169,22 +174,22 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Vocabulary entry not found'
-        }
+          message: 'Vocabulary entry not found',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 404,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     // Prepare update object
     const updates: any = {
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     };
 
     // Handle review update (spaced repetition)
@@ -192,22 +197,24 @@ serve(async (request: Request) => {
       const reviewSuccess = updateData.review_success;
       const currentReviewCount = existing.review_count || 0;
       const currentSuccessRate = existing.success_rate || 0;
-      
+
       // Calculate new success rate
-      const newSuccessRate = (currentSuccessRate * currentReviewCount + (reviewSuccess ? 1 : 0)) / (currentReviewCount + 1);
-      
+      const newSuccessRate =
+        (currentSuccessRate * currentReviewCount + (reviewSuccess ? 1 : 0)) /
+        (currentReviewCount + 1);
+
       // Calculate next review date using SM-2 algorithm
       const { interval, easeFactor } = calculateNextReview(
         currentReviewCount + 1,
         reviewSuccess ? 4 : 1, // Quality: 4 for success, 1 for failure
-        existing.ease_factor || 2.5
+        existing.ease_factor || 2.5,
       );
-      
+
       updates.review_count = currentReviewCount + 1;
       updates.success_rate = Math.round(newSuccessRate * 100) / 100; // Round to 2 decimals
       updates.next_review_at = getNextReviewDate(interval).toISOString();
       updates.ease_factor = easeFactor;
-      
+
       // Reset to beginning if failed
       if (!reviewSuccess && currentReviewCount > 2) {
         updates.review_count = 0;
@@ -219,7 +226,7 @@ serve(async (request: Request) => {
     if (updateData.definition) {
       updates.definition = updateData.definition;
     }
-    
+
     if (updateData.difficulty) {
       updates.difficulty = updateData.difficulty;
     }
@@ -235,56 +242,55 @@ serve(async (request: Request) => {
 
     if (updateError) {
       console.error('Database error:', updateError);
-      
+
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
           message: 'Failed to update vocabulary entry',
-          details: updateError
-        }
+          details: updateError,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 500,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
     // Return success response
     const successResponse: SuccessResponse = {
       success: true,
-      data: updated
+      data: updated,
     };
 
     return new Response(
       JSON.stringify(successResponse),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 200,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error:', error);
-    
+
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred'
-      }
+        message: 'An unexpected error occurred',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 });

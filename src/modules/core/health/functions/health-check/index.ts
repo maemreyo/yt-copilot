@@ -11,7 +11,7 @@ enum ServiceStatus {
   OK = 'ok',
   DEGRADED = 'degraded',
   ERROR = 'error',
-  UNKNOWN = 'unknown'
+  UNKNOWN = 'unknown',
 }
 
 /**
@@ -20,7 +20,7 @@ enum ServiceStatus {
 enum HealthStatus {
   OK = 'ok',
   DEGRADED = 'degraded',
-  ERROR = 'error'
+  ERROR = 'error',
 }
 
 /**
@@ -74,14 +74,14 @@ class HealthChecker {
 
   constructor() {
     this.startTime = Date.now();
-    
+
     // Initialize services
     try {
       this.supabase = createClient(
         Deno.env.get('SUPABASE_URL') || '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initialize Supabase client:', error);
     }
 
@@ -91,7 +91,7 @@ class HealthChecker {
           apiVersion: '2023-10-16',
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initialize Stripe client:', error);
     }
   }
@@ -101,7 +101,7 @@ class HealthChecker {
    */
   async checkDatabase(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.supabase) {
         return {
@@ -141,14 +141,16 @@ class HealthChecker {
       return {
         status,
         latency,
-        message: status === ServiceStatus.OK ? 'Database is healthy' : `High latency: ${latency}ms`,
+        message: status === ServiceStatus.OK
+          ? 'Database is healthy'
+          : `High latency: ${latency}ms`,
         details: {
           connectionPool: 'active',
           queryTime: latency,
         },
         lastChecked: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: ServiceStatus.ERROR,
         latency: Date.now() - startTime,
@@ -164,7 +166,7 @@ class HealthChecker {
    */
   async checkAuth(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.supabase) {
         return {
@@ -201,7 +203,7 @@ class HealthChecker {
         },
         lastChecked: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: ServiceStatus.ERROR,
         latency: Date.now() - startTime,
@@ -216,7 +218,7 @@ class HealthChecker {
    */
   async checkStorage(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.supabase) {
         return {
@@ -250,7 +252,7 @@ class HealthChecker {
         },
         lastChecked: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: ServiceStatus.ERROR,
         latency: Date.now() - startTime,
@@ -265,7 +267,7 @@ class HealthChecker {
    */
   async checkStripe(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       if (!this.stripe) {
         return {
@@ -291,7 +293,7 @@ class HealthChecker {
         },
         lastChecked: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: ServiceStatus.ERROR,
         latency: Date.now() - startTime,
@@ -306,10 +308,10 @@ class HealthChecker {
    */
   async checkResend(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       const resendApiKey = Deno.env.get('RESEND_API_KEY');
-      
+
       if (!resendApiKey) {
         return {
           status: ServiceStatus.DEGRADED,
@@ -348,7 +350,7 @@ class HealthChecker {
         },
         lastChecked: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: ServiceStatus.ERROR,
         latency: Date.now() - startTime,
@@ -363,7 +365,7 @@ class HealthChecker {
    */
   async checkEdgeFunctions(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       // Since we're running in an Edge Function, we can assume it's working
       // But we can check memory and other runtime metrics
@@ -381,7 +383,7 @@ class HealthChecker {
         },
         lastChecked: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
       return {
         status: ServiceStatus.ERROR,
         latency: Date.now() - startTime,
@@ -396,7 +398,7 @@ class HealthChecker {
    */
   getPerformanceMetrics(startTime: number) {
     const responseTime = Date.now() - startTime;
-    
+
     return {
       responseTime,
       // Note: Memory and CPU metrics may not be available in Edge Functions
@@ -420,17 +422,19 @@ class HealthChecker {
   /**
    * Determine overall health status
    */
-  determineOverallStatus(services: Record<string, ServiceHealth>): HealthStatus {
-    const statuses = Object.values(services).map(service => service.status);
-    
+  determineOverallStatus(
+    services: Record<string, ServiceHealth>,
+  ): HealthStatus {
+    const statuses = Object.values(services).map((service) => service.status);
+
     if (statuses.includes(ServiceStatus.ERROR)) {
       return HealthStatus.ERROR;
     }
-    
+
     if (statuses.includes(ServiceStatus.DEGRADED)) {
       return HealthStatus.DEGRADED;
     }
-    
+
     return HealthStatus.OK;
   }
 
@@ -439,16 +443,17 @@ class HealthChecker {
    */
   async checkHealth(): Promise<HealthResponse> {
     const checkStartTime = Date.now();
-    
+
     // Run all health checks in parallel
-    const [database, auth, storage, stripe, resend, edgeFunctions] = await Promise.all([
-      this.checkDatabase(),
-      this.checkAuth(),
-      this.checkStorage(),
-      this.checkStripe(),
-      this.checkResend(),
-      this.checkEdgeFunctions(),
-    ]);
+    const [database, auth, storage, stripe, resend, edgeFunctions] =
+      await Promise.all([
+        this.checkDatabase(),
+        this.checkAuth(),
+        this.checkStorage(),
+        this.checkStripe(),
+        this.checkResend(),
+        this.checkEdgeFunctions(),
+      ]);
 
     const services = {
       database,
@@ -523,7 +528,7 @@ serve(async (req) => {
           ...securityHeaders,
           'Allow': 'GET, OPTIONS',
         },
-      }
+      },
     );
   }
 
@@ -546,24 +551,30 @@ serve(async (req) => {
         'Access-Control-Allow-Origin': '*',
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Health check failed:', error);
-    
+
     return new Response(
-      JSON.stringify({
-        status: HealthStatus.ERROR,
-        message: 'Health check system failure',
-        timestamp: new Date().toISOString(),
-        error: {
-          code: 'HEALTH_CHECK_FAILURE',
-          message: error.message,
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.stack : undefined,
+      JSON.stringify(
+        {
+          status: HealthStatus.ERROR,
+          message: 'Health check system failure',
+          timestamp: new Date().toISOString(),
+          error: {
+            code: 'HEALTH_CHECK_FAILURE',
+            message: error.message,
+            details: Deno.env.get('NODE_ENV') === 'development'
+              ? error.stack
+              : undefined,
+          },
         },
-      }, null, 2),
+        null,
+        2,
+      ),
       {
         status: 500,
         headers: securityHeaders,
-      }
+      },
     );
   }
 });

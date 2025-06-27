@@ -1,6 +1,6 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import type { SuccessResponse, ErrorResponse } from '../../_shared/types.ts';
+import type { ErrorResponse, SuccessResponse } from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -17,7 +17,9 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
+async function extractUser(
+  request: Request,
+): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -27,7 +29,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
     const token = authHeader.substring(7);
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -37,9 +39,9 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
     return {
       id: user.id,
-      email: user.email || ''
+      email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Auth error:', error);
     return null;
   }
@@ -63,16 +65,16 @@ serve(async (request: Request) => {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only DELETE method is allowed'
-      }
+        message: 'Only DELETE method is allowed',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 
@@ -84,16 +86,16 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'INVALID_ID',
-          message: 'Invalid vocabulary ID format'
-        }
+          message: 'Invalid vocabulary ID format',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -104,16 +106,16 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Invalid or missing authentication token'
-        }
+          message: 'Invalid or missing authentication token',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 401, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 401,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -121,7 +123,7 @@ serve(async (request: Request) => {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      { auth: { persistSession: false } }
+      { auth: { persistSession: false } },
     );
 
     // Check if vocabulary entry exists
@@ -137,16 +139,16 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Vocabulary entry not found'
-        }
+          message: 'Vocabulary entry not found',
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 404,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -155,29 +157,29 @@ serve(async (request: Request) => {
       .from('vocabulary_entries')
       .update({
         deleted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', vocabularyId)
       .eq('user_id', user.id);
 
     if (deleteError) {
       console.error('Database error:', deleteError);
-      
+
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
           message: 'Failed to delete vocabulary entry',
-          details: deleteError
-        }
+          details: deleteError,
+        },
       };
-      
+
       return new Response(
         JSON.stringify(errorResponse),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
+        {
+          status: 500,
+          headers: { ...corsHeaders, ...securityHeaders },
+        },
       );
     }
 
@@ -195,7 +197,7 @@ serve(async (request: Request) => {
       await supabase
         .from('learning_sessions')
         .update({
-          words_learned: activeSession.words_learned - 1
+          words_learned: activeSession.words_learned - 1,
         })
         .eq('id', activeSession.id);
     }
@@ -205,35 +207,34 @@ serve(async (request: Request) => {
       success: true,
       data: {
         id: vocabularyId,
-        deleted: true
-      }
+        deleted: true,
+      },
     };
 
     return new Response(
       JSON.stringify(successResponse),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 200,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Unexpected error:', error);
-    
+
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred'
-      }
+        message: 'An unexpected error occurred',
+      },
     };
-    
+
     return new Response(
       JSON.stringify(errorResponse),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, ...securityHeaders } 
-      }
+      {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      },
     );
   }
 });

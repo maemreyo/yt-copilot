@@ -2,10 +2,20 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders, createCorsResponse, createCorsSuccessResponse, createCorsErrorResponse } from '@/cors';
-import { securityHeaders, createSecureResponse } from '@/shared-security';
+import {
+  corsHeaders,
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
+import { createSecureResponse, securityHeaders } from '@/shared-security';
 import { validateRequestBody, ValidationSchema } from '@/shared-validation';
-import { createAppError, ErrorType, handleUnknownError, AppError } from '@/shared-errors';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
 
 /**
  * Request interface for video analysis
@@ -67,7 +77,7 @@ const YOUTUBE_URL_PATTERNS = [
 function extractVideoId(url: string): string | null {
   try {
     const cleanUrl = url.trim();
-    
+
     for (const pattern of YOUTUBE_URL_PATTERNS) {
       const match = cleanUrl.match(pattern);
       if (match && match[1]) {
@@ -81,7 +91,7 @@ function extractVideoId(url: string): string | null {
     }
 
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to extract video ID:', error);
     return null;
   }
@@ -100,7 +110,7 @@ function parseDuration(duration: string): number {
     const seconds = parseInt(match[3] || '0', 10);
 
     return hours * 3600 + minutes * 60 + seconds;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to parse duration:', error);
     return 0;
   }
@@ -109,15 +119,17 @@ function parseDuration(duration: string): number {
 /**
  * Validate YouTube URL
  */
-function validateYoutubeUrl(value: unknown): { isValid: boolean; errors: string[] } {
+function validateYoutubeUrl(
+  value: unknown,
+): { isValid: boolean; errors: string[] } {
   if (typeof value !== 'string') {
     return { isValid: false, errors: ['Must be a string'] };
   }
-  
+
   if (!extractVideoId(value)) {
     return { isValid: false, errors: ['Invalid YouTube URL format'] };
   }
-  
+
   return { isValid: true, errors: [] };
 }
 
@@ -129,22 +141,25 @@ const analyzeVideoSchema: ValidationSchema<AnalyzeVideoRequest> = {
     required: true,
     type: 'string',
     validate: validateYoutubeUrl,
-    sanitize: (value) => typeof value === 'string' ? value.trim() : value
+    sanitize: (value) => typeof value === 'string' ? value.trim() : value,
   },
   options: {
     required: false,
-    type: 'object'
-  }
+    type: 'object',
+  },
 };
 
 /**
  * Request validation using shared validation utility
  */
 function validateRequest(data: any): { isValid: boolean; errors: string[] } {
-  const result = validateRequestBody<AnalyzeVideoRequest>(data, analyzeVideoSchema);
+  const result = validateRequestBody<AnalyzeVideoRequest>(
+    data,
+    analyzeVideoSchema,
+  );
   return {
     isValid: result.isValid,
-    errors: result.errors
+    errors: result.errors,
   };
 }
 
@@ -166,7 +181,7 @@ async function checkRateLimit(identifier: string): Promise<boolean> {
  */
 async function getCachedVideo(
   supabase: any,
-  videoId: string
+  videoId: string,
 ): Promise<VideoMetadata | null> {
   try {
     const { data, error } = await supabase
@@ -180,7 +195,8 @@ async function getCachedVideo(
     // Check if cache is still valid (24 hours)
     const lastRefreshed = new Date(data.last_refreshed_at || data.created_at);
     const now = new Date();
-    const hoursSinceRefresh = (now.getTime() - lastRefreshed.getTime()) / (1000 * 60 * 60);
+    const hoursSinceRefresh = (now.getTime() - lastRefreshed.getTime()) /
+      (1000 * 60 * 60);
 
     if (hoursSinceRefresh > 24) {
       return null; // Cache expired
@@ -199,7 +215,7 @@ async function getCachedVideo(
       likeCount: data.like_count,
       tags: data.metadata?.tags,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Cache lookup failed:', error);
     return null;
   }
@@ -210,7 +226,7 @@ async function getCachedVideo(
  */
 async function cacheVideo(
   supabase: any,
-  metadata: VideoMetadata
+  metadata: VideoMetadata,
 ): Promise<void> {
   try {
     const { error } = await supabase
@@ -237,7 +253,7 @@ async function cacheVideo(
     if (error) {
       console.error('Failed to cache video:', error);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Cache save failed:', error);
   }
 }
@@ -263,13 +279,13 @@ async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
       headers: {
         'Accept': 'application/json',
       },
-    }
+    },
   );
 
   if (!response.ok) {
     const error = await response.text();
     console.error('YouTube API error:', error);
-    
+
     if (response.status === 403) {
       throw new Error('YouTube API quota exceeded');
     }
@@ -295,9 +311,14 @@ async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
     channelName: snippet.channelTitle,
     publishedAt: snippet.publishedAt,
     durationSeconds: parseDuration(contentDetails.duration),
-    thumbnailUrl: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url,
-    viewCount: statistics?.viewCount ? parseInt(statistics.viewCount, 10) : undefined,
-    likeCount: statistics?.likeCount ? parseInt(statistics.likeCount, 10) : undefined,
+    thumbnailUrl: snippet.thumbnails?.high?.url ||
+      snippet.thumbnails?.default?.url,
+    viewCount: statistics?.viewCount
+      ? parseInt(statistics.viewCount, 10)
+      : undefined,
+    likeCount: statistics?.likeCount
+      ? parseInt(statistics.likeCount, 10)
+      : undefined,
     tags: snippet.tags,
   };
 }
@@ -308,7 +329,7 @@ async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
 serve(async (req) => {
   // Generate a request ID for tracking
   const requestId = crypto.randomUUID();
-  
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return createCorsResponse();
@@ -320,7 +341,7 @@ serve(async (req) => {
       'Only POST method is allowed',
       405,
       requestId,
-      { allowedMethods: ['POST'] }
+      { allowedMethods: ['POST'] },
     );
   }
 
@@ -329,12 +350,12 @@ serve(async (req) => {
     let requestData: AnalyzeVideoRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch (error: any) {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         'Invalid JSON in request body',
         undefined,
-        requestId
+        requestId,
       );
     }
 
@@ -345,7 +366,7 @@ serve(async (req) => {
         ErrorType.VALIDATION_ERROR,
         'Invalid request parameters',
         { errors: validation.errors },
-        requestId
+        requestId,
       );
     }
 
@@ -360,20 +381,20 @@ serve(async (req) => {
         ErrorType.RATE_LIMIT_ERROR,
         'Too many requests. Please try again later.',
         { retryAfter: 60 },
-        requestId
+        requestId,
       );
     }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       throw createAppError(
         ErrorType.INTERNAL_ERROR,
         'Supabase configuration missing',
         undefined,
-        requestId
+        requestId,
       );
     }
 
@@ -394,7 +415,7 @@ serve(async (req) => {
     // Fetch from YouTube if not cached
     if (!metadata) {
       metadata = await fetchVideoMetadata(videoId);
-      
+
       // Cache the result
       if (shouldCache) {
         await cacheVideo(supabase, metadata);
@@ -418,21 +439,20 @@ serve(async (req) => {
           video: metadata,
           cached,
           processedAt: new Date().toISOString(),
-        }
+        },
       },
       200,
-      requestId
+      requestId,
     );
-
-  } catch (error) {
+  } catch (error: any) {
     // Log the error
     console.error('Request failed:', error);
-    
+
     // Handle known error types
     if (error instanceof AppError) {
       return error.toHttpResponse();
     }
-    
+
     // Map specific error messages to appropriate error types
     if (error instanceof Error) {
       if (error.message.includes('Video not found')) {
@@ -440,32 +460,32 @@ serve(async (req) => {
           ErrorType.NOT_FOUND_ERROR,
           'The requested video was not found',
           { videoId: extractVideoId(requestData?.videoUrl || '') },
-          requestId
+          requestId,
         );
         return appError.toHttpResponse();
-      } 
-      
+      }
+
       if (error.message.includes('quota exceeded')) {
         const appError = createAppError(
           ErrorType.EXTERNAL_SERVICE_ERROR,
           'YouTube API quota exceeded. Please try again later.',
           undefined,
-          requestId
+          requestId,
         );
         return appError.toHttpResponse();
-      } 
-      
+      }
+
       if (error.message.includes('API key not configured')) {
         const appError = createAppError(
           ErrorType.INTERNAL_ERROR,
           'Service configuration error',
           undefined,
-          requestId
+          requestId,
         );
         return appError.toHttpResponse();
       }
     }
-    
+
     // For any other unknown errors
     const appError = handleUnknownError(error, requestId);
     return appError.toHttpResponse();

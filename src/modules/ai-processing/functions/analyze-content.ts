@@ -5,7 +5,10 @@ import { createRateLimiter } from '@/rate-limiting';
 import { createAppError, ErrorType } from '@/errors';
 import { AuthService } from '@/auth';
 import { Logger } from '@/logging';
-import { AnalyzeContentRequestSchema, type AnalyzeContentResponse } from '../types';
+import {
+  AnalyzeContentRequestSchema,
+  type AnalyzeContentResponse,
+} from '../types';
 import { openAIClient } from '../utils/openai-client.ts';
 import { aiCacheManager } from '../utils/cache-manager.ts';
 
@@ -17,8 +20,10 @@ const rateLimiterFree = createRateLimiter({
   maxRequests: parseInt(Deno.env.get('ANALYSIS_RATE_LIMIT_FREE') || '3'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `analyze:${auth}` : `analyze:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `analyze:${auth}`
+      : `analyze:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const rateLimiterPremium = createRateLimiter({
@@ -26,14 +31,16 @@ const rateLimiterPremium = createRateLimiter({
   maxRequests: parseInt(Deno.env.get('ANALYSIS_RATE_LIMIT_PREMIUM') || '20'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `analyze:${auth}` : `analyze:${request.headers.get('x-real-ip')}`;
-  }
+    return auth
+      ? `analyze:${auth}`
+      : `analyze:${request.headers.get('x-real-ip')}`;
+  },
 });
 
 const requestSchema = z.object({
   video_id: z.string().uuid(),
   analysis_type: z.enum(['fact_opinion', 'sentiment', 'bias']),
-  segments: z.array(z.number()).optional()
+  segments: z.array(z.number()).optional(),
 });
 
 const corsHeaders = {
@@ -44,39 +51,42 @@ const corsHeaders = {
 serve(async (request) => {
   // Handle CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, { 
+    return new Response(null, {
       status: 204,
-      headers: corsHeaders 
+      headers: corsHeaders,
     });
   }
 
   if (request.method !== 'POST') {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'METHOD_NOT_ALLOWED', message: 'Only POST method allowed' } 
+      JSON.stringify({
+        success: false,
+        error: {
+          code: 'METHOD_NOT_ALLOWED',
+          message: 'Only POST method allowed',
+        },
       }),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   // Authenticate user
   const authService = new AuthService();
   const { user, authType } = await authService.authenticateRequest(request);
-  
+
   if (!user) {
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: { code: 'UNAUTHORIZED', message: 'Authentication required' } 
+      JSON.stringify({
+        success: false,
+        error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
       }),
-      { 
-        status: 401, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -84,7 +94,7 @@ serve(async (request) => {
   const body = await request.json();
   const validation = requestSchema.safeParse({
     ...body,
-    user_id: user.id
+    user_id: user.id,
   });
 
   if (!validation.success) {
@@ -94,21 +104,22 @@ serve(async (request) => {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid request data',
-          details: validation.error.errors
-        }
+          details: validation.error.errors,
+        },
       }),
-      { 
-        status: 400, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   const { video_id, analysis_type, segments } = validation.data;
 
   // Check if user has premium features for advanced analysis
-  const isPremium = user.subscription_tier === 'premium' || user.subscription_tier === 'pro';
-  
+  const isPremium = user.subscription_tier === 'premium' ||
+    user.subscription_tier === 'pro';
+
   // Some analysis types might be premium-only
   if (analysis_type === 'bias' && !isPremium) {
     return new Response(
@@ -116,36 +127,41 @@ serve(async (request) => {
         success: false,
         error: {
           code: 'PREMIUM_REQUIRED',
-          message: 'Bias analysis is a premium feature. Please upgrade your subscription.'
-        }
+          message:
+            'Bias analysis is a premium feature. Please upgrade your subscription.',
+        },
       }),
-      { 
-        status: 403, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
   // Apply rate limiting
   const rateLimiter = isPremium ? rateLimiterPremium : rateLimiterFree;
-  
+
   try {
     await rateLimiter(request);
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: isPremium 
-            ? `Premium rate limit exceeded: ${Deno.env.get('ANALYSIS_RATE_LIMIT_PREMIUM')} analyses per day`
-            : `Free rate limit exceeded: ${Deno.env.get('ANALYSIS_RATE_LIMIT_FREE')} analyses per day. Upgrade to premium for more.`
-        }
+          message: isPremium
+            ? `Premium rate limit exceeded: ${
+              Deno.env.get('ANALYSIS_RATE_LIMIT_PREMIUM')
+            } analyses per day`
+            : `Free rate limit exceeded: ${
+              Deno.env.get('ANALYSIS_RATE_LIMIT_FREE')
+            } analyses per day. Upgrade to premium for more.`,
+        },
       }),
-      { 
-        status: 429, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 
@@ -155,7 +171,7 @@ serve(async (request) => {
     // Check cache first
     const cachedAnalysis = await aiCacheManager.getCachedAnalysis(
       video_id,
-      analysis_type
+      analysis_type,
     );
 
     if (cachedAnalysis && (!segments || segments.length === 0)) {
@@ -166,20 +182,20 @@ serve(async (request) => {
         suggestions: [], // Generate fresh suggestions if needed
         tokens_used: cachedAnalysis.tokens_used || 0,
         cached: true,
-        model: cachedAnalysis.model
+        model: cachedAnalysis.model,
       };
 
-      logger.info('Returning cached analysis', { 
-        video_id, 
-        analysis_type 
+      logger.info('Returning cached analysis', {
+        video_id,
+        analysis_type,
       });
 
       return new Response(
         JSON.stringify({ success: true, data: response }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
       );
     }
 
@@ -194,7 +210,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.NOT_FOUND,
         'Video not found',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -210,7 +226,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.AUTHORIZATION_ERROR,
         'You do not have access to this video. Please analyze the video first.',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -225,7 +241,7 @@ serve(async (request) => {
       throw createAppError(
         ErrorType.NOT_FOUND,
         'No transcript available for this video',
-        { video_id }
+        { video_id },
       );
     }
 
@@ -235,15 +251,15 @@ serve(async (request) => {
 
     if (segments && segments.length > 0) {
       // Filter to only requested segments
-      selectedSegments = transcript.segments.filter((_: any, index: number) => 
+      selectedSegments = transcript.segments.filter((_: any, index: number) =>
         segments.includes(index)
       );
-      
+
       if (selectedSegments.length === 0) {
         throw createAppError(
           ErrorType.VALIDATION_ERROR,
           'Invalid segment indices provided',
-          { segments, totalSegments: transcript.segments.length }
+          { segments, totalSegments: transcript.segments.length },
         );
       }
     }
@@ -257,13 +273,13 @@ serve(async (request) => {
       video_id,
       analysis_type,
       transcript_length: transcriptText.length,
-      segment_count: selectedSegments.length
+      segment_count: selectedSegments.length,
     });
 
     const { analysis, tokensUsed } = await openAIClient.analyzeContent(
       transcriptText,
       analysis_type,
-      segments
+      segments,
     );
 
     // Generate counter-perspective suggestions for fact/opinion analysis
@@ -273,14 +289,15 @@ serve(async (request) => {
       const mainTopic = video.title;
       const mainOpinions = analysis.opinions
         .slice(0, 3)
-        .map(op => op.text)
+        .map((op) => op.text)
         .join('; ');
 
       if (mainOpinions) {
-        const { suggestions: counterSuggestions } = await openAIClient.generateCounterPerspectives(
-          mainTopic,
-          mainOpinions
-        );
+        const { suggestions: counterSuggestions } = await openAIClient
+          .generateCounterPerspectives(
+            mainTopic,
+            mainOpinions,
+          );
         suggestions = counterSuggestions;
       }
     }
@@ -295,7 +312,7 @@ serve(async (request) => {
         analysis.confidence_score,
         Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
         segments,
-        tokensUsed
+        tokensUsed,
       );
     }
 
@@ -307,7 +324,7 @@ serve(async (request) => {
       tokensUsed,
       estimatedCost,
       facts_found: analysis.facts.length,
-      opinions_found: analysis.opinions.length
+      opinions_found: analysis.opinions.length,
     });
 
     const response: AnalyzeContentResponse = {
@@ -317,27 +334,28 @@ serve(async (request) => {
       suggestions,
       tokens_used: tokensUsed,
       cached: false,
-      model: Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini'
+      model: Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
     };
 
     return new Response(
       JSON.stringify({ success: true, data: response }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
-
   } catch (error: any) {
     logger.error('Content analysis error:', error);
-    
+
     // Determine error code and status based on error type
     let errorCode = 'ANALYSIS_FAILED';
     let statusCode = 500;
     let message = error.message || 'Failed to analyze content';
-    
+
     if (error.type === ErrorType.NOT_FOUND) {
-      errorCode = error.message.includes('transcript') ? 'TRANSCRIPT_NOT_FOUND' : 'VIDEO_NOT_FOUND';
+      errorCode = error.message.includes('transcript')
+        ? 'TRANSCRIPT_NOT_FOUND'
+        : 'VIDEO_NOT_FOUND';
       statusCode = 404;
     } else if (error.type === ErrorType.AUTHORIZATION_ERROR) {
       errorCode = 'UNAUTHORIZED';
@@ -361,13 +379,13 @@ serve(async (request) => {
         error: {
           code: errorCode,
           message,
-          details: error.details
-        }
+          details: error.details,
+        },
       }),
-      { 
-        status: statusCode, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      {
+        status: statusCode,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
     );
   }
 }, {
@@ -376,6 +394,6 @@ serve(async (request) => {
   schema: requestSchema,
   middleware: [],
   rateLimit: {
-    enabled: false // We handle rate limiting internally based on user tier
-  }
+    enabled: false, // We handle rate limiting internally based on user tier
+  },
 });

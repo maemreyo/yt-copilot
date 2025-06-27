@@ -136,7 +136,7 @@ class ProfileService {
       };
 
       return userProfile;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting user profile:', error);
       throw error;
     }
@@ -217,7 +217,7 @@ class ProfileService {
       }
 
       return updatedProfile;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating user profile:', error);
       throw error;
     }
@@ -259,7 +259,7 @@ class ProfileService {
         success: true,
         message: 'Account deletion completed successfully',
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting user account:', error);
       throw error;
     }
@@ -466,7 +466,7 @@ class ProfileService {
         console.error('Failed to delete user from auth:', deleteError);
         throw new Error(`Failed to delete user: ${deleteError.message}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error performing account deletion:', error);
       throw error;
     }
@@ -495,7 +495,7 @@ class ProfileService {
       await this.supabase
         .from('audit_logs')
         .insert(auditEntry);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to log profile update:', error);
       // Don't throw - audit logging failure shouldn't break the operation
     }
@@ -525,7 +525,7 @@ class ProfileService {
       await this.supabase
         .from('audit_logs')
         .insert(auditEntry);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to log account deletion:', error);
       // Don't throw - audit logging failure shouldn't break the operation
     }
@@ -563,7 +563,7 @@ async function extractUserFromRequest(
       userId: user.id,
       email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -624,7 +624,7 @@ serve(async (req) => {
         requestId,
       );
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Profile management error:', error);
 
     // If it's already an AppError, return it directly
@@ -663,7 +663,7 @@ async function handleGetProfile(
       200,
       crypto.randomUUID(),
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error getting profile:', error);
 
     // If it's already an AppError, return it directly
@@ -704,7 +704,7 @@ async function handleUpdateProfile(
         },
       },
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating profile:', error);
 
     const isValidationError = error.message.includes('Validation failed');
@@ -761,7 +761,7 @@ async function handleDeleteAccount(
         },
       },
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting account:', error);
 
     const isValidationError = error.message.includes('Confirmation email') ||

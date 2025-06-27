@@ -118,83 +118,87 @@ export class ConsoleFormatter implements LogFormatter {
 
   format(entry: LogEntry): string {
     const parts: string[] = [];
-    
+
     // Timestamp
     parts.push(`[${entry.timestamp}]`);
-    
+
     // Level with colors
-    const levelName = this.enableColors ? this.colorizeLevel(entry.level, entry.levelName) : entry.levelName;
+    const levelName = this.enableColors
+      ? this.colorizeLevel(entry.level, entry.levelName)
+      : entry.levelName;
     parts.push(`[${levelName}]`);
-    
+
     // Context
     if (entry.context) {
       const contextParts: string[] = [];
-      
+
       if (entry.context.requestId) {
         contextParts.push(`req:${entry.context.requestId.substring(0, 8)}`);
       }
-      
+
       if (entry.context.userId) {
         contextParts.push(`user:${entry.context.userId.substring(0, 8)}`);
       }
-      
+
       if (entry.context.module) {
         contextParts.push(`${entry.context.module}`);
       }
-      
+
       if (contextParts.length > 0) {
         parts.push(`[${contextParts.join('|')}]`);
       }
     }
-    
+
     // Message
     parts.push(entry.message);
-    
+
     // Metadata
     if (entry.metadata && Object.keys(entry.metadata).length > 0) {
       parts.push(`\n  Metadata: ${JSON.stringify(entry.metadata, null, 2)}`);
     }
-    
+
     // Error details
     if (entry.error) {
       parts.push(`\n  Error: ${entry.error.name}: ${entry.error.message}`);
-      
+
       if (this.includeStackTrace && entry.error.stack) {
         parts.push(`\n  Stack: ${entry.error.stack}`);
       }
     }
-    
+
     // Performance data
     if (entry.performance) {
       const perfParts: string[] = [];
-      
+
       if (entry.performance.duration !== undefined) {
         perfParts.push(`${entry.performance.duration}ms`);
       }
-      
+
       if (entry.performance.memory !== undefined) {
-        perfParts.push(`${Math.round(entry.performance.memory / 1024 / 1024)}MB`);
+        perfParts.push(
+          `${Math.round(entry.performance.memory / 1024 / 1024)}MB`,
+        );
       }
-      
+
       if (perfParts.length > 0) {
         parts.push(`\n  Performance: ${perfParts.join(', ')}`);
       }
     }
-    
+
     return parts.join(' ');
   }
 
   private colorizeLevel(level: LogLevel, levelName: string): string {
     if (!this.enableColors) return levelName;
-    
+
     const colors = {
       [LogLevel.DEBUG]: '\x1b[36m', // Cyan
-      [LogLevel.INFO]: '\x1b[32m',  // Green
-      [LogLevel.WARN]: '\x1b[33m',  // Yellow
+      [LogLevel.INFO]: '\x1b[32m', // Green
+      [LogLevel.WARN]: '\x1b[33m', // Yellow
       [LogLevel.ERROR]: '\x1b[31m', // Red
       [LogLevel.FATAL]: '\x1b[35m', // Magenta
     };
-    
+
     const reset = '\x1b[0m';
     return `${colors[level]}${levelName}${reset}`;
   }
@@ -224,7 +228,7 @@ export class ConsoleOutput implements LogOutput {
 
   async write(entry: LogEntry): Promise<void> {
     const formatted = this.formatter.format(entry);
-    
+
     switch (entry.level) {
       case LogLevel.DEBUG:
         console.debug(formatted);
@@ -261,7 +265,7 @@ export class FileOutput implements LogOutput {
   async write(entry: LogEntry): Promise<void> {
     try {
       const formatted = this.formatter.format(entry) + '\n';
-      
+
       // In Edge Functions/Deno environment, we might not have file system access
       // This would be implemented differently in a Node.js environment
       if (typeof Deno !== 'undefined' && Deno.writeTextFile) {
@@ -270,7 +274,7 @@ export class FileOutput implements LogOutput {
         // Fallback to console in environments without file system
         console.log(formatted.trim());
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to write log to file:', error);
     }
   }
@@ -301,7 +305,7 @@ export class ExternalServiceOutput implements LogOutput {
       } else if (this.endpoint) {
         await this.sendToCustomEndpoint(entry);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send log to external service:', error);
     }
   }
@@ -324,7 +328,7 @@ export class ExternalServiceOutput implements LogOutput {
         },
         body: JSON.stringify(entry),
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send log to custom endpoint:', error);
     }
   }
@@ -337,7 +341,10 @@ export class DataRedactor {
   private sensitiveFields: Set<string>;
   private redactionValue: string;
 
-  constructor(sensitiveFields: string[] = [], redactionValue: string = '[REDACTED]') {
+  constructor(
+    sensitiveFields: string[] = [],
+    redactionValue: string = '[REDACTED]',
+  ) {
     this.sensitiveFields = new Set([
       'password',
       'token',
@@ -364,22 +371,25 @@ export class DataRedactor {
     }
 
     if (Array.isArray(data)) {
-      return data.map(item => this.redact(item));
+      return data.map((item) => this.redact(item));
     }
 
     if (typeof data === 'object') {
       const redacted: any = {};
-      
+
       for (const [key, value] of Object.entries(data)) {
         const lowerKey = key.toLowerCase();
-        
-        if (this.sensitiveFields.has(lowerKey) || this.containsSensitivePattern(lowerKey)) {
+
+        if (
+          this.sensitiveFields.has(lowerKey) ||
+          this.containsSensitivePattern(lowerKey)
+        ) {
           redacted[key] = this.redactionValue;
         } else {
           redacted[key] = this.redact(value);
         }
       }
-      
+
       return redacted;
     }
 
@@ -396,7 +406,7 @@ export class DataRedactor {
       /credential/i,
     ];
 
-    return sensitivePatterns.some(pattern => pattern.test(key));
+    return sensitivePatterns.some((pattern) => pattern.test(key));
   }
 }
 
@@ -409,7 +419,7 @@ export class PerformanceTracker {
 
   constructor() {
     this.startTime = performance.now();
-    
+
     // Get initial memory usage if available
     if (typeof performance !== 'undefined' && performance.memory) {
       this.startMemory = performance.memory.usedJSHeapSize;
@@ -418,7 +428,7 @@ export class PerformanceTracker {
 
   getMetrics(): { duration: number; memory?: number } {
     const duration = Math.round(performance.now() - this.startTime);
-    
+
     let memory: number | undefined;
     if (this.startMemory !== undefined && performance.memory) {
       memory = performance.memory.usedJSHeapSize - this.startMemory;
@@ -442,7 +452,8 @@ export class Logger {
       enableConsole: config.enableConsole ?? true,
       enableStructured: config.enableStructured ?? environment.isProduction(),
       enableColors: config.enableColors ?? !environment.isProduction(),
-      includeStackTrace: config.includeStackTrace ?? !environment.isProduction(),
+      includeStackTrace: config.includeStackTrace ??
+        !environment.isProduction(),
       maxMessageLength: config.maxMessageLength ?? 10000,
       sensitiveFields: config.sensitiveFields ?? [],
       redactSensitiveData: config.redactSensitiveData ?? true,
@@ -472,8 +483,11 @@ export class Logger {
     if (this.config.enableConsole) {
       const formatter = this.config.enableStructured
         ? new JsonFormatter()
-        : new ConsoleFormatter(this.config.enableColors, this.config.includeStackTrace);
-      
+        : new ConsoleFormatter(
+          this.config.enableColors,
+          this.config.includeStackTrace,
+        );
+
       outputs.push(new ConsoleOutput(formatter));
     }
 
@@ -509,7 +523,7 @@ export class Logger {
     message: string,
     metadata?: Record<string, unknown>,
     error?: Error,
-    performance?: { duration?: number; memory?: number }
+    performance?: { duration?: number; memory?: number },
   ): Promise<void> {
     // Check if level is enabled
     if (level < this.config.level) {
@@ -534,28 +548,32 @@ export class Logger {
       message: truncatedMessage,
       context: Object.keys(this.context).length > 0 ? this.context : undefined,
       metadata: redactedMetadata,
-      error: error ? {
-        name: error.name,
-        message: error.message,
-        stack: this.config.includeStackTrace ? error.stack : undefined,
-        code: (error as any).code,
-      } : undefined,
+      error: error
+        ? {
+          name: error.name,
+          message: error.message,
+          stack: this.config.includeStackTrace ? error.stack : undefined,
+          code: (error as any).code,
+        }
+        : undefined,
       performance,
     };
 
     // Write to all enabled outputs
     const writePromises = this.config.outputs
-      .filter(output => output.enabled && level >= output.minLevel)
-      .map(output => output.write(entry).catch(err => {
-        console.error(`Failed to write to output ${output.name}:`, err);
-      }));
+      .filter((output) => output.enabled && level >= output.minLevel)
+      .map((output) =>
+        output.write(entry).catch((err) => {
+          console.error(`Failed to write to output ${output.name}:`, err);
+        })
+      );
 
     await Promise.all(writePromises);
   }
 
   private formatTimestamp(): string {
     const now = new Date();
-    
+
     switch (this.config.timestampFormat) {
       case 'unix':
         return Math.floor(now.getTime() / 1000).toString();
@@ -570,35 +588,52 @@ export class Logger {
   /**
    * Debug level logging
    */
-  async debug(message: string, metadata?: Record<string, unknown>): Promise<void> {
+  async debug(
+    message: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
     await this.log(LogLevel.DEBUG, message, metadata);
   }
 
   /**
    * Info level logging
    */
-  async info(message: string, metadata?: Record<string, unknown>): Promise<void> {
+  async info(
+    message: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
     await this.log(LogLevel.INFO, message, metadata);
   }
 
   /**
    * Warning level logging
    */
-  async warn(message: string, metadata?: Record<string, unknown>): Promise<void> {
+  async warn(
+    message: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
     await this.log(LogLevel.WARN, message, metadata);
   }
 
   /**
    * Error level logging
    */
-  async error(message: string, error?: Error, metadata?: Record<string, unknown>): Promise<void> {
+  async error(
+    message: string,
+    error?: Error,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
     await this.log(LogLevel.ERROR, message, metadata, error);
   }
 
   /**
    * Fatal level logging
    */
-  async fatal(message: string, error?: Error, metadata?: Record<string, unknown>): Promise<void> {
+  async fatal(
+    message: string,
+    error?: Error,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
     await this.log(LogLevel.FATAL, message, metadata, error);
   }
 
@@ -608,31 +643,31 @@ export class Logger {
   async time<T>(
     operation: string,
     fn: () => Promise<T>,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
   ): Promise<T> {
     const tracker = new PerformanceTracker();
-    
+
     try {
       await this.debug(`Starting ${operation}`, metadata);
       const result = await fn();
       const metrics = tracker.getMetrics();
-      
+
       await this.info(`Completed ${operation}`, {
         ...metadata,
         duration: metrics.duration,
         memory: metrics.memory,
       });
-      
+
       return result;
-    } catch (error) {
+    } catch (error: any) {
       const metrics = tracker.getMetrics();
-      
+
       await this.error(`Failed ${operation}`, error as Error, {
         ...metadata,
         duration: metrics.duration,
         memory: metrics.memory,
       });
-      
+
       throw error;
     }
   }
@@ -660,7 +695,8 @@ export const loggingUtils = {
   /**
    * Create data redactor
    */
-  createRedactor: (sensitiveFields?: string[]) => new DataRedactor(sensitiveFields),
+  createRedactor: (sensitiveFields?: string[]) =>
+    new DataRedactor(sensitiveFields),
 
   /**
    * Log levels
