@@ -1,6 +1,6 @@
 // CREATED: 2025-06-24 - Comprehensive billing integration tests for all endpoints
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { request } from 'supertest';
 import crypto from 'crypto';
 
@@ -19,7 +19,7 @@ describe('Billing Module Integration Tests', () => {
       email: 'billing-integration@example.com',
       name: 'Billing Integration User',
       role: 'user',
-      password: 'BillingTest123!'
+      password: 'BillingTest123!',
     });
 
     // Get user token for authenticated requests
@@ -28,7 +28,7 @@ describe('Billing Module Integration Tests', () => {
     // Create test API key for API key authentication tests
     testApiKey = await globalThis.testDb.createTestApiKey(testUser.id, {
       name: 'Billing Test API Key',
-      permissions: ['billing:read', 'billing:write', 'profile:read']
+      permissions: ['billing:read', 'billing:write', 'profile:read'],
     });
   });
 
@@ -51,11 +51,11 @@ describe('Billing Module Integration Tests', () => {
         cancelUrl: 'http://localhost:3000/cancel',
         quantity: 1,
         allowPromotionCodes: true,
-        billingAddressCollection: 'auto'
+        billingAddressCollection: 'auto',
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-checkout-session')
+        .post('/billing_create-checkout-session')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send(checkoutPayload)
         .expect(200);
@@ -66,11 +66,13 @@ describe('Billing Module Integration Tests', () => {
       expect(response.body.url).toBeDefined();
       expect(response.body.customerId).toBeDefined();
       expect(response.body.expiresAt).toBeDefined();
-      expect(response.body.message).toBe('Checkout session created successfully');
+      expect(response.body.message).toBe(
+        'Checkout session created successfully',
+      );
 
       // Verify session ID format (Stripe format: cs_...)
       expect(response.body.sessionId).toMatch(/^cs_/);
-      
+
       // Verify URL format
       expect(response.body.url).toMatch(/^https:\/\/checkout\.stripe\.com/);
 
@@ -90,11 +92,11 @@ describe('Billing Module Integration Tests', () => {
       const invalidPayload = {
         priceId: 'price_invalid_id',
         successUrl: 'http://localhost:3000/success',
-        cancelUrl: 'http://localhost:3000/cancel'
+        cancelUrl: 'http://localhost:3000/cancel',
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-checkout-session')
+        .post('/billing_create-checkout-session')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send(invalidPayload)
         .expect(400);
@@ -111,11 +113,11 @@ describe('Billing Module Integration Tests', () => {
       const checkoutPayload = {
         priceId: 'price_test_pro_monthly',
         successUrl: 'http://localhost:3000/success',
-        cancelUrl: 'http://localhost:3000/cancel'
+        cancelUrl: 'http://localhost:3000/cancel',
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-checkout-session')
+        .post('/billing_create-checkout-session')
         .send(checkoutPayload)
         .expect(401);
 
@@ -126,11 +128,11 @@ describe('Billing Module Integration Tests', () => {
       const checkoutPayload = {
         priceId: 'price_test_pro_monthly',
         successUrl: 'http://localhost:3000/success',
-        cancelUrl: 'http://localhost:3000/cancel'
+        cancelUrl: 'http://localhost:3000/cancel',
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-checkout-session')
+        .post('/billing_create-checkout-session')
         .set('X-API-Key', testApiKey)
         .send(checkoutPayload)
         .expect(200);
@@ -141,11 +143,15 @@ describe('Billing Module Integration Tests', () => {
 
     it('should handle CORS preflight requests', async () => {
       const response = await request(`${BASE_URL}/functions/v1`)
-        .options('/billing_enhanced-checkout-session')
+        .options('/billing_create-checkout-session')
         .expect(200);
 
-      expect(response.headers['access-control-allow-methods']).toContain('POST');
-      expect(response.headers['access-control-allow-headers']).toContain('Authorization');
+      expect(response.headers['access-control-allow-methods']).toContain(
+        'POST',
+      );
+      expect(response.headers['access-control-allow-headers']).toContain(
+        'Authorization',
+      );
     });
   });
 
@@ -154,14 +160,14 @@ describe('Billing Module Integration Tests', () => {
       // Set up user with Stripe customer ID for portal tests
       if (stripeCustomerId) {
         await globalThis.testDb.updateUserProfile(testUser.id, {
-          stripe_customer_id: stripeCustomerId
+          stripe_customer_id: stripeCustomerId,
         });
       }
     });
 
     it('should create customer portal session successfully', async () => {
       const portalPayload = {
-        returnUrl: 'http://localhost:3000/billing'
+        returnUrl: 'http://localhost:3000/billing',
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
@@ -182,11 +188,11 @@ describe('Billing Module Integration Tests', () => {
     it('should handle missing customer ID', async () => {
       // Remove Stripe customer ID
       await globalThis.testDb.updateUserProfile(testUser.id, {
-        stripe_customer_id: null
+        stripe_customer_id: null,
       });
 
       const portalPayload = {
-        returnUrl: 'http://localhost:3000/billing'
+        returnUrl: 'http://localhost:3000/billing',
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
@@ -211,19 +217,21 @@ describe('Billing Module Integration Tests', () => {
   describe('Subscription Retrieval Integration Test', () => {
     beforeEach(async () => {
       // Set up user with subscription for testing
-      stripeSubscriptionId = 'sub_test_' + crypto.randomBytes(8).toString('hex');
-      
+      stripeSubscriptionId = 'sub_test_' +
+        crypto.randomBytes(8).toString('hex');
+
       await globalThis.testDb.updateUserProfile(testUser.id, {
-        stripe_customer_id: stripeCustomerId || 'cus_test_' + crypto.randomBytes(8).toString('hex'),
+        stripe_customer_id: stripeCustomerId ||
+          'cus_test_' + crypto.randomBytes(8).toString('hex'),
         stripe_subscription_id: stripeSubscriptionId,
-        stripe_subscription_status: 'active'
+        stripe_subscription_status: 'active',
       });
     });
 
     it('should retrieve subscription with caching', async () => {
       // First request - should fetch from Stripe and cache
       const response1 = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 
@@ -236,26 +244,28 @@ describe('Billing Module Integration Tests', () => {
 
       // Second request - should use cache
       const response2 = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 
       expect(response2.body.cached).toBe(true); // Second request cached
       expect(response2.body.cacheKey).toBeDefined();
-      
+
       // Both responses should have identical subscription data
-      expect(response2.body.subscription.id).toBe(response1.body.subscription.id);
+      expect(response2.body.subscription.id).toBe(
+        response1.body.subscription.id,
+      );
     });
 
     it('should handle user without subscription', async () => {
       // Remove subscription from user
       await globalThis.testDb.updateUserProfile(testUser.id, {
         stripe_subscription_id: null,
-        stripe_subscription_status: null
+        stripe_subscription_status: null,
       });
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 
@@ -265,7 +275,7 @@ describe('Billing Module Integration Tests', () => {
 
     it('should work with API key authentication', async () => {
       const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('X-API-Key', testApiKey)
         .expect(200);
 
@@ -274,12 +284,12 @@ describe('Billing Module Integration Tests', () => {
 
     it('should include comprehensive subscription data', async () => {
       const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 
       const subscription = response.body.subscription;
-      
+
       // Verify all expected fields are present
       expect(subscription).toHaveProperty('id');
       expect(subscription).toHaveProperty('status');
@@ -287,7 +297,7 @@ describe('Billing Module Integration Tests', () => {
       expect(subscription).toHaveProperty('cancelAtPeriodEnd');
       expect(subscription).toHaveProperty('priceId');
       expect(subscription).toHaveProperty('customerId');
-      
+
       // Optional fields may or may not be present
       if (subscription.productName) {
         expect(typeof subscription.productName).toBe('string');
@@ -299,20 +309,22 @@ describe('Billing Module Integration Tests', () => {
 
     it('should apply rate limiting', async () => {
       // Make multiple rapid requests to test rate limiting
-      const promises = Array.from({ length: 25 }, () =>
-        request(`${BASE_URL}/functions/v1`)
-          .get('/billing_enhanced-get-subscription')
-          .set('Authorization', `Bearer ${testUserToken}`)
+      const promises = Array.from(
+        { length: 25 },
+        () =>
+          request(`${BASE_URL}/functions/v1`)
+            .get('/billing_get-subscription')
+            .set('Authorization', `Bearer ${testUserToken}`),
       );
 
       const responses = await Promise.all(promises);
-      
+
       // Some requests should be rate limited (429 status)
-      const statusCodes = responses.map(r => r.status);
+      const statusCodes = responses.map((r) => r.status);
       const hasRateLimit = statusCodes.includes(429);
-      
+
       if (hasRateLimit) {
-        const rateLimitedResponse = responses.find(r => r.status === 429);
+        const rateLimitedResponse = responses.find((r) => r.status === 429);
         expect(rateLimitedResponse!.body.error.code).toBe('RATE_LIMIT_ERROR');
       }
     });
@@ -332,31 +344,34 @@ describe('Billing Module Integration Tests', () => {
         data: {
           object: {
             id: 'cs_test_' + crypto.randomBytes(8).toString('hex'),
-            customer: stripeCustomerId || 'cus_test_' + crypto.randomBytes(8).toString('hex'),
-            subscription: stripeSubscriptionId || 'sub_test_' + crypto.randomBytes(8).toString('hex'),
+            customer: stripeCustomerId ||
+              'cus_test_' + crypto.randomBytes(8).toString('hex'),
+            subscription: stripeSubscriptionId ||
+              'sub_test_' + crypto.randomBytes(8).toString('hex'),
             metadata: {
-              supabase_user_id: testUser.id
-            }
-          }
-        }
+              supabase_user_id: testUser.id,
+            },
+          },
+        },
       };
 
       // Generate mock webhook signature (in real tests, this would be Stripe's signature)
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test_secret';
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
+        'whsec_test_secret';
       const timestamp = Math.floor(Date.now() / 1000);
       const payload = JSON.stringify(webhookPayload);
-      
+
       // Create HMAC signature similar to Stripe's format
       const hmac = crypto.createHmac('sha256', webhookSecret);
       hmac.update(`${timestamp}.${payload}`);
       const signature = hmac.digest('hex');
-      
+
       webhookSignature = `t=${timestamp},v1=${signature}`;
     });
 
     it('should process checkout.session.completed webhook', async () => {
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-webhooks-stripe')
+        .post('/billing_webhooks-stripe')
         .set('stripe-signature', webhookSignature)
         .send(webhookPayload)
         .expect(200);
@@ -368,9 +383,15 @@ describe('Billing Module Integration Tests', () => {
       expect(response.body.processingTime).toBeGreaterThan(0);
 
       // Verify database was updated
-      const updatedProfile = await globalThis.testDb.getUserProfile(testUser.id);
-      expect(updatedProfile.stripe_customer_id).toBe(webhookPayload.data.object.customer);
-      expect(updatedProfile.stripe_subscription_id).toBe(webhookPayload.data.object.subscription);
+      const updatedProfile = await globalThis.testDb.getUserProfile(
+        testUser.id,
+      );
+      expect(updatedProfile.stripe_customer_id).toBe(
+        webhookPayload.data.object.customer,
+      );
+      expect(updatedProfile.stripe_subscription_id).toBe(
+        webhookPayload.data.object.subscription,
+      );
     });
 
     it('should process subscription.updated webhook', async () => {
@@ -383,21 +404,23 @@ describe('Billing Module Integration Tests', () => {
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-webhooks-stripe')
+        .post('/billing_webhooks-stripe')
         .set('stripe-signature', webhookSignature)
         .send(webhookPayload)
         .expect(200);
 
       expect(response.body.received).toBe(true);
-      
+
       // Verify subscription status was updated
-      const updatedProfile = await globalThis.testDb.getUserProfile(testUser.id);
+      const updatedProfile = await globalThis.testDb.getUserProfile(
+        testUser.id,
+      );
       expect(updatedProfile.stripe_subscription_status).toBe('past_due');
     });
 
     it('should reject webhook without signature', async () => {
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-webhooks-stripe')
+        .post('/billing_webhooks-stripe')
         .send(webhookPayload)
         .expect(400);
 
@@ -407,7 +430,7 @@ describe('Billing Module Integration Tests', () => {
 
     it('should reject webhook with invalid signature', async () => {
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-webhooks-stripe')
+        .post('/billing_webhooks-stripe')
         .set('stripe-signature', 'invalid_signature')
         .send(webhookPayload)
         .expect(401);
@@ -417,9 +440,9 @@ describe('Billing Module Integration Tests', () => {
 
     it('should handle unrecognized webhook events gracefully', async () => {
       webhookPayload.type = 'unhandled.event.type';
-      
+
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-webhooks-stripe')
+        .post('/billing_webhooks-stripe')
         .set('stripe-signature', webhookSignature)
         .send(webhookPayload)
         .expect(200);
@@ -433,9 +456,10 @@ describe('Billing Module Integration Tests', () => {
       // Create webhook with old timestamp (older than 5 minutes)
       const oldTimestamp = Math.floor(Date.now() / 1000) - (6 * 60); // 6 minutes ago
       webhookPayload.created = oldTimestamp;
-      
+
       // Recreate signature with old timestamp
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test_secret';
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
+        'whsec_test_secret';
       const payload = JSON.stringify(webhookPayload);
       const hmac = crypto.createHmac('sha256', webhookSecret);
       hmac.update(`${oldTimestamp}.${payload}`);
@@ -443,7 +467,7 @@ describe('Billing Module Integration Tests', () => {
       const oldSignature = `t=${oldTimestamp},v1=${signature}`;
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-webhooks-stripe')
+        .post('/billing_webhooks-stripe')
         .set('stripe-signature', oldSignature)
         .send(webhookPayload)
         .expect(400);
@@ -457,12 +481,12 @@ describe('Billing Module Integration Tests', () => {
     it('should complete full billing lifecycle', async () => {
       // 1. Create checkout session
       const checkoutResponse = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-checkout-session')
+        .post('/billing_checkout-session')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           priceId: 'price_test_pro_monthly',
           successUrl: 'http://localhost:3000/success',
-          cancelUrl: 'http://localhost:3000/cancel'
+          cancelUrl: 'http://localhost:3000/cancel',
         })
         .expect(200);
 
@@ -480,35 +504,38 @@ describe('Billing Module Integration Tests', () => {
             customer: customerId,
             subscription: 'sub_test_lifecycle',
             metadata: {
-              supabase_user_id: testUser.id
-            }
-          }
-        }
+              supabase_user_id: testUser.id,
+            },
+          },
+        },
       };
 
       // Generate proper webhook signature
       const timestamp = Math.floor(Date.now() / 1000);
       const payload = JSON.stringify(webhookPayload);
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test_secret';
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
+        'whsec_test_secret';
       const hmac = crypto.createHmac('sha256', webhookSecret);
       hmac.update(`${timestamp}.${payload}`);
       const signature = hmac.digest('hex');
       const webhookSignature = `t=${timestamp},v1=${signature}`;
 
       await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_enhanced-webhooks-stripe')
+        .post('/billing_webhooks-stripe')
         .set('stripe-signature', webhookSignature)
         .send(webhookPayload)
         .expect(200);
 
       // 3. Verify subscription is retrievable
       const subscriptionResponse = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 
       expect(subscriptionResponse.body.subscription).toBeDefined();
-      expect(subscriptionResponse.body.subscription.customerId).toBe(customerId);
+      expect(subscriptionResponse.body.subscription.customerId).toBe(
+        customerId,
+      );
 
       // 4. Access customer portal
       const portalResponse = await request(`${BASE_URL}/functions/v1`)
@@ -524,26 +551,26 @@ describe('Billing Module Integration Tests', () => {
       // Make concurrent requests to different billing endpoints
       const concurrentRequests = [
         request(`${BASE_URL}/functions/v1`)
-          .get('/billing_enhanced-get-subscription')
+          .get('/billing_get-subscription')
           .set('Authorization', `Bearer ${testUserToken}`),
-        
+
         request(`${BASE_URL}/functions/v1`)
           .post('/billing_create-customer-portal')
           .set('Authorization', `Bearer ${testUserToken}`)
           .send({ returnUrl: 'http://localhost:3000/billing' }),
-          
+
         request(`${BASE_URL}/functions/v1`)
           .post('/billing_enhanced-checkout-session')
           .set('Authorization', `Bearer ${testUserToken}`)
           .send({
             priceId: 'price_test_basic_monthly',
             successUrl: 'http://localhost:3000/success',
-            cancelUrl: 'http://localhost:3000/cancel'
-          })
+            cancelUrl: 'http://localhost:3000/cancel',
+          }),
       ];
 
       const responses = await Promise.allSettled(concurrentRequests);
-      
+
       // All requests should complete without conflicts
       responses.forEach((result, index) => {
         if (result.status === 'fulfilled') {
@@ -558,20 +585,20 @@ describe('Billing Module Integration Tests', () => {
   describe('Performance and Monitoring Integration', () => {
     it('should track performance metrics', async () => {
       const startTime = Date.now();
-      
+
       const response = await request(`${BASE_URL}/functions/v1`)
         .get('/billing_enhanced-get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
-      
+
       const totalTime = Date.now() - startTime;
-      
+
       // Response should include performance information
       expect(response.body.timestamp).toBeDefined();
-      
+
       // Performance should be reasonable
       expect(totalTime).toBeLessThan(5000); // Under 5 seconds
-      
+
       // If processing time is reported, verify it's reasonable
       if (response.body.processingTime) {
         expect(response.body.processingTime).toBeGreaterThan(0);
@@ -586,8 +613,9 @@ describe('Billing Module Integration Tests', () => {
         .expect(200);
 
       // Response should include request ID for tracking
-      expect(response.headers['x-request-id'] || response.body.requestId).toBeDefined();
-      
+      expect(response.headers['x-request-id'] || response.body.requestId)
+        .toBeDefined();
+
       // Timestamp should be present and valid
       expect(response.body.timestamp).toBeDefined();
       const timestamp = new Date(response.body.timestamp);

@@ -1,5 +1,5 @@
 import { serve } from 'std/http/server.ts';
-import { z } from 'https://deno.sh/zod@v3.22.4';
+import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { createRateLimiter } from '@/rate-limiting';
 import { createAppError, ErrorType } from '@/errors';

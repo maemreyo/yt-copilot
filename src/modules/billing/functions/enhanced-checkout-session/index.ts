@@ -3,6 +3,17 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import {
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
 
 /**
  * Checkout session request interface
@@ -401,19 +412,7 @@ class EnhancedCheckoutService {
   }
 }
 
-/**
- * Security headers for responses
- */
-const securityHeaders = {
-  'Content-Type': 'application/json',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0',
-};
+// Security headers are now imported from @/shared-security
 
 /**
  * Extract user from JWT token
@@ -468,35 +467,23 @@ async function checkRateLimit(userId: string): Promise<boolean> {
  * Main serve function
  */
 serve(async (req) => {
+  // Generate a request ID for tracking
+  const requestId = crypto.randomUUID();
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        ...securityHeaders,
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+    return createCorsResponse();
   }
 
   // Only allow POST requests
   if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'METHOD_NOT_ALLOWED',
-          message: 'Only POST method is allowed',
-        },
-        timestamp: new Date().toISOString(),
-      }),
+    return createCorsErrorResponse(
+      'Only POST method is allowed',
+      405,
+      requestId,
       {
-        status: 405,
-        headers: {
-          ...securityHeaders,
-          'Allow': 'POST, OPTIONS',
-        },
+        code: 'METHOD_NOT_ALLOWED',
+        allowedMethods: ['POST'],
       },
     );
   }
@@ -505,38 +492,24 @@ serve(async (req) => {
     // Extract authenticated user
     const userInfo = await extractUserFromRequest(req);
     if (!userInfo) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_REQUIRED',
-            message: 'Valid authentication token required',
-          },
-          timestamp: new Date().toISOString(),
-        }),
-        {
-          status: 401,
-          headers: securityHeaders,
-        },
+      return createCorsErrorResponse(
+        'Valid authentication token required',
+        401,
+        requestId,
+        { code: 'AUTHENTICATION_REQUIRED' },
       );
     }
 
     // Check rate limit
     const rateLimitAllowed = await checkRateLimit(userInfo.userId);
     if (!rateLimitAllowed) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: 'Too many checkout requests. Please try again later.',
-          },
-          timestamp: new Date().toISOString(),
-        }),
+      return createCorsErrorResponse(
+        'Too many checkout requests. Please try again later.',
+        429,
+        requestId,
         {
-          status: 429,
-          headers: {
-            ...securityHeaders,
-            'Retry-After': '60',
-          },
+          code: 'RATE_LIMIT_EXCEEDED',
+          retryAfter: 60,
         },
       );
     }
@@ -549,18 +522,13 @@ serve(async (req) => {
     const validation = service.validateRequest(body);
 
     if (!validation.isValid) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request parameters',
-            details: validation.errors,
-          },
-          timestamp: new Date().toISOString(),
-        }),
+      return createCorsErrorResponse(
+        'Invalid request parameters',
+        400,
+        requestId,
         {
-          status: 400,
-          headers: securityHeaders,
+          code: 'VALIDATION_ERROR',
+          details: validation.errors,
         },
       );
     }
@@ -572,18 +540,13 @@ serve(async (req) => {
       validation.sanitized,
     );
 
-    return new Response(
-      JSON.stringify({
+    return createCorsSuccessResponse(
+      {
         ...result,
         timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: {
-          ...securityHeaders,
-          'Access-Control-Allow-Origin': '*',
-        },
       },
+      200,
+      requestId,
     );
   } catch (error) {
     console.error('Enhanced checkout session error:', error);
@@ -593,29 +556,13 @@ serve(async (req) => {
     const isValidationError = error.message.includes('Invalid') ||
       error.message.includes('must be');
 
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: isStripeError
-            ? 'STRIPE_ERROR'
-            : isValidationError
-            ? 'VALIDATION_ERROR'
-            : 'CHECKOUT_ERROR',
-          message: isStripeError
-            ? 'Payment processing error'
-            : isValidationError
-            ? error.message
-            : 'Failed to create checkout session',
-          details: Deno.env.get('NODE_ENV') === 'development'
-            ? error.message
-            : undefined,
-        },
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: isStripeError ? 402 : isValidationError ? 400 : 500,
-        headers: securityHeaders,
-      },
-    );
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 });
