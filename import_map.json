@@ -17,6 +17,11 @@
     "@/security": "./src/shared/utils/security.ts",
     "@/environment": "./src/shared/config/environment.ts",
     "@/config": "./src/shared/config/index.ts",
-    "@/validation": "./src/shared/utils/validation.ts"
+    "@/validation": "./src/shared/utils/validation.ts",
+    
+    "@/cors": "./src/shared/edge-functions/_shared/cors.ts",
+    "@/shared-errors": "./src/shared/edge-functions/_shared/errors.ts",
+    "@/shared-security": "./src/shared/edge-functions/_shared/security.ts",
+    "@/shared-validation": "./src/shared/edge-functions/_shared/validation.ts"
   }
 }

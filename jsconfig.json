@@ -1,0 +1,74 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "std/*": [
+                "./node_modules/deno-types/std@0.168.0/*"
+            ],
+            "@supabase/supabase-js": [
+                "./node_modules/@supabase/supabase-js"
+            ],
+            "stripe": [
+                "./node_modules/stripe"
+            ],
+            "zod": [
+                "./node_modules/zod"
+            ],
+            "_shared/*": [
+                "./supabase/_internal/functions/_shared/*"
+            ],
+            "../_shared/*": [
+                "./supabase/_internal/functions/_shared/*"
+            ],
+            "./_shared/*": [
+                "./supabase/_internal/functions/_shared/*"
+            ],
+            "@/rate-limiting": [
+                "./src/shared/utils/rate-limiting.ts"
+            ],
+            "@/errors": [
+                "./src/shared/utils/errors.ts"
+            ],
+            "@/auth": [
+                "./src/shared/utils/auth.ts"
+            ],
+            "@/logging": [
+                "./src/shared/utils/logging.ts"
+            ],
+            "@/cache": [
+                "./src/shared/utils/cache.ts"
+            ],
+            "@/security": [
+                "./src/shared/utils/security.ts"
+            ],
+            "@/environment": [
+                "./src/shared/config/environment.ts"
+            ],
+            "@/config": [
+                "./src/shared/config/index.ts"
+            ],
+            "@/validation": [
+                "./src/shared/utils/validation.ts"
+            ],
+            "@/cors": [
+                "./src/shared/edge-functions/_shared/cors.ts"
+            ],
+            "@/shared-errors": [
+                "./src/shared/edge-functions/_shared/errors.ts"
+            ],
+            "@/shared-security": [
+                "./src/shared/edge-functions/_shared/security.ts"
+            ],
+            "@/shared-validation": [
+                "./src/shared/edge-functions/_shared/validation.ts"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*",
+        "supabase/**/*"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
