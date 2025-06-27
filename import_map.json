@@ -9,6 +9,7 @@
     "../_shared/": "./supabase/_internal/functions/_shared/",
     "./_shared/": "./supabase/_internal/functions/_shared/",
     
+    "@/": "./src/",
     "@/rate-limiting": "./src/shared/utils/rate-limiting.ts",
     "@/errors": "./src/shared/utils/errors.ts",
     "@/auth": "./src/shared/utils/auth.ts",

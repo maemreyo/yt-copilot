@@ -2,7 +2,19 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '_shared/cors.ts';
+import {
+  corsHeaders,
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
+import { createSecureResponse, securityHeaders } from '@/shared-security';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
 
 /**
  * API Key revocation request interface
@@ -42,17 +54,7 @@ interface AuditLogEntry {
   userAgent?: string;
 }
 
-/**
- * Security headers for responses
- */
-const securityHeaders = {
-  'Content-Type': 'application/json',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-};
+// Security headers are now imported from @/shared-security
 
 /**
  * Request validator for API key revocation
@@ -114,7 +116,10 @@ class RevocationValidator {
  * Rate limiter for API key revocation
  */
 class RevocationRateLimiter {
-  private static userRequests = new Map<string, { count: number; resetTime: number }>();
+  private static userRequests = new Map<
+    string,
+    { count: number; resetTime: number }
+  >();
 
   /**
    * Check if user can revoke API key
@@ -136,16 +141,16 @@ class RevocationRateLimiter {
     }
 
     if (userLimit.count >= maxRequests) {
-      return { 
-        allowed: false, 
+      return {
+        allowed: false,
         resetTime: userLimit.resetTime,
         remaining: 0,
       };
     }
 
     userLimit.count++;
-    return { 
-      allowed: true, 
+    return {
+      allowed: true,
       remaining: maxRequests - userLimit.count,
     };
   }
@@ -160,7 +165,7 @@ class ApiKeyRevocationService {
   constructor() {
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
   }
 
@@ -192,13 +197,17 @@ class ApiKeyRevocationService {
   /**
    * Revoke API key (soft delete)
    */
-  async revokeApiKey(keyPrefix: string, userId: string, reason?: string): Promise<{
+  async revokeApiKey(
+    keyPrefix: string,
+    userId: string,
+    reason?: string,
+  ): Promise<{
     success: boolean;
     apiKey?: any;
   }> {
     // First verify the key exists and belongs to the user
     const verification = await this.findAndVerifyApiKey(keyPrefix, userId);
-    
+
     if (!verification.found) {
       throw new Error('API key not found');
     }
@@ -237,7 +246,7 @@ class ApiKeyRevocationService {
     // In a production system, this would go to a dedicated audit table
     // For now, we'll just log it
     const auditId = crypto.randomUUID();
-    
+
     console.log('AUDIT LOG:', {
       id: auditId,
       ...entry,
@@ -282,13 +291,15 @@ class ApiKeyRevocationService {
    * Send notification about API key revocation (if enabled)
    */
   async sendRevocationNotification(
-    userId: string, 
-    keyName: string, 
-    keyPrefix: string
+    userId: string,
+    keyName: string,
+    keyPrefix: string,
   ): Promise<void> {
     // TODO: Implement email notification via Resend
-    console.log(`[NOTIFICATION] API key revoked for user ${userId}: ${keyName} (${keyPrefix})`);
-    
+    console.log(
+      `[NOTIFICATION] API key revoked for user ${userId}: ${keyName} (${keyPrefix})`,
+    );
+
     // In production, this would send an email:
     // - Key name and prefix
     // - Revocation timestamp
@@ -305,10 +316,10 @@ function extractRequestMetadata(req: Request): {
   userAgent?: string;
 } {
   return {
-    ipAddress: req.headers.get('cf-connecting-ip') || 
-              req.headers.get('x-forwarded-for') || 
-              req.headers.get('x-real-ip') || 
-              'unknown',
+    ipAddress: req.headers.get('cf-connecting-ip') ||
+      req.headers.get('x-forwarded-for') ||
+      req.headers.get('x-real-ip') ||
+      'unknown',
     userAgent: req.headers.get('user-agent') || 'unknown',
   };
 }
@@ -317,36 +328,26 @@ function extractRequestMetadata(req: Request): {
  * Main serve function
  */
 serve(async (req) => {
+  // Generate a request ID for tracking
+  const requestId = crypto.randomUUID();
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: { ...corsHeaders },
-    });
+    return createCorsResponse();
   }
 
   // Only allow DELETE requests
   if (req.method !== 'DELETE') {
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'METHOD_NOT_ALLOWED',
-          message: 'Only DELETE method is allowed',
-        },
-        timestamp: new Date().toISOString(),
-      }),
+    return createCorsErrorResponse(
+      'Only DELETE method is allowed',
+      405,
+      requestId,
       {
-        status: 405,
-        headers: {
-          ...corsHeaders,
-          ...securityHeaders,
-          'Allow': 'DELETE, OPTIONS',
-        },
-      }
+        code: 'METHOD_NOT_ALLOWED',
+        allowedMethods: ['DELETE'],
+      },
     );
   }
-
-  const requestId = crypto.randomUUID();
   const requestMetadata = extractRequestMetadata(req);
 
   try {
@@ -356,26 +357,19 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_ERROR',
-            message: 'Missing or invalid authorization header',
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+      throw createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        'Missing or invalid authorization header',
+        { code: 'AUTHENTICATION_ERROR' },
+        requestId,
       );
     }
 
     const token = authHeader.substring(7);
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await revocationService.supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await revocationService
+      .supabase.auth.getUser(token);
 
     if (userError || !user) {
       return new Response(
@@ -390,15 +384,17 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
     // Check rate limiting
     const rateLimitResult = RevocationRateLimiter.canRevokeApiKey(user.id);
     if (!rateLimitResult.allowed) {
-      const retryAfter = Math.ceil((rateLimitResult.resetTime! - Date.now()) / 1000);
-      
+      const retryAfter = Math.ceil(
+        (rateLimitResult.resetTime! - Date.now()) / 1000,
+      );
+
       return new Response(
         JSON.stringify({
           error: {
@@ -418,7 +414,7 @@ serve(async (req) => {
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': rateLimitResult.resetTime!.toString(),
           },
-        }
+        },
       );
     }
 
@@ -439,7 +435,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
@@ -459,7 +455,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
@@ -468,7 +464,7 @@ serve(async (req) => {
       const result = await revocationService.revokeApiKey(
         validation.sanitized.keyPrefix,
         user.id,
-        validation.sanitized.reason
+        validation.sanitized.reason,
       );
 
       const revokedAt = new Date().toISOString();
@@ -495,7 +491,7 @@ serve(async (req) => {
           await revocationService.sendRevocationNotification(
             user.id,
             result.apiKey.name,
-            validation.sanitized.keyPrefix
+            validation.sanitized.keyPrefix,
           );
         } catch (error) {
           console.warn('Failed to send revocation notification:', error);
@@ -523,11 +519,11 @@ serve(async (req) => {
             ...corsHeaders,
             ...securityHeaders,
             'X-Request-ID': requestId,
-            'X-RateLimit-Remaining': rateLimitResult.remaining?.toString() || '0',
+            'X-RateLimit-Remaining': rateLimitResult.remaining?.toString() ||
+              '0',
           },
-        }
+        },
       );
-
     } catch (error) {
       // Handle specific errors
       if (error.message === 'API key not found') {
@@ -544,7 +540,7 @@ serve(async (req) => {
           {
             status: 404,
             headers: { ...corsHeaders, ...securityHeaders },
-          }
+          },
         );
       }
 
@@ -561,13 +557,12 @@ serve(async (req) => {
           {
             status: 403,
             headers: { ...corsHeaders, ...securityHeaders },
-          }
+          },
         );
       }
 
       throw error; // Re-throw other errors
     }
-
   } catch (error) {
     console.error('API key revocation error:', error);
 
@@ -576,7 +571,9 @@ serve(async (req) => {
         error: {
           code: 'INTERNAL_ERROR',
           message: 'Internal server error',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+          details: Deno.env.get('NODE_ENV') === 'development'
+            ? error.message
+            : undefined,
         },
         timestamp: new Date().toISOString(),
         requestId,
@@ -584,7 +581,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, ...securityHeaders },
-      }
+      },
     );
   }
 });

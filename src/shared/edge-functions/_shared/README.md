@@ -18,7 +18,7 @@ src/shared/edge-functions/_shared/
 ### CORS Headers
 
 ```typescript
-import { corsHeaders, createCorsResponse, addCorsHeaders } from '_shared/cors.ts';
+import { corsHeaders, createCorsResponse, addCorsHeaders } from '@/cors';
 
 // Basic CORS headers
 const response = new Response(data, {
@@ -118,7 +118,7 @@ import {
   corsHeaders, 
   createCorsResponse,
   createCorsSuccessResponse 
-} from '_shared/cors.ts';
+} from '@/cors';
 import { 
   generateRequestId,
   extractAuthToken,

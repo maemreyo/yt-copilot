@@ -2,7 +2,19 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '_shared/cors.ts';
+import {
+  corsHeaders,
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
+import { createSecureResponse, securityHeaders } from '@/shared-security';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
 
 /**
  * API Key listing query parameters interface
@@ -62,17 +74,7 @@ interface ListApiKeysResponse {
   };
 }
 
-/**
- * Security headers for responses
- */
-const securityHeaders = {
-  'Content-Type': 'application/json',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cache-Control': 'private, max-age=300', // Cache for 5 minutes
-};
+// Security headers are now imported from @/shared-security
 
 /**
  * Query parameter validator
@@ -195,7 +197,7 @@ class ApiKeyListingService {
   constructor() {
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
   }
 
@@ -206,11 +208,11 @@ class ApiKeyListingService {
     if (apiKey.revoked_at) {
       return 'revoked';
     }
-    
+
     if (apiKey.expires_at && new Date(apiKey.expires_at) < new Date()) {
       return 'expired';
     }
-    
+
     return 'active';
   }
 
@@ -241,12 +243,15 @@ class ApiKeyListingService {
     // Search filter
     if (query.search) {
       dbQuery = dbQuery.or(
-        `name.ilike.%${query.search}%,description.ilike.%${query.search}%,key_prefix.ilike.%${query.search}%`
+        `name.ilike.%${query.search}%,description.ilike.%${query.search}%,key_prefix.ilike.%${query.search}%`,
       );
     }
 
     // Exclude revoked keys unless explicitly requested
-    if (!query.includeRevoked && query.status !== 'revoked' && query.status !== 'all') {
+    if (
+      !query.includeRevoked && query.status !== 'revoked' &&
+      query.status !== 'all'
+    ) {
       dbQuery = dbQuery.is('revoked_at', null);
     }
 
@@ -274,17 +279,21 @@ class ApiKeyListingService {
    */
   private transformToMetadata(record: any): ApiKeyMetadata {
     const status = this.determineStatus(record);
-    
+
     return {
       id: record.id,
       keyPrefix: record.key_prefix,
       name: record.name,
       description: record.description,
-      permissions: record.permissions ? JSON.parse(record.permissions) : undefined,
+      permissions: record.permissions
+        ? JSON.parse(record.permissions)
+        : undefined,
       status,
       createdAt: record.created_at,
       expiresAt: record.expires_at,
-      lastUsedAt: record.updated_at !== record.created_at ? record.updated_at : undefined,
+      lastUsedAt: record.updated_at !== record.created_at
+        ? record.updated_at
+        : undefined,
       revokedAt: record.revoked_at,
       revocationReason: record.revocation_reason,
       usageStats: {
@@ -331,7 +340,7 @@ class ApiKeyListingService {
         totalExpired++;
       } else {
         totalActive++;
-        
+
         // Check if expiring in 7 days
         if (key.expires_at && new Date(key.expires_at) <= in7Days) {
           expiringIn7Days++;
@@ -356,7 +365,10 @@ class ApiKeyListingService {
   /**
    * List API keys with pagination and filtering
    */
-  async listApiKeys(userId: string, query: ListApiKeysQuery): Promise<ListApiKeysResponse> {
+  async listApiKeys(
+    userId: string,
+    query: ListApiKeysQuery,
+  ): Promise<ListApiKeysResponse> {
     // Build and execute query
     let dbQuery = this.buildQueryFilters(query, userId);
     dbQuery = this.applySorting(dbQuery, query.sortBy!, query.sortOrder!);
@@ -369,7 +381,9 @@ class ApiKeyListingService {
     }
 
     // Transform to metadata objects
-    const transformedKeys = (apiKeys || []).map(key => this.transformToMetadata(key));
+    const transformedKeys = (apiKeys || []).map((key) =>
+      this.transformToMetadata(key)
+    );
 
     // Calculate pagination info
     const total = count || 0;
@@ -399,36 +413,26 @@ class ApiKeyListingService {
  * Main serve function
  */
 serve(async (req) => {
+  // Generate a request ID for tracking
+  const requestId = crypto.randomUUID();
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: { ...corsHeaders },
-    });
+    return createCorsResponse();
   }
 
   // Only allow GET requests
   if (req.method !== 'GET') {
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'METHOD_NOT_ALLOWED',
-          message: 'Only GET method is allowed',
-        },
-        timestamp: new Date().toISOString(),
-      }),
+    return createCorsErrorResponse(
+      'Only GET method is allowed',
+      405,
+      requestId,
       {
-        status: 405,
-        headers: {
-          ...corsHeaders,
-          ...securityHeaders,
-          'Allow': 'GET, OPTIONS',
-        },
-      }
+        code: 'METHOD_NOT_ALLOWED',
+        allowedMethods: ['GET'],
+      },
     );
   }
-
-  const requestId = crypto.randomUUID();
 
   try {
     // Initialize service
@@ -437,68 +441,50 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_ERROR',
-            message: 'Missing or invalid authorization header',
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+      throw createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        'Missing or invalid authorization header',
+        { code: 'AUTHENTICATION_ERROR' },
+        requestId,
       );
     }
 
     const token = authHeader.substring(7);
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await listingService.supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await listingService.supabase
+      .auth.getUser(token);
 
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_ERROR',
-            message: 'Invalid or expired token',
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+      throw createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        'Invalid or expired token',
+        { code: 'AUTHENTICATION_ERROR' },
+        requestId,
       );
     }
 
     // Parse and validate query parameters
     const url = new URL(req.url);
     const validation = QueryValidator.validateQuery(url);
-    
+
     if (!validation.isValid) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid query parameters',
-            details: validation.errors,
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        'Invalid query parameters',
         {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+          code: 'VALIDATION_ERROR',
+          details: validation.errors,
+        },
+        requestId,
       );
     }
 
     // List API keys
-    const result = await listingService.listApiKeys(user.id, validation.sanitized);
+    const result = await listingService.listApiKeys(
+      user.id,
+      validation.sanitized,
+    );
 
     // Add response metadata
     const response = {
@@ -510,35 +496,26 @@ serve(async (req) => {
       },
     };
 
-    return new Response(JSON.stringify(response, null, 2), {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        ...securityHeaders,
-        'X-Request-ID': requestId,
+    return createCorsSuccessResponse(
+      response,
+      200,
+      requestId,
+      {
         'X-Total-Count': result.pagination.total.toString(),
         'X-Page': result.pagination.page.toString(),
         'X-Per-Page': result.pagination.limit.toString(),
       },
-    });
-
+    );
   } catch (error) {
     console.error('API key listing error:', error);
 
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Internal server error',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
-        },
-        timestamp: new Date().toISOString(),
-        requestId,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, ...securityHeaders },
-      }
-    );
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 });

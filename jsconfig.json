@@ -1,6 +1,12 @@
 {
     "compilerOptions": {
         "baseUrl": ".",
+        "module": "esnext",
+        "target": "esnext",
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "checkJs": false,
+        "allowSyntheticDefaultImports": true,
         "paths": {
             "std/*": [
                 "./node_modules/deno-types/std@0.168.0/*"
@@ -70,5 +76,8 @@
     ],
     "exclude": [
         "node_modules"
-    ]
+    ],
+    "typeAcquisition": {
+        "enable": true
+    }
 }

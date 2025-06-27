@@ -4,15 +4,21 @@
     "typescript.validate.enable": false,
     "typescript.preferences.quoteStyle": "single",
     // Deno configuration for Supabase Edge Functions
-    "deno.enable": false,
+    "deno.enable": true,
+    "deno.path": "/Users/matthewngo/.deno/bin/deno",
     "deno.enablePaths": [
         "./supabase/functions",
-        "./supabase/_internal/functions"
+        "./supabase/_internal/functions",
+        "./src/modules"
     ],
     "deno.config": "./deno.json",
     "deno.importMap": "./import_map.json",
     "deno.lint": true,
     "deno.unstable": false,
+    "deno.suggest.imports.hosts": {
+        "https://deno.land": true,
+        "https://esm.sh": true
+    },
     // File associations
     "[typescript]": {
         "editor.defaultFormatter": "denoland.vscode-deno",
@@ -23,8 +29,11 @@
     // Configure file associations for Supabase functions
     "files.associations": {
         "**/supabase/**/*.ts": "typescript",
-        "**/supabase/**/*.js": "javascript"
+        "**/supabase/**/*.js": "javascript",
+        "**/src/modules/**/*.ts": "typescript"
     },
+    // Enable path intellisense for import maps
+    "typescript.preferences.importModuleSpecifier": "non-relative",
     // Search exclusions
     "search.exclude": {
         "**/node_modules": true,

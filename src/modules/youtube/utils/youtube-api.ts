@@ -1,15 +1,15 @@
 // YouTube Data API v3 integration utilities
 
-import { environment } from '@/config/environment';
+import { environment } from '@/environment';
 import { Logger } from '@/logging';
-import { createAppError } from '@/errors';
+import { createAppError } from '@/shared-errors';
 import { cacheUtils } from '@/cache';
-import type {
-  YouTubeVideoMetadata,
-  YouTubeAPIVideoListResponse,
+import {
   YouTubeAPIVideoItem,
+  YouTubeAPIVideoListResponse,
   YouTubeErrorCode,
-} from '../types/youtube';
+  YouTubeVideoMetadata,
+} from '../types/youtube.ts';
 
 const logger = new Logger({ service: 'youtube-api' });
 
@@ -46,7 +46,7 @@ export class YouTubeAPIClient {
     try {
       // Clean the URL
       const cleanUrl = url.trim();
-      
+
       // Try each pattern
       for (const pattern of YOUTUBE_VIDEO_URL_PATTERNS) {
         const match = cleanUrl.match(pattern);
@@ -109,7 +109,7 @@ export class YouTubeAPIClient {
       });
 
       const url = `${YOUTUBE_API_BASE_URL}/videos?${params}`;
-      
+
       logger.info('Fetching YouTube video metadata', { videoId });
 
       // Make API request
@@ -132,7 +132,7 @@ export class YouTubeAPIClient {
         throw createAppError(
           YouTubeErrorCode.VIDEO_NOT_FOUND,
           `Video with ID ${videoId} not found`,
-          { videoId }
+          { videoId },
         );
       }
 
@@ -143,7 +143,7 @@ export class YouTubeAPIClient {
         throw createAppError(
           YouTubeErrorCode.VIDEO_PRIVATE,
           'This video is private',
-          { videoId }
+          { videoId },
         );
       }
 
@@ -189,11 +189,17 @@ export class YouTubeAPIClient {
       duration: contentDetails.duration,
       durationSeconds: YouTubeAPIClient.parseDuration(contentDetails.duration),
       thumbnails: snippet.thumbnails,
-      statistics: statistics ? {
-        viewCount: parseInt(statistics.viewCount, 10),
-        likeCount: statistics.likeCount ? parseInt(statistics.likeCount, 10) : undefined,
-        commentCount: statistics.commentCount ? parseInt(statistics.commentCount, 10) : undefined,
-      } : undefined,
+      statistics: statistics
+        ? {
+          viewCount: parseInt(statistics.viewCount, 10),
+          likeCount: statistics.likeCount
+            ? parseInt(statistics.likeCount, 10)
+            : undefined,
+          commentCount: statistics.commentCount
+            ? parseInt(statistics.commentCount, 10)
+            : undefined,
+        }
+        : undefined,
       tags: snippet.tags,
       categoryId: snippet.categoryId,
       defaultLanguage: snippet.defaultLanguage,
@@ -204,7 +210,10 @@ export class YouTubeAPIClient {
   /**
    * Handle YouTube API errors
    */
-  private async handleAPIError(response: Response, videoId: string): Promise<never> {
+  private async handleAPIError(
+    response: Response,
+    videoId: string,
+  ): Promise<never> {
     const errorBody = await response.text();
     let errorData: any;
 
@@ -226,13 +235,13 @@ export class YouTubeAPIClient {
         throw createAppError(
           YouTubeErrorCode.API_QUOTA_EXCEEDED,
           'YouTube API quota exceeded. Please try again later.',
-          { videoId, quotaError: errorData }
+          { videoId, quotaError: errorData },
         );
       }
       throw createAppError(
         YouTubeErrorCode.API_ERROR,
         'Access denied to YouTube API',
-        { videoId, status: 403 }
+        { videoId, status: 403 },
       );
     }
 
@@ -240,7 +249,7 @@ export class YouTubeAPIClient {
       throw createAppError(
         YouTubeErrorCode.VIDEO_NOT_FOUND,
         `Video ${videoId} not found`,
-        { videoId }
+        { videoId },
       );
     }
 
@@ -248,7 +257,7 @@ export class YouTubeAPIClient {
     throw createAppError(
       YouTubeErrorCode.API_ERROR,
       `YouTube API error: ${errorData.error?.message || 'Unknown error'}`,
-      { videoId, status: response.status, error: errorData }
+      { videoId, status: response.status, error: errorData },
     );
   }
 
@@ -275,7 +284,7 @@ export class YouTubeAPIClient {
     }
 
     const data: YouTubeAPIVideoListResponse = await response.json();
-    return data.items.map(video => this.transformVideoData(video));
+    return data.items.map((video) => this.transformVideoData(video));
   }
 }
 

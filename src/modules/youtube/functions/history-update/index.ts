@@ -2,7 +2,7 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '_shared/cors.ts';
+import { corsHeaders } from '@/cors';
 
 /**
  * Request interface
@@ -48,7 +48,9 @@ const securityHeaders = {
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(request: Request): Promise<string | null> {
+async function extractUserFromRequest(
+  request: Request,
+): Promise<string | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -56,10 +58,10 @@ async function extractUserFromRequest(request: Request): Promise<string | null> 
     }
 
     const token = authHeader.substring(7);
-    
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -108,9 +110,11 @@ function validateRequest(data: any): { isValid: boolean; errors: string[] } {
   }
 
   if (data.playbackRate !== undefined) {
-    if (typeof data.playbackRate !== 'number' || 
-        data.playbackRate < 0.25 || 
-        data.playbackRate > 2.0) {
+    if (
+      typeof data.playbackRate !== 'number' ||
+      data.playbackRate < 0.25 ||
+      data.playbackRate > 2.0
+    ) {
       errors.push('playbackRate must be between 0.25 and 2.0');
     }
   }
@@ -140,9 +144,16 @@ function validateRequest(data: any): { isValid: boolean; errors: string[] } {
   }
 
   // Check if at least one field is being updated
-  const updateFields = ['progressSeconds', 'completed', 'playbackRate', 'isBookmarked', 'notes', 'tags'];
-  const hasUpdate = updateFields.some(field => data[field] !== undefined);
-  
+  const updateFields = [
+    'progressSeconds',
+    'completed',
+    'playbackRate',
+    'isBookmarked',
+    'notes',
+    'tags',
+  ];
+  const hasUpdate = updateFields.some((field) => data[field] !== undefined);
+
   if (!hasUpdate) {
     errors.push('At least one field must be provided for update');
   }
@@ -185,7 +196,7 @@ serve(async (req) => {
           ...corsHeaders,
           'Allow': 'PUT, OPTIONS',
         },
-      }
+      },
     );
   }
 
@@ -204,7 +215,7 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -222,7 +233,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -242,7 +253,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -261,14 +272,14 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
     }
@@ -295,7 +306,7 @@ serve(async (req) => {
         {
           status: 404,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -320,7 +331,7 @@ serve(async (req) => {
         {
           status: 404,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -331,10 +342,11 @@ serve(async (req) => {
 
     if (requestData.progressSeconds !== undefined) {
       updateData.progress_seconds = requestData.progressSeconds;
-      
+
       // Auto-calculate completed if not explicitly set
       if (requestData.completed === undefined && video.duration_seconds) {
-        updateData.completed = requestData.progressSeconds >= (video.duration_seconds * 0.95);
+        updateData.completed =
+          requestData.progressSeconds >= (video.duration_seconds * 0.95);
       }
     }
 
@@ -384,9 +396,8 @@ serve(async (req) => {
       {
         status: 200,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
-
   } catch (error) {
     console.error('Request failed:', error);
 
@@ -402,7 +413,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
   }
 });

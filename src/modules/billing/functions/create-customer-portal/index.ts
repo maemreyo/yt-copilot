@@ -3,7 +3,7 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
-import { corsHeaders } from '_shared/cors.ts';
+import { corsHeaders } from '@/cors';
 
 /**
  * Customer portal request interface
@@ -75,7 +75,9 @@ class CustomerPortalValidator {
       if (typeof data.configuration !== 'string') {
         errors.push('configuration must be a string');
       } else if (!/^bpc_[a-zA-Z0-9]+$/.test(data.configuration)) {
-        errors.push('configuration must be a valid Stripe portal configuration ID');
+        errors.push(
+          'configuration must be a valid Stripe portal configuration ID',
+        );
       } else {
         sanitized.configuration = data.configuration;
       }
@@ -87,12 +89,49 @@ class CustomerPortalValidator {
         errors.push('locale must be a string');
       } else {
         const validLocales = [
-          'auto', 'bg', 'cs', 'da', 'de', 'el', 'en', 'en-GB', 'es', 'es-419',
-          'et', 'fi', 'fil', 'fr', 'fr-CA', 'hr', 'hu', 'id', 'it', 'ja', 'ko',
-          'lt', 'lv', 'ms', 'mt', 'nb', 'nl', 'pl', 'pt', 'pt-BR', 'ro', 'ru',
-          'sk', 'sl', 'sv', 'th', 'tr', 'vi', 'zh', 'zh-HK', 'zh-TW'
+          'auto',
+          'bg',
+          'cs',
+          'da',
+          'de',
+          'el',
+          'en',
+          'en-GB',
+          'es',
+          'es-419',
+          'et',
+          'fi',
+          'fil',
+          'fr',
+          'fr-CA',
+          'hr',
+          'hu',
+          'id',
+          'it',
+          'ja',
+          'ko',
+          'lt',
+          'lv',
+          'ms',
+          'mt',
+          'nb',
+          'nl',
+          'pl',
+          'pt',
+          'pt-BR',
+          'ro',
+          'ru',
+          'sk',
+          'sl',
+          'sv',
+          'th',
+          'tr',
+          'vi',
+          'zh',
+          'zh-HK',
+          'zh-TW',
         ];
-        
+
         if (!validLocales.includes(data.locale)) {
           errors.push(`locale must be one of: ${validLocales.join(', ')}`);
         } else {
@@ -111,12 +150,15 @@ class CustomerPortalValidator {
   /**
    * Validate return URL against allowed domains
    */
-  static validateReturnUrlDomain(returnUrl: string, allowedDomains: string[]): boolean {
+  static validateReturnUrlDomain(
+    returnUrl: string,
+    allowedDomains: string[],
+  ): boolean {
     try {
       const url = new URL(returnUrl);
       const hostname = url.hostname.toLowerCase();
-      
-      return allowedDomains.some(domain => {
+
+      return allowedDomains.some((domain) => {
         const lowerDomain = domain.toLowerCase();
         return hostname === lowerDomain || hostname.endsWith(`.${lowerDomain}`);
       });
@@ -130,7 +172,10 @@ class CustomerPortalValidator {
  * Rate limiter for customer portal creation
  */
 class CustomerPortalRateLimiter {
-  private static userRequests = new Map<string, { count: number; resetTime: number }>();
+  private static userRequests = new Map<
+    string,
+    { count: number; resetTime: number }
+  >();
 
   /**
    * Check if user can create customer portal session
@@ -152,16 +197,16 @@ class CustomerPortalRateLimiter {
     }
 
     if (userLimit.count >= maxRequests) {
-      return { 
-        allowed: false, 
+      return {
+        allowed: false,
         resetTime: userLimit.resetTime,
         remaining: 0,
       };
     }
 
     userLimit.count++;
-    return { 
-      allowed: true, 
+    return {
+      allowed: true,
       remaining: maxRequests - userLimit.count,
     };
   }
@@ -181,7 +226,7 @@ class CustomerPortalService {
 
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
   }
 
@@ -195,7 +240,9 @@ class CustomerPortalService {
   }> {
     const { data: profile, error } = await this.supabase
       .from('profiles')
-      .select('stripe_customer_id, stripe_subscription_id, stripe_subscription_status')
+      .select(
+        'stripe_customer_id, stripe_subscription_id, stripe_subscription_status',
+      )
       .eq('id', userId)
       .single();
 
@@ -217,9 +264,12 @@ class CustomerPortalService {
   /**
    * Create or retrieve Stripe customer
    */
-  async ensureStripeCustomer(userId: string, userEmail: string): Promise<string> {
+  async ensureStripeCustomer(
+    userId: string,
+    userEmail: string,
+  ): Promise<string> {
     const userProfile = await this.getUserCustomerId(userId);
-    
+
     if (userProfile.customerId) {
       // Verify customer exists in Stripe
       try {
@@ -245,7 +295,10 @@ class CustomerPortalService {
       .eq('id', userId);
 
     if (updateError) {
-      console.error('Failed to update profile with Stripe customer ID:', updateError);
+      console.error(
+        'Failed to update profile with Stripe customer ID:',
+        updateError,
+      );
     }
 
     return customer.id;
@@ -256,7 +309,7 @@ class CustomerPortalService {
    */
   async createPortalSession(
     customerId: string,
-    request: CreateCustomerPortalRequest
+    request: CreateCustomerPortalRequest,
   ): Promise<{
     sessionId: string;
     url: string;
@@ -280,10 +333,13 @@ class CustomerPortalService {
     }
 
     try {
-      const session = await this.stripe.billingPortal.sessions.create(sessionParams);
-      
+      const session = await this.stripe.billingPortal.sessions.create(
+        sessionParams,
+      );
+
       // Calculate expiration time (Stripe portal sessions expire after 24 hours)
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+        .toISOString();
 
       return {
         sessionId: session.id,
@@ -305,7 +361,7 @@ class CustomerPortalService {
     userId: string,
     customerId: string,
     sessionId: string,
-    metadata: Record<string, unknown>
+    metadata: Record<string, unknown>,
   ): Promise<void> {
     // In production, this would go to an audit log table
     console.log('CUSTOMER_PORTAL_ACCESS:', {
@@ -323,13 +379,13 @@ class CustomerPortalService {
   getAllowedDomains(): string[] {
     const appUrl = Deno.env.get('APP_URL') || 'http://localhost:3000';
     const allowedDomains = [new URL(appUrl).hostname];
-    
+
     // Add additional allowed domains from environment
     const additionalDomains = Deno.env.get('ALLOWED_RETURN_DOMAINS');
     if (additionalDomains) {
-      allowedDomains.push(...additionalDomains.split(',').map(d => d.trim()));
+      allowedDomains.push(...additionalDomains.split(',').map((d) => d.trim()));
     }
-    
+
     return allowedDomains;
   }
 }
@@ -363,7 +419,7 @@ serve(async (req) => {
           ...securityHeaders,
           'Allow': 'POST, OPTIONS',
         },
-      }
+      },
     );
   }
 
@@ -388,14 +444,15 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
     const token = authHeader.substring(7);
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await portalService.supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await portalService.supabase
+      .auth.getUser(token);
 
     if (userError || !user) {
       return new Response(
@@ -410,15 +467,19 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
     // Check rate limiting
-    const rateLimitResult = CustomerPortalRateLimiter.canCreatePortalSession(user.id);
+    const rateLimitResult = CustomerPortalRateLimiter.canCreatePortalSession(
+      user.id,
+    );
     if (!rateLimitResult.allowed) {
-      const retryAfter = Math.ceil((rateLimitResult.resetTime! - Date.now()) / 1000);
-      
+      const retryAfter = Math.ceil(
+        (rateLimitResult.resetTime! - Date.now()) / 1000,
+      );
+
       return new Response(
         JSON.stringify({
           error: {
@@ -438,7 +499,7 @@ serve(async (req) => {
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': rateLimitResult.resetTime!.toString(),
           },
-        }
+        },
       );
     }
 
@@ -462,7 +523,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
@@ -482,14 +543,19 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
     // Validate return URL domain if provided
     if (validation.sanitized.returnUrl) {
       const allowedDomains = portalService.getAllowedDomains();
-      if (!CustomerPortalValidator.validateReturnUrlDomain(validation.sanitized.returnUrl, allowedDomains)) {
+      if (
+        !CustomerPortalValidator.validateReturnUrlDomain(
+          validation.sanitized.returnUrl,
+          allowedDomains,
+        )
+      ) {
         return new Response(
           JSON.stringify({
             error: {
@@ -503,23 +569,34 @@ serve(async (req) => {
           {
             status: 400,
             headers: { ...corsHeaders, ...securityHeaders },
-          }
+          },
         );
       }
     }
 
     // Ensure user has Stripe customer
-    const customerId = await portalService.ensureStripeCustomer(user.id, user.email!);
+    const customerId = await portalService.ensureStripeCustomer(
+      user.id,
+      user.email!,
+    );
 
     // Create customer portal session
-    const portalSession = await portalService.createPortalSession(customerId, validation.sanitized);
+    const portalSession = await portalService.createPortalSession(
+      customerId,
+      validation.sanitized,
+    );
 
     // Log portal access for audit
-    await portalService.logPortalAccess(user.id, customerId, portalSession.sessionId, {
-      requestId,
-      returnUrl: validation.sanitized.returnUrl,
-      userAgent: req.headers.get('user-agent'),
-    });
+    await portalService.logPortalAccess(
+      user.id,
+      customerId,
+      portalSession.sessionId,
+      {
+        requestId,
+        returnUrl: validation.sanitized.returnUrl,
+        userAgent: req.headers.get('user-agent'),
+      },
+    );
 
     // Prepare response
     const response: CreateCustomerPortalResponse = {
@@ -539,9 +616,8 @@ serve(async (req) => {
           'X-Request-ID': requestId,
           'X-RateLimit-Remaining': rateLimitResult.remaining?.toString() || '0',
         },
-      }
+      },
     );
-
   } catch (error) {
     console.error('Customer portal creation error:', error);
 
@@ -552,7 +628,9 @@ serve(async (req) => {
           error: {
             code: 'EXTERNAL_SERVICE_ERROR',
             message: 'Payment service error',
-            details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+            details: Deno.env.get('NODE_ENV') === 'development'
+              ? error.message
+              : undefined,
           },
           timestamp: new Date().toISOString(),
           requestId,
@@ -560,7 +638,7 @@ serve(async (req) => {
         {
           status: 502,
           headers: { ...corsHeaders, ...securityHeaders },
-        }
+        },
       );
     }
 
@@ -569,7 +647,9 @@ serve(async (req) => {
         error: {
           code: 'INTERNAL_ERROR',
           message: 'Internal server error',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+          details: Deno.env.get('NODE_ENV') === 'development'
+            ? error.message
+            : undefined,
         },
         timestamp: new Date().toISOString(),
         requestId,
@@ -577,7 +657,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, ...securityHeaders },
-      }
+      },
     );
   }
 });

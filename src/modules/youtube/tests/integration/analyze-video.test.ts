@@ -1,9 +1,8 @@
 // Integration tests for YouTube video analysis endpoint
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { TestDatabaseManager } from '@/testing/database-manager';
-import { TEST_CONSTANTS } from '@/testing/constants';
 
 const BASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const testDb = new TestDatabaseManager();
@@ -183,7 +182,9 @@ describe('YouTube Video Analysis Integration', () => {
           error: {
             code: 'VALIDATION_ERROR',
             message: expect.any(String),
-            details: expect.arrayContaining(['videoUrl is required and must be a string']),
+            details: expect.arrayContaining([
+              'videoUrl is required and must be a string',
+            ]),
           },
         });
       });
@@ -203,7 +204,9 @@ describe('YouTube Video Analysis Integration', () => {
             .expect(400);
 
           expect(response.body.error.code).toBe('VALIDATION_ERROR');
-          expect(response.body.error.details).toContain('Invalid YouTube URL format');
+          expect(response.body.error.details).toContain(
+            'Invalid YouTube URL format',
+          );
         }
       });
 
@@ -289,7 +292,7 @@ describe('YouTube Video Analysis Integration', () => {
         );
 
         const responses = await Promise.all(requests);
-        const rateLimited = responses.filter(r => r.status === 429);
+        const rateLimited = responses.filter((r) => r.status === 429);
 
         expect(rateLimited.length).toBeGreaterThan(0);
         expect(rateLimited[0].body.error.code).toBe('RATE_LIMIT_EXCEEDED');

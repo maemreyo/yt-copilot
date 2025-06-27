@@ -2,6 +2,13 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
+import { createCorsResponse, createCorsSuccessResponse } from '@/cors';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
 
 /**
  * Login request interface
@@ -75,10 +82,10 @@ class SessionManagementService {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
       {
         auth: { persistSession: false },
-        global: { 
-          headers: { 'x-application-name': 'session-service' } 
-        }
-      }
+        global: {
+          headers: { 'x-application-name': 'session-service' },
+        },
+      },
     );
 
     // Regular client for auth operations
@@ -86,15 +93,18 @@ class SessionManagementService {
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_ANON_KEY') || '',
       {
-        auth: { persistSession: false }
-      }
+        auth: { persistSession: false },
+      },
     );
   }
 
   /**
    * Create user session (login)
    */
-  async createSession(loginRequest: LoginRequest, request: Request): Promise<LoginResponse> {
+  async createSession(
+    loginRequest: LoginRequest,
+    request: Request,
+  ): Promise<LoginResponse> {
     try {
       // Validate login request
       const validation = this.validateLoginRequest(loginRequest);
@@ -103,10 +113,11 @@ class SessionManagementService {
       }
 
       // Authenticate user with Supabase Auth
-      const { data: authData, error: authError } = await this.supabaseAuth.auth.signInWithPassword({
-        email: loginRequest.email,
-        password: loginRequest.password
-      });
+      const { data: authData, error: authError } = await this.supabaseAuth.auth
+        .signInWithPassword({
+          email: loginRequest.email,
+          password: loginRequest.password,
+        });
 
       if (authError) {
         console.error('Authentication failed:', authError);
@@ -138,14 +149,19 @@ class SessionManagementService {
         metadata: JSON.stringify({
           deviceInfo: loginRequest.deviceInfo,
           loginTime: new Date().toISOString(),
-          rememberMe: loginRequest.rememberMe || false
+          rememberMe: loginRequest.rememberMe || false,
         }),
         created_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + (loginRequest.rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000)).toISOString(),
+        expires_at: new Date(
+          Date.now() +
+            (loginRequest.rememberMe
+              ? 30 * 24 * 60 * 60 * 1000
+              : 24 * 60 * 60 * 1000),
+        ).toISOString(),
         last_accessed_at: new Date().toISOString(),
         ip_address: ipAddress,
         user_agent: userAgent,
-        is_active: true
+        is_active: true,
       };
 
       const { error: sessionError } = await this.supabase
@@ -161,7 +177,7 @@ class SessionManagementService {
       await this.logSessionEvent(authData.user.id, 'login', {
         ipAddress,
         userAgent,
-        sessionId: sessionData.id
+        sessionId: sessionData.id,
       });
 
       return {
@@ -175,10 +191,10 @@ class SessionManagementService {
             id: authData.user.id,
             email: authData.user.email || '',
             name: profile?.name || authData.user.user_metadata?.name || '',
-            role: profile?.role || 'user'
-          }
+            role: profile?.role || 'user',
+          },
         },
-        message: 'Login successful'
+        message: 'Login successful',
       };
     } catch (error) {
       console.error('Error creating session:', error);
@@ -189,7 +205,10 @@ class SessionManagementService {
   /**
    * Revoke current session (logout)
    */
-  async revokeSession(sessionId: string, request: Request): Promise<{ success: boolean; message: string }> {
+  async revokeSession(
+    sessionId: string,
+    request: Request,
+  ): Promise<{ success: boolean; message: string }> {
     try {
       // Get session from database
       const { data: session, error: sessionError } = await this.supabase
@@ -209,7 +228,7 @@ class SessionManagementService {
         .update({
           is_active: false,
           revoked_at: new Date().toISOString(),
-          revoked_reason: 'User logout'
+          revoked_reason: 'User logout',
         })
         .eq('id', sessionId);
 
@@ -222,12 +241,12 @@ class SessionManagementService {
       await this.logSessionEvent(session.user_id, 'logout', {
         sessionId,
         ipAddress: this.extractIpAddress(request),
-        userAgent: request.headers.get('User-Agent')
+        userAgent: request.headers.get('User-Agent'),
       });
 
       return {
         success: true,
-        message: 'Session revoked successfully'
+        message: 'Session revoked successfully',
       };
     } catch (error) {
       console.error('Error revoking session:', error);
@@ -238,7 +257,10 @@ class SessionManagementService {
   /**
    * List user sessions
    */
-  async listUserSessions(userId: string, currentSessionId?: string): Promise<SessionInfo[]> {
+  async listUserSessions(
+    userId: string,
+    currentSessionId?: string,
+  ): Promise<SessionInfo[]> {
     try {
       const { data: sessions, error } = await this.supabase
         .from('user_sessions')
@@ -261,9 +283,11 @@ class SessionManagementService {
         lastAccessedAt: session.last_accessed_at,
         ipAddress: session.ip_address,
         userAgent: session.user_agent,
-        deviceInfo: session.metadata ? JSON.parse(session.metadata).deviceInfo : undefined,
+        deviceInfo: session.metadata
+          ? JSON.parse(session.metadata).deviceInfo
+          : undefined,
         isActive: session.is_active,
-        isCurrent: session.id === currentSessionId
+        isCurrent: session.id === currentSessionId,
       }));
     } catch (error) {
       console.error('Error listing user sessions:', error);
@@ -299,23 +323,35 @@ class SessionManagementService {
     }
 
     // Validate rememberMe
-    if (request.rememberMe !== undefined && typeof request.rememberMe !== 'boolean') {
+    if (
+      request.rememberMe !== undefined &&
+      typeof request.rememberMe !== 'boolean'
+    ) {
       errors.push('RememberMe must be a boolean');
     }
 
     // Validate deviceInfo
     if (request.deviceInfo !== undefined) {
-      if (typeof request.deviceInfo !== 'object' || request.deviceInfo === null) {
+      if (
+        typeof request.deviceInfo !== 'object' || request.deviceInfo === null
+      ) {
         errors.push('DeviceInfo must be an object');
       } else {
         const deviceInfo = request.deviceInfo;
-        if (deviceInfo.name !== undefined && typeof deviceInfo.name !== 'string') {
+        if (
+          deviceInfo.name !== undefined && typeof deviceInfo.name !== 'string'
+        ) {
           errors.push('DeviceInfo name must be a string');
         }
-        if (deviceInfo.type !== undefined && typeof deviceInfo.type !== 'string') {
+        if (
+          deviceInfo.type !== undefined && typeof deviceInfo.type !== 'string'
+        ) {
           errors.push('DeviceInfo type must be a string');
         }
-        if (deviceInfo.browser !== undefined && typeof deviceInfo.browser !== 'string') {
+        if (
+          deviceInfo.browser !== undefined &&
+          typeof deviceInfo.browser !== 'string'
+        ) {
           errors.push('DeviceInfo browser must be a string');
         }
         if (deviceInfo.os !== undefined && typeof deviceInfo.os !== 'string') {
@@ -326,7 +362,7 @@ class SessionManagementService {
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -346,7 +382,7 @@ class SessionManagementService {
       'x-forwarded-for',
       'x-real-ip',
       'x-client-ip',
-      'cf-connecting-ip'
+      'cf-connecting-ip',
     ];
 
     for (const header of headers) {
@@ -363,9 +399,9 @@ class SessionManagementService {
    * Log session event for audit trail
    */
   private async logSessionEvent(
-    userId: string, 
-    action: string, 
-    details: Record<string, unknown>
+    userId: string,
+    action: string,
+    details: Record<string, unknown>,
   ): Promise<void> {
     try {
       const auditEntry = {
@@ -375,9 +411,9 @@ class SessionManagementService {
         resource_id: details.sessionId || 'unknown',
         details: JSON.stringify({
           ...details,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         }),
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       };
 
       await this.supabase
@@ -390,19 +426,7 @@ class SessionManagementService {
   }
 }
 
-/**
- * Security headers for responses
- */
-const securityHeaders = {
-  'Content-Type': 'application/json',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0'
-};
+// Security headers are now imported from @/shared-security
 
 /**
  * Extract session ID from request
@@ -425,7 +449,9 @@ function extractSessionId(request: Request): string | null {
 /**
  * Extract user ID from JWT token
  */
-async function extractUserFromRequest(request: Request): Promise<{ userId: string; sessionId?: string } | null> {
+async function extractUserFromRequest(
+  request: Request,
+): Promise<{ userId: string; sessionId?: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -433,11 +459,11 @@ async function extractUserFromRequest(request: Request): Promise<{ userId: strin
     }
 
     const token = authHeader.substring(7);
-    
+
     // Create Supabase client to verify token
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -447,7 +473,7 @@ async function extractUserFromRequest(request: Request): Promise<{ userId: strin
 
     return {
       userId: user.id,
-      sessionId: token.substring(0, 32)
+      sessionId: token.substring(0, 32),
     };
   } catch (error) {
     console.error('Error extracting user from request:', error);
@@ -459,17 +485,12 @@ async function extractUserFromRequest(request: Request): Promise<{ userId: strin
  * Main serve function
  */
 serve(async (req) => {
+  // Generate a request ID for tracking
+  const requestId = crypto.randomUUID();
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        ...securityHeaders,
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Session-ID',
-      },
-    });
+    return createCorsResponse();
   }
 
   try {
@@ -485,200 +506,161 @@ serve(async (req) => {
     } else if (req.method === 'GET' && path.endsWith('/sessions')) {
       return await handleListSessions(req, service);
     } else {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'NOT_FOUND',
-            message: 'Endpoint not found',
-            availableEndpoints: [
-              'POST /login - Create user session',
-              'DELETE /logout - Revoke current session',
-              'GET /sessions - List user sessions'
-            ],
-          },
-          timestamp: new Date().toISOString(),
-        }),
+      throw createAppError(
+        ErrorType.NOT_FOUND_ERROR,
+        'Endpoint not found',
         {
-          status: 404,
-          headers: securityHeaders,
-        }
+          code: 'NOT_FOUND',
+          availableEndpoints: [
+            'POST /login - Create user session',
+            'DELETE /logout - Revoke current session',
+            'GET /sessions - List user sessions',
+          ],
+        },
+        requestId,
       );
     }
   } catch (error) {
     console.error('Session management error:', error);
-    
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
-        },
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 500,
-        headers: securityHeaders,
-      }
-    );
+
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 });
 
 /**
  * Handle login request
  */
-async function handleLogin(req: Request, service: SessionManagementService): Promise<Response> {
+async function handleLogin(
+  req: Request,
+  service: SessionManagementService,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+
   try {
     const body = await req.json();
     const loginResponse = await service.createSession(body, req);
 
-    return new Response(
-      JSON.stringify({
-        ...loginResponse,
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: {
-          ...securityHeaders,
-          'Access-Control-Allow-Origin': '*',
-        },
-      }
-    );
-  } catch (error) {
+    return createCorsSuccessResponse(loginResponse, 200, requestId);
+  } catch (error: any) {
     console.error('Error handling login:', error);
-    
+
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
     const isValidationError = error.message.includes('Validation failed');
     const isAuthError = error.message.includes('Invalid email or password');
-    
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: isValidationError ? 'VALIDATION_ERROR' : 
-                 isAuthError ? 'AUTHENTICATION_ERROR' : 'LOGIN_ERROR',
-          message: error.message,
-        },
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: isValidationError ? 400 : isAuthError ? 401 : 500,
-        headers: securityHeaders,
-      }
-    );
+
+    if (isValidationError) {
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        error.message,
+        { code: 'VALIDATION_ERROR' },
+        requestId,
+      );
+    } else if (isAuthError) {
+      throw createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        error.message,
+        { code: 'AUTHENTICATION_ERROR' },
+        requestId,
+      );
+    } else {
+      // For any other unknown errors
+      const appError = handleUnknownError(error, requestId);
+      return appError.toHttpResponse();
+    }
   }
 }
 
 /**
  * Handle logout request
  */
-async function handleLogout(req: Request, service: SessionManagementService): Promise<Response> {
+async function handleLogout(
+  req: Request,
+  service: SessionManagementService,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+
   try {
     const sessionId = extractSessionId(req);
     if (!sessionId) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'SESSION_ID_REQUIRED',
-            message: 'Session ID required for logout',
-          },
-          timestamp: new Date().toISOString(),
-        }),
-        {
-          status: 400,
-          headers: securityHeaders,
-        }
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        'Session ID required for logout',
+        { code: 'SESSION_ID_REQUIRED' },
+        requestId,
       );
     }
 
     const result = await service.revokeSession(sessionId, req);
 
-    return new Response(
-      JSON.stringify({
-        ...result,
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: {
-          ...securityHeaders,
-          'Access-Control-Allow-Origin': '*',
-        },
-      }
-    );
+    return createCorsSuccessResponse(result, 200, requestId);
   } catch (error) {
     console.error('Error handling logout:', error);
-    
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'LOGOUT_ERROR',
-          message: 'Failed to logout',
-          details: error.message,
-        },
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 500,
-        headers: securityHeaders,
-      }
-    );
+
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 }
 
 /**
  * Handle list sessions request
  */
-async function handleListSessions(req: Request, service: SessionManagementService): Promise<Response> {
+async function handleListSessions(
+  req: Request,
+  service: SessionManagementService,
+): Promise<Response> {
+  const requestId = crypto.randomUUID();
+
   try {
     const userInfo = await extractUserFromRequest(req);
     if (!userInfo) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_REQUIRED',
-            message: 'Valid authentication token required',
-          },
-          timestamp: new Date().toISOString(),
-        }),
-        {
-          status: 401,
-          headers: securityHeaders,
-        }
+      throw createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        'Valid authentication token required',
+        { code: 'AUTHENTICATION_REQUIRED' },
+        requestId,
       );
     }
 
-    const sessions = await service.listUserSessions(userInfo.userId, userInfo.sessionId);
+    const sessions = await service.listUserSessions(
+      userInfo.userId,
+      userInfo.sessionId,
+    );
 
-    return new Response(
-      JSON.stringify({
+    return createCorsSuccessResponse(
+      {
         sessions,
         count: sessions.length,
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: {
-          ...securityHeaders,
-          'Access-Control-Allow-Origin': '*',
-        },
-      }
+      },
+      200,
+      requestId,
     );
   } catch (error) {
     console.error('Error handling list sessions:', error);
-    
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'SESSIONS_LIST_ERROR',
-          message: 'Failed to list sessions',
-          details: error.message,
-        },
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 500,
-        headers: securityHeaders,
-      }
-    );
+
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 }

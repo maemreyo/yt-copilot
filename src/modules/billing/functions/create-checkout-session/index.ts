@@ -1,7 +1,7 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
-import { corsHeaders } from '_shared/cors.ts';
+import { createCorsResponse } from '@/cors';
 
 interface CreateCheckoutSessionRequest {
   priceId: string;
@@ -16,7 +16,6 @@ interface CheckoutSessionResponse {
   expiresAt: string;
 }
 
-
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -25,7 +24,10 @@ serve(async (req: Request) => {
 
   // Validate HTTP method
   if (req.method !== 'POST') {
-    return createErrorResponse('Method not allowed. Only POST requests are supported.', 405);
+    return createErrorResponse(
+      'Method not allowed. Only POST requests are supported.',
+      405,
+    );
   }
 
   try {
@@ -42,7 +44,7 @@ serve(async (req: Request) => {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Supabase environment variables are not set');
     }
@@ -52,17 +54,25 @@ serve(async (req: Request) => {
     // Extract and validate JWT token
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return createErrorResponse('Missing or invalid authorization header', 401);
+      return createErrorResponse(
+        'Missing or invalid authorization header',
+        401,
+      );
     }
 
     const token = authHeader.split(' ')[1];
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await supabase.auth.getUser(
+      token,
+    );
 
     if (userError || !user) {
       console.error('Auth error:', userError);
-      return createErrorResponse('Unauthorized - Invalid or expired token', 401);
+      return createErrorResponse(
+        'Unauthorized - Invalid or expired token',
+        401,
+      );
     }
 
     // Parse and validate request body
@@ -76,9 +86,9 @@ serve(async (req: Request) => {
     const validation = validateRequest(requestData);
     if (!validation.isValid) {
       return createErrorResponse(
-        'Validation failed', 
-        400, 
-        { errors: validation.errors }
+        'Validation failed',
+        400,
+        { errors: validation.errors },
       );
     }
 
@@ -123,7 +133,7 @@ serve(async (req: Request) => {
 
     // Create checkout session
     const defaultAppUrl = Deno.env.get('APP_URL') || 'http://localhost:3000';
-    
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       line_items: [
@@ -133,7 +143,8 @@ serve(async (req: Request) => {
         },
       ],
       mode: 'subscription',
-      success_url: successUrl || `${defaultAppUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: successUrl ||
+        `${defaultAppUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${defaultAppUrl}/billing/cancel`,
       subscription_data: {
         metadata: {
@@ -157,7 +168,6 @@ serve(async (req: Request) => {
       customerId,
       expiresAt: new Date(session.expires_at * 1000).toISOString(),
     });
-
   } catch (error) {
     console.error('Error in create-checkout-session function:', error);
 
