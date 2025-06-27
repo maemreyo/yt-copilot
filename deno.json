@@ -1,7 +1,7 @@
 {
+  "nodeModulesDir": "auto",
   "compilerOptions": {
-    "allowJs": true,
-    "lib": ["deno.window"],
+    "lib": ["deno.window", "dom", "esnext"],
     "strict": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,
@@ -11,7 +11,6 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react"
   },
-  "nodeModulesDir": true,
   "lint": {
     "rules": {
       "tags": ["recommended"]
@@ -28,7 +27,6 @@
     "exclude": ["node_modules/", "dist/", "build/"]
   },
   "importMap": "./import_map.json",
-  "config": "./tsconfig.json",
   "tasks": {
     "dev": "deno run --allow-net --allow-read --allow-env --watch main.ts",
     "test": "deno test --allow-all",

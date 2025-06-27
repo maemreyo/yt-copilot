@@ -4,13 +4,13 @@ import {
   CreateNoteSchema,
   sanitizeTags,
   validateRequest,
-} from '_shared/validators.ts';
+} from '../../_shared/validators.ts';
 import type {
   CreateNoteRequest,
   ErrorResponse,
   SuccessResponse,
   VideoNote,
-} from '_shared/types.ts';
+} from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {

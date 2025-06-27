@@ -16,12 +16,12 @@ import {
   createCorsResponse,
   createCorsSuccessResponse,
 } from '@/cors';
-import { Logger } from '@/logging';
+import { Logger, LogLevel } from '@/logging';
 import { CacheManager, GlobalCaches } from '@/cache';
 import { createRateLimiter } from '@/rate-limiting';
 
 // Import Layer 2 utilities
-import { DatabaseService } from '@/database';
+import { DatabaseService } from './database-service';
 import { AuditLogger } from '@/audit-logging';
 
 /**
@@ -67,7 +67,7 @@ class EnhancedSubscriptionService {
 
     this.logger = new Logger({
       service: 'subscription-service',
-      level: 'info',
+      level: LogLevel.INFO,
       enablePerformanceTracking: true,
     });
 
