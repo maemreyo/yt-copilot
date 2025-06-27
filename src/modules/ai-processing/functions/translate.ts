@@ -1,12 +1,12 @@
 
 import { serve } from 'std/http/server.ts';
-import { z } from 'zod';
+import { z } from 'https://deno.sh/zod@v3.22.4';
 import { createRateLimiter } from '@/rate-limiting';
 import { ErrorType } from '@/errors';
 import { AuthService } from '@/auth';
 import { TranslateRequestSchema, type TranslateResponse } from '../types';
-import { translationClient, wordsAPIClient } from '../utils/translation-client';
-import { aiCacheManager } from '../utils/cache-manager';
+import { translationClient, wordsAPIClient } from '../utils/translation-client.ts';
+import { aiCacheManager } from '../utils/cache-manager.ts';
 
 // Rate limiting configuration
 const rateLimiterFree = createRateLimiter({

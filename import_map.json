@@ -7,6 +7,16 @@
     
     "_shared/": "./supabase/_internal/functions/_shared/",
     "../_shared/": "./supabase/_internal/functions/_shared/",
-    "./_shared/": "./supabase/_internal/functions/_shared/"
+    "./_shared/": "./supabase/_internal/functions/_shared/",
+    
+    "@/rate-limiting": "./src/shared/utils/rate-limiting.ts",
+    "@/errors": "./src/shared/utils/errors.ts",
+    "@/auth": "./src/shared/utils/auth.ts",
+    "@/logging": "./src/shared/utils/logging.ts",
+    "@/cache": "./src/shared/utils/cache.ts",
+    "@/security": "./src/shared/utils/security.ts",
+    "@/environment": "./src/shared/config/environment.ts",
+    "@/config": "./src/shared/config/index.ts",
+    "@/validation": "./src/shared/utils/validation.ts"
   }
 }

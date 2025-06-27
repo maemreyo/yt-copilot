@@ -124,6 +124,50 @@ export interface AnalyzeContentResponse {
 }
 
 // ============================================
+// Counter-Perspective Types
+// ============================================
+
+export const FindCounterpointsRequestSchema = z.object({
+  video_id: z.string().uuid(),
+  main_topics: z.array(z.string()).optional(),
+  original_perspective: z.string().optional(),
+  user_id: z.string().uuid()
+});
+
+export type FindCounterpointsRequest = z.infer<typeof FindCounterpointsRequestSchema>;
+
+export interface CounterPerspectiveSource {
+  source: string;
+  title: string;
+  url: string;
+  relevance_score: number;
+  credibility_score: number;
+  reasoning: string;
+}
+
+export interface FindCounterpointsResponse {
+  video_id: string;
+  counter_perspectives: CounterPerspectiveSource[];
+  search_keywords: string[];
+  tokens_used: number;
+  cached: boolean;
+  model: string;
+}
+
+export interface CounterPerspectiveRecord {
+  id: string;
+  video_id: string;
+  user_id: string;
+  main_topics: string[];
+  original_perspective: string;
+  counter_perspectives: CounterPerspectiveSource[];
+  search_keywords: string[];
+  model: string;
+  tokens_used?: number;
+  created_at: string;
+}
+
+// ============================================
 // Database Types
 // ============================================
 
@@ -172,8 +216,8 @@ export interface ContentAnalysisRecord {
 
 export interface AIProcessingError {
   code: 'TRANSLATION_FAILED' | 'SUMMARIZATION_FAILED' | 'ANALYSIS_FAILED' | 
-        'QUOTA_EXCEEDED' | 'INVALID_LANGUAGE' | 'VIDEO_NOT_FOUND' |
-        'TRANSCRIPT_NOT_FOUND' | 'MODEL_ERROR';
+        'COUNTERPOINTS_FAILED' | 'QUOTA_EXCEEDED' | 'INVALID_LANGUAGE' | 
+        'VIDEO_NOT_FOUND' | 'TRANSCRIPT_NOT_FOUND' | 'MODEL_ERROR';
   message: string;
   details?: any;
 }

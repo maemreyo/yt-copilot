@@ -1,39 +1,33 @@
 import { serve } from 'std/http/server.ts';
-import { z } from 'https://deno.sh/zod@v3.22.4';
+import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 import { createRateLimiter } from '@/rate-limiting';
 import { createAppError, ErrorType } from '@/errors';
 import { AuthService } from '@/auth';
 import { Logger } from '@/logging';
-import { AnalyzeContentRequestSchema, type AnalyzeContentResponse } from '../types';
-import { openAIClient } from '../utils/openai-client.ts';
-import { aiCacheManager } from '../utils/cache-manager.ts';
+import { FindCounterpointsRequestSchema, type FindCounterpointsResponse } from '../types';
+import { openAIClient } from '../utils/openai-client';
+import { aiCacheManager } from '../utils/cache-manager';
 
-const logger = new Logger({ service: 'analyze-content-function' });
+const logger = new Logger({ service: 'find-counterpoints-function' });
 
-// Rate limiting configuration - more restrictive for analysis
+// Rate limiting configuration - more restrictive for premium features
 const rateLimiterFree = createRateLimiter({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  maxRequests: parseInt(Deno.env.get('ANALYSIS_RATE_LIMIT_FREE') || '3'),
+  maxRequests: parseInt(Deno.env.get('COUNTERPOINTS_RATE_LIMIT_FREE') || '1'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `analyze:${auth}` : `analyze:${request.headers.get('x-real-ip')}`;
+    return auth ? `counterpoints:${auth}` : `counterpoints:${request.headers.get('x-real-ip')}`;
   }
 });
 
 const rateLimiterPremium = createRateLimiter({
   windowMs: 24 * 60 * 60 * 1000, // 24 hours
-  maxRequests: parseInt(Deno.env.get('ANALYSIS_RATE_LIMIT_PREMIUM') || '20'),
+  maxRequests: parseInt(Deno.env.get('COUNTERPOINTS_RATE_LIMIT_PREMIUM') || '10'),
   keyGenerator: (request) => {
     const auth = request.headers.get('authorization');
-    return auth ? `analyze:${auth}` : `analyze:${request.headers.get('x-real-ip')}`;
+    return auth ? `counterpoints:${auth}` : `counterpoints:${request.headers.get('x-real-ip')}`;
   }
-});
-
-const requestSchema = z.object({
-  video_id: z.string().uuid(),
-  analysis_type: z.enum(['fact_opinion', 'sentiment', 'bias']),
-  segments: z.array(z.number()).optional()
 });
 
 const corsHeaders = {
@@ -82,7 +76,7 @@ serve(async (request) => {
 
   // Parse and validate request
   const body = await request.json();
-  const validation = requestSchema.safeParse({
+  const validation = FindCounterpointsRequestSchema.safeParse({
     ...body,
     user_id: user.id
   });
@@ -104,19 +98,18 @@ serve(async (request) => {
     );
   }
 
-  const { video_id, analysis_type, segments } = validation.data;
+  const { video_id, main_topics, original_perspective, user_id } = validation.data;
 
-  // Check if user has premium features for advanced analysis
+  // Check if user has premium features (counter-perspective is premium-only)
   const isPremium = user.subscription_tier === 'premium' || user.subscription_tier === 'pro';
   
-  // Some analysis types might be premium-only
-  if (analysis_type === 'bias' && !isPremium) {
+  if (!isPremium) {
     return new Response(
       JSON.stringify({
         success: false,
         error: {
           code: 'PREMIUM_REQUIRED',
-          message: 'Bias analysis is a premium feature. Please upgrade your subscription.'
+          message: 'Counter-perspective discovery is a premium feature. Please upgrade your subscription.'
         }
       }),
       { 
@@ -138,8 +131,8 @@ serve(async (request) => {
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
           message: isPremium 
-            ? `Premium rate limit exceeded: ${Deno.env.get('ANALYSIS_RATE_LIMIT_PREMIUM')} analyses per day`
-            : `Free rate limit exceeded: ${Deno.env.get('ANALYSIS_RATE_LIMIT_FREE')} analyses per day. Upgrade to premium for more.`
+            ? `Premium rate limit exceeded: ${Deno.env.get('COUNTERPOINTS_RATE_LIMIT_PREMIUM')} requests per day`
+            : `Free rate limit exceeded: ${Deno.env.get('COUNTERPOINTS_RATE_LIMIT_FREE')} request per day. Upgrade to premium for more.`
         }
       }),
       { 
@@ -153,26 +146,19 @@ serve(async (request) => {
 
   try {
     // Check cache first
-    const cachedAnalysis = await aiCacheManager.getCachedAnalysis(
-      video_id,
-      analysis_type
-    );
+    const cachedCounterpoints = await aiCacheManager.getCachedCounterPerspectives(video_id);
 
-    if (cachedAnalysis && (!segments || segments.length === 0)) {
-      const response: AnalyzeContentResponse = {
-        video_id: cachedAnalysis.video_id,
-        analysis_type: cachedAnalysis.analysis_type as any,
-        analysis: cachedAnalysis.analysis_data,
-        suggestions: [], // Generate fresh suggestions if needed
-        tokens_used: cachedAnalysis.tokens_used || 0,
+    if (cachedCounterpoints) {
+      const response: FindCounterpointsResponse = {
+        video_id,
+        counter_perspectives: cachedCounterpoints.counter_perspectives,
+        search_keywords: cachedCounterpoints.search_keywords,
+        tokens_used: cachedCounterpoints.tokens_used || 0,
         cached: true,
-        model: cachedAnalysis.model
+        model: cachedCounterpoints.model
       };
 
-      logger.info('Returning cached analysis', { 
-        video_id, 
-        analysis_type 
-      });
+      logger.info('Returning cached counter-perspectives', { video_id });
 
       return new Response(
         JSON.stringify({ success: true, data: response }),
@@ -203,7 +189,7 @@ serve(async (request) => {
       .from('user_video_history')
       .select('id')
       .eq('video_id', video_id)
-      .eq('user_id', user.id)
+      .eq('user_id', user_id)
       .single();
 
     if (!userHistory) {
@@ -230,91 +216,61 @@ serve(async (request) => {
     }
 
     // Extract text from transcript segments
-    let transcriptText: string;
-    let selectedSegments = transcript.segments;
-
-    if (segments && segments.length > 0) {
-      // Filter to only requested segments
-      selectedSegments = transcript.segments.filter((_: any, index: number) => 
-        segments.includes(index)
-      );
-      
-      if (selectedSegments.length === 0) {
-        throw createAppError(
-          ErrorType.VALIDATION_ERROR,
-          'Invalid segment indices provided',
-          { segments, totalSegments: transcript.segments.length }
-        );
-      }
-    }
-
-    transcriptText = selectedSegments
+    const transcriptText = transcript.segments
       .map((segment: any) => segment.text)
       .join(' ');
 
-    // Perform content analysis using OpenAI
-    logger.info('Analyzing content with OpenAI', {
+    // Find counter-perspectives using OpenAI
+    logger.info('Finding counter-perspectives with OpenAI', {
       video_id,
-      analysis_type,
       transcript_length: transcriptText.length,
-      segment_count: selectedSegments.length
+      main_topics_provided: !!main_topics,
+      original_perspective_provided: !!original_perspective
     });
 
-    const { analysis, tokensUsed } = await openAIClient.analyzeContent(
+    const { 
+      counterPerspectives, 
+      searchKeywords, 
+      tokensUsed 
+    } = await openAIClient.findCounterPerspectives(
+      video.title,
       transcriptText,
-      analysis_type,
-      segments
+      main_topics,
+      original_perspective
     );
 
-    // Generate counter-perspective suggestions for fact/opinion analysis
-    let suggestions: string[] = [];
-    if (analysis_type === 'fact_opinion' && isPremium) {
-      // Extract main topic from video title and opinions
-      const mainTopic = video.title;
-      const mainOpinions = analysis.opinions
-        .slice(0, 3)
-        .map(op => op.text)
-        .join('; ');
+    // Extract main topics and original perspective from the response if not provided
+    const extractedMainTopics = main_topics || 
+      (counterPerspectives[0]?.main_topics || ['general']);
+    
+    const extractedOriginalPerspective = original_perspective || 
+      (counterPerspectives[0]?.original_perspective || 'No clear perspective detected');
 
-      if (mainOpinions) {
-        const { suggestions: counterSuggestions } = await openAIClient.generateCounterPerspectives(
-          mainTopic,
-          mainOpinions
-        );
-        suggestions = counterSuggestions;
-      }
-    }
-
-    // Cache the analysis (only if no specific segments were requested)
-    if (!segments || segments.length === 0) {
-      await aiCacheManager.cacheAnalysis(
-        video_id,
-        user.id,
-        analysis_type,
-        analysis,
-        analysis.confidence_score,
-        Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
-        segments,
-        tokensUsed
-      );
-    }
+    // Cache the counter-perspectives
+    await aiCacheManager.cacheCounterPerspectives(
+      video_id,
+      user_id,
+      extractedMainTopics,
+      extractedOriginalPerspective,
+      counterPerspectives,
+      searchKeywords,
+      Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini',
+      tokensUsed
+    );
 
     // Log cost estimation
     const estimatedCost = openAIClient.estimateCost(tokensUsed);
-    logger.info('Analysis completed', {
+    logger.info('Counter-perspectives generation completed', {
       video_id,
-      analysis_type,
       tokensUsed,
       estimatedCost,
-      facts_found: analysis.facts.length,
-      opinions_found: analysis.opinions.length
+      perspectives_found: counterPerspectives.length
     });
 
-    const response: AnalyzeContentResponse = {
+    const response: FindCounterpointsResponse = {
       video_id,
-      analysis_type,
-      analysis,
-      suggestions,
+      counter_perspectives: counterPerspectives,
+      search_keywords: searchKeywords,
       tokens_used: tokensUsed,
       cached: false,
       model: Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini'
@@ -329,12 +285,12 @@ serve(async (request) => {
     );
 
   } catch (error: any) {
-    logger.error('Content analysis error:', error);
+    logger.error('Counter-perspectives generation error:', error);
     
     // Determine error code and status based on error type
-    let errorCode = 'ANALYSIS_FAILED';
+    let errorCode = 'COUNTERPOINTS_FAILED';
     let statusCode = 500;
-    let message = error.message || 'Failed to analyze content';
+    let message = error.message || 'Failed to generate counter-perspectives';
     
     if (error.type === ErrorType.NOT_FOUND) {
       errorCode = error.message.includes('transcript') ? 'TRANSCRIPT_NOT_FOUND' : 'VIDEO_NOT_FOUND';
@@ -369,13 +325,5 @@ serve(async (request) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
-  }
-}, {
-  name: 'analyze-content',
-  version: 'v1',
-  schema: requestSchema,
-  middleware: [],
-  rateLimit: {
-    enabled: false // We handle rate limiting internally based on user tier
   }
 });

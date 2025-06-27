@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     AI-powered processing endpoints for the YouTube Learning Co-pilot extension.
-    Includes translation, summarization, and content analysis features.
+    Includes translation, summarization, content analysis, and counter-perspective discovery features.
 
 servers:
   - url: https://your-project.supabase.co/functions/v1
@@ -30,7 +30,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/TranslateRequest'
+              $ref: "#/components/schemas/TranslateRequest"
             examples:
               basicTranslation:
                 summary: Basic translation
@@ -50,20 +50,20 @@ paths:
                   target_lang: "es"
                   context: "Financial institution"
       responses:
-        '200':
+        "200":
           description: Translation successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TranslateResponse'
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/RateLimitExceeded'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
+                $ref: "#/components/schemas/TranslateResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 
   /ai_summarize:
     post:
@@ -82,22 +82,22 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SummarizeRequest'
+              $ref: "#/components/schemas/SummarizeRequest"
       responses:
-        '200':
+        "200":
           description: Summary generated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SummarizeResponse'
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/VideoNotFound'
-        '429':
-          $ref: '#/components/responses/RateLimitExceeded'
+                $ref: "#/components/schemas/SummarizeResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/VideoNotFound"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
 
   /ai_analyze-content:
     post:
@@ -116,22 +116,68 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AnalyzeContentRequest'
+              $ref: "#/components/schemas/AnalyzeContentRequest"
       responses:
-        '200':
+        "200":
           description: Analysis completed successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnalyzeContentResponse'
-        '400':
-          $ref: '#/components/responses/ValidationError'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/VideoNotFound'
-        '429':
-          $ref: '#/components/responses/RateLimitExceeded'
+                $ref: "#/components/schemas/AnalyzeContentResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/VideoNotFound"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
+
+  /ai_find-counterpoints:
+    post:
+      summary: Find counter-perspectives
+      description: |
+        Discovers alternative viewpoints and counter-arguments to the content in a video.
+        Premium feature that helps users develop critical thinking skills.
+      operationId: findCounterpoints
+      tags:
+        - Critical Thinking
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FindCounterpointsRequest"
+            examples:
+              basicRequest:
+                summary: Basic request
+                value:
+                  video_id: "123e4567-e89b-12d3-a456-426614174000"
+              withTopics:
+                summary: With main topics
+                value:
+                  video_id: "123e4567-e89b-12d3-a456-426614174000"
+                  main_topics: ["climate change", "renewable energy"]
+                  original_perspective: "Renewable energy is too expensive to implement globally"
+      responses:
+        "200":
+          description: Counter-perspectives found successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindCounterpointsResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PremiumRequired"
+        "404":
+          $ref: "#/components/responses/VideoNotFound"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
 
 components:
   schemas:
@@ -149,12 +195,12 @@ components:
           example: "Hello world"
         source_lang:
           type: string
-          pattern: '^[a-z]{2}$'
+          pattern: "^[a-z]{2}$"
           description: Source language ISO 639-1 code (auto-detect if not provided)
           example: "en"
         target_lang:
           type: string
-          pattern: '^[a-z]{2}$'
+          pattern: "^[a-z]{2}$"
           description: Target language ISO 639-1 code
           example: "es"
         context:
@@ -183,7 +229,7 @@ components:
             definitions:
               type: array
               items:
-                $ref: '#/components/schemas/Definition'
+                $ref: "#/components/schemas/Definition"
             pronunciation:
               type: string
             cached:
@@ -220,7 +266,7 @@ components:
           enum: [brief, detailed, bullet_points]
         language:
           type: string
-          pattern: '^[a-z]{2}$'
+          pattern: "^[a-z]{2}$"
           default: "en"
         custom_prompt:
           type: string
@@ -242,7 +288,7 @@ components:
             language:
               type: string
             content:
-              $ref: '#/components/schemas/VideoSummaryContent'
+              $ref: "#/components/schemas/VideoSummaryContent"
             tokens_used:
               type: integer
             cached:
@@ -302,7 +348,7 @@ components:
             analysis_type:
               type: string
             analysis:
-              $ref: '#/components/schemas/ContentAnalysis'
+              $ref: "#/components/schemas/ContentAnalysis"
             suggestions:
               type: array
               items:
@@ -320,17 +366,17 @@ components:
         facts:
           type: array
           items:
-            $ref: '#/components/schemas/Fact'
+            $ref: "#/components/schemas/Fact"
         opinions:
           type: array
           items:
-            $ref: '#/components/schemas/Opinion'
+            $ref: "#/components/schemas/Opinion"
         sentiment:
-          $ref: '#/components/schemas/SentimentScore'
+          $ref: "#/components/schemas/SentimentScore"
         bias_indicators:
           type: array
           items:
-            $ref: '#/components/schemas/BiasIndicator'
+            $ref: "#/components/schemas/BiasIndicator"
         confidence_score:
           type: number
           minimum: 0
@@ -393,6 +439,75 @@ components:
           type: string
           enum: [low, medium, high]
 
+    FindCounterpointsRequest:
+      type: object
+      required:
+        - video_id
+      properties:
+        video_id:
+          type: string
+          format: uuid
+        main_topics:
+          type: array
+          items:
+            type: string
+          description: Main topics or themes in the video
+        original_perspective:
+          type: string
+          description: Summary of the main perspective or argument in the video
+
+    FindCounterpointsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        data:
+          type: object
+          properties:
+            video_id:
+              type: string
+            counter_perspectives:
+              type: array
+              items:
+                $ref: "#/components/schemas/CounterPerspectiveSource"
+            search_keywords:
+              type: array
+              items:
+                type: string
+            tokens_used:
+              type: integer
+            cached:
+              type: boolean
+            model:
+              type: string
+
+    CounterPerspectiveSource:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Name of the credible source
+        title:
+          type: string
+          description: Title of the article or content
+        url:
+          type: string
+          description: URL to the source (may be hypothetical)
+        relevance_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: How relevant the counter-perspective is to the original content
+        credibility_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Estimated credibility of the source
+        reasoning:
+          type: string
+          description: Why this offers a valuable counter-perspective
+
     Error:
       type: object
       required:
@@ -421,7 +536,7 @@ components:
                 enum: [false]
               error:
                 allOf:
-                  - $ref: '#/components/schemas/Error'
+                  - $ref: "#/components/schemas/Error"
                   - properties:
                       code:
                         enum: [VALIDATION_ERROR, INVALID_LANGUAGE]
@@ -438,7 +553,7 @@ components:
                 enum: [false]
               error:
                 allOf:
-                  - $ref: '#/components/schemas/Error'
+                  - $ref: "#/components/schemas/Error"
                   - properties:
                       code:
                         enum: [UNAUTHORIZED]
@@ -455,7 +570,7 @@ components:
                 enum: [false]
               error:
                 allOf:
-                  - $ref: '#/components/schemas/Error'
+                  - $ref: "#/components/schemas/Error"
                   - properties:
                       code:
                         enum: [VIDEO_NOT_FOUND, TRANSCRIPT_NOT_FOUND]
@@ -472,10 +587,27 @@ components:
                 enum: [false]
               error:
                 allOf:
-                  - $ref: '#/components/schemas/Error'
+                  - $ref: "#/components/schemas/Error"
                   - properties:
                       code:
                         enum: [RATE_LIMIT_EXCEEDED]
+
+    PremiumRequired:
+      description: Premium subscription required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                enum: [false]
+              error:
+                allOf:
+                  - $ref: "#/components/schemas/Error"
+                  - properties:
+                      code:
+                        enum: [PREMIUM_REQUIRED]
 
     ServiceUnavailable:
       description: External service unavailable
@@ -489,7 +621,7 @@ components:
                 enum: [false]
               error:
                 allOf:
-                  - $ref: '#/components/schemas/Error'
+                  - $ref: "#/components/schemas/Error"
                   - properties:
                       code:
                         enum: [EXTERNAL_SERVICE_ERROR, MODEL_ERROR]

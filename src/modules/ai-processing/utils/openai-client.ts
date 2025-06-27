@@ -342,6 +342,94 @@ Respond with a JSON array of strings.`
     }
   }
   
+  async findCounterPerspectives(
+    videoTitle: string,
+    transcript: string,
+    mainTopics?: string[],
+    originalPerspective?: string
+  ): Promise<{ 
+    counterPerspectives: any[]; 
+    searchKeywords: string[];
+    tokensUsed: number;
+  }> {
+    logger.info('Finding counter-perspectives', { 
+      videoTitle, 
+      mainTopicsProvided: !!mainTopics,
+      originalPerspectiveProvided: !!originalPerspective
+    });
+    
+    // Prepare transcript for analysis
+    const maxTranscriptLength = 5000;
+    const truncatedTranscript = transcript.length > maxTranscriptLength 
+      ? transcript.substring(0, maxTranscriptLength) + '...[truncated]'
+      : transcript;
+    
+    // Create system prompt
+    const systemPrompt = `You are an expert in critical thinking and media literacy.
+Your task is to identify the main perspective in the content and suggest credible counter-perspectives.
+Always respond with valid JSON matching this structure:
+{
+  "main_topics": ["topic1", "topic2", ...],
+  "original_perspective": "summary of the main perspective or argument",
+  "counter_perspectives": [
+    {
+      "source": "name of credible source",
+      "title": "title of article or content",
+      "url": "hypothetical URL",
+      "relevance_score": 0.95, // 0-1 scale
+      "credibility_score": 0.85, // 0-1 scale
+      "reasoning": "why this offers a valuable counter-perspective"
+    },
+    ...
+  ],
+  "search_keywords": ["keyword1", "keyword2", ...]
+}`;
+    
+    // Create user prompt
+    let userPrompt = `Video Title: "${videoTitle}"\n\n`;
+    
+    if (mainTopics && mainTopics.length > 0) {
+      userPrompt += `Main Topics: ${mainTopics.join(', ')}\n\n`;
+    }
+    
+    if (originalPerspective) {
+      userPrompt += `Original Perspective: ${originalPerspective}\n\n`;
+    }
+    
+    userPrompt += `Transcript:\n${truncatedTranscript}\n\n`;
+    userPrompt += `Identify the main perspective in this content and suggest 3-5 credible counter-perspectives.
+Focus on academic, journalistic, or expert sources that would offer balanced alternative viewpoints.
+If no clear perspective is detected, suggest diverse viewpoints on the main topics.`;
+    
+    const messages: OpenAIMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+    
+    const { response, tokensUsed } = await this.makeRequest(messages, {
+      temperature: 0.7,
+      maxTokens: 2000,
+      responseFormat: { type: 'json_object' }
+    });
+    
+    try {
+      const parsed = JSON.parse(response);
+      
+      // Ensure all required fields are present
+      return {
+        counterPerspectives: parsed.counter_perspectives || [],
+        searchKeywords: parsed.search_keywords || [],
+        tokensUsed
+      };
+    } catch (error) {
+      logger.error('Failed to parse counter-perspectives response', { error, response });
+      throw createAppError(
+        ErrorType.INTERNAL_ERROR,
+        'Failed to parse AI counter-perspectives response'
+      );
+    }
+  }
+  
   // ============================================
   // Cost Estimation
   // ============================================

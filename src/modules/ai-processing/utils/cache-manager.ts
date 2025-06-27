@@ -3,7 +3,8 @@ import { Logger } from '@/logging';
 import type { 
   AITranslationRecord, 
   VideoSummaryRecord,
-  ContentAnalysisRecord 
+  ContentAnalysisRecord,
+  CounterPerspectiveRecord
 } from '../types';
 
 const logger = new Logger({ service: 'ai-cache-manager' });
@@ -12,7 +13,8 @@ const logger = new Logger({ service: 'ai-cache-manager' });
 const CACHE_TTL = {
   translation: parseInt(Deno.env.get('TRANSLATION_CACHE_TTL') || '2592000'), // 30 days
   summary: parseInt(Deno.env.get('SUMMARY_CACHE_TTL') || '604800'), // 7 days
-  analysis: parseInt(Deno.env.get('ANALYSIS_CACHE_TTL') || '604800') // 7 days
+  analysis: parseInt(Deno.env.get('ANALYSIS_CACHE_TTL') || '604800'), // 7 days
+  counterpoints: parseInt(Deno.env.get('COUNTERPOINTS_CACHE_TTL') || '604800') // 7 days
 };
 
 export class AICacheManager {
@@ -358,6 +360,114 @@ export class AICacheManager {
   }
   
   // ============================================
+  // Counter-Perspectives Cache
+  // ============================================
+  
+  async getCachedCounterPerspectives(
+    videoId: string
+  ): Promise<CounterPerspectiveRecord | null> {
+    try {
+      const { data, error } = await this.supabase
+        .from('counter_perspectives')
+        .select('*')
+        .eq('video_id', videoId)
+        .single();
+      
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null;
+        }
+        logger.error('Failed to get cached counter-perspectives', { error });
+        return null;
+      }
+      
+      // Check if cache is still valid
+      const createdAt = new Date(data.created_at).getTime();
+      const now = Date.now();
+      const ageInSeconds = (now - createdAt) / 1000;
+      
+      if (ageInSeconds > CACHE_TTL.counterpoints) {
+        // Cache expired, delete it
+        await this.deleteCachedCounterPerspectives(data.id);
+        return null;
+      }
+      
+      logger.info('Counter-perspectives cache hit', {
+        videoId,
+        cacheAge: Math.round(ageInSeconds / 3600) + ' hours'
+      });
+      
+      return data;
+    } catch (error) {
+      logger.error('Counter-perspectives cache lookup error', { error });
+      return null;
+    }
+  }
+  
+  async cacheCounterPerspectives(
+    videoId: string,
+    userId: string,
+    mainTopics: string[],
+    originalPerspective: string,
+    counterPerspectives: any[],
+    searchKeywords: string[],
+    model: string,
+    tokensUsed?: number
+  ): Promise<void> {
+    try {
+      // First, try to update existing cache entry
+      const { error: updateError } = await this.supabase
+        .from('counter_perspectives')
+        .update({
+          user_id: userId,
+          main_topics: mainTopics,
+          original_perspective: originalPerspective,
+          counter_perspectives: counterPerspectives,
+          search_keywords: searchKeywords,
+          model,
+          tokens_used: tokensUsed
+        })
+        .eq('video_id', videoId);
+      
+      if (updateError) {
+        // If update failed, insert new record
+        const { error: insertError } = await this.supabase
+          .from('counter_perspectives')
+          .insert({
+            video_id: videoId,
+            user_id: userId,
+            main_topics: mainTopics,
+            original_perspective: originalPerspective,
+            counter_perspectives: counterPerspectives,
+            search_keywords: searchKeywords,
+            model,
+            tokens_used: tokensUsed
+          });
+        
+        if (insertError) {
+          logger.error('Failed to cache counter-perspectives', { error: insertError });
+        }
+      }
+      
+      logger.info('Counter-perspectives cached', {
+        videoId,
+        model,
+        tokensUsed,
+        perspectiveCount: counterPerspectives.length
+      });
+    } catch (error) {
+      logger.error('Counter-perspectives cache write error', { error });
+    }
+  }
+  
+  private async deleteCachedCounterPerspectives(id: string): Promise<void> {
+    await this.supabase
+      .from('counter_perspectives')
+      .delete()
+      .eq('id', id);
+  }
+  
+  // ============================================
   // Cache Statistics
   // ============================================
   
@@ -365,10 +475,16 @@ export class AICacheManager {
     translations: number;
     summaries: number;
     analyses: number;
+    counterpoints: number;
     totalSaved: number; // Estimated cost savings
   }> {
     try {
-      const [translationsResult, summariesResult, analysesResult] = await Promise.all([
+      const [
+        translationsResult, 
+        summariesResult, 
+        analysesResult,
+        counterpointsResult
+      ] = await Promise.all([
         this.supabase
           .from('ai_translations')
           .select('id', { count: 'exact' })
@@ -382,25 +498,35 @@ export class AICacheManager {
         this.supabase
           .from('content_analysis')
           .select('tokens_used')
+          .eq('user_id', userId),
+          
+        this.supabase
+          .from('counter_perspectives')
+          .select('tokens_used')
           .eq('user_id', userId)
       ]);
       
       const translations = translationsResult.count || 0;
       const summaries = summariesResult.data?.length || 0;
       const analyses = analysesResult.data?.length || 0;
+      const counterpoints = counterpointsResult.data?.length || 0;
       
       // Calculate estimated cost savings
       const avgTranslationCost = 0.00002; // $20 per 1M chars
       const avgTokenCost = 0.00000015; // $0.15 per 1M tokens
       
       const translationSavings = translations * 100 * avgTranslationCost; // Assume 100 chars avg
-      const tokenSavings = [...(summariesResult.data || []), ...(analysesResult.data || [])]
-        .reduce((sum, item) => sum + (item.tokens_used || 0), 0) * avgTokenCost;
+      const tokenSavings = [
+        ...(summariesResult.data || []), 
+        ...(analysesResult.data || []),
+        ...(counterpointsResult.data || [])
+      ].reduce((sum, item) => sum + (item.tokens_used || 0), 0) * avgTokenCost;
       
       return {
         translations,
         summaries,
         analyses,
+        counterpoints,
         totalSaved: Math.round((translationSavings + tokenSavings) * 100) / 100
       };
     } catch (error) {
@@ -409,6 +535,7 @@ export class AICacheManager {
         translations: 0,
         summaries: 0,
         analyses: 0,
+        counterpoints: 0,
         totalSaved: 0
       };
     }

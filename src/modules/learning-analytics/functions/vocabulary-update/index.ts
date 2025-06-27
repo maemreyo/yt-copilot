@@ -1,5 +1,5 @@
-import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { serve } from 'std/http/server.ts';
+import { createClient } from '@supabase/supabase-js';
 import { UpdateVocabularySchema } from '../../_shared/validators.ts';
 import { calculateNextReview, getNextReviewDate } from '../../_shared/spaced-repetition.ts';
 import type { 

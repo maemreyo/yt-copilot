@@ -503,6 +503,18 @@ export function createRateLimitMiddleware(config: Partial<RateLimitConfig> = {})
 }
 
 /**
+ * Create a rate limiter function
+ */
+export function createRateLimiter(config: Partial<RateLimitConfig> = {}) {
+  const limiter = new RateLimiter(config);
+  
+  return async (req: Request): Promise<void> => {
+    await limiter.createMiddleware()(req);
+    // If no error is thrown, the request is allowed
+  };
+}
+
+/**
  * Default export for convenience
  */
 export default {

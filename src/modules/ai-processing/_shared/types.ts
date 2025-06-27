@@ -169,3 +169,45 @@ export interface ContentAnalysisRecord {
   tokens_used?: number;
   created_at: string;
 }
+
+// ============================================
+// Counter-Perspective Types
+// ============================================
+
+export interface FindCounterpointsRequest {
+  video_id: string;
+  main_topics?: string[];
+  original_perspective?: string;
+  user_id?: string; // Added by middleware
+}
+
+export interface FindCounterpointsResponse {
+  video_id: string;
+  counter_perspectives: CounterPerspectiveSource[];
+  search_keywords: string[];
+  tokens_used: number;
+  cached: boolean;
+  model: string;
+}
+
+export interface CounterPerspectiveSource {
+  source: string;
+  title: string;
+  url: string;
+  relevance_score: number;
+  credibility_score: number;
+  reasoning: string;
+}
+
+export interface CounterPerspectiveRecord {
+  id: string;
+  video_id: string;
+  user_id: string;
+  main_topics: string[];
+  original_perspective: string;
+  counter_perspectives: CounterPerspectiveSource[];
+  search_keywords: string[];
+  model: string;
+  tokens_used?: number;
+  created_at: string;
+}
