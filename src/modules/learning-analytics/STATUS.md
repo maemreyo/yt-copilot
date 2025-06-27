@@ -1,154 +1,213 @@
-# Module 9: Learning Analytics - Implementation Summary
+# Module 9: Deployment & Testing Checklist
 
-## ✅ Đã hoàn thành
+## 🚀 Pre-Deployment Tasks
 
-### 1. **Module Structure** 
-Tạo cấu trúc chuẩn cho Edge Functions:
-```
-src/modules/learning-analytics/
-├── functions/           # Edge Functions endpoints
-├── _shared/            # Shared utilities
-├── migrations/         # Database schema
-└── tests/             # Integration tests
-```
+### 1. **Environment Setup**
+- [ ] Ensure Supabase project is configured
+- [ ] Set environment variables:
+  ```bash
+  SUPABASE_URL=your-project-url
+  SUPABASE_ANON_KEY=your-anon-key
+  SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+  ```
+- [ ] Verify Deno is installed locally
 
-### 2. **Shared Utilities** (`_shared/`)
-- ✅ **types.ts**: Complete type definitions cho toàn bộ module
-- ✅ **spaced-repetition.ts**: SM-2 algorithm implementation
-- ✅ **validators.ts**: Input validation với Zod
+### 2. **Database Setup**
+- [ ] Review and finalize migration file
+- [ ] Add missing database functions:
+  ```sql
+  -- Add to migration file
+  CREATE OR REPLACE FUNCTION calculate_learning_streak(p_user_id UUID)
+  RETURNS INTEGER AS $$
+  DECLARE
+    streak INTEGER := 0;
+    current_date DATE := CURRENT_DATE;
+    check_date DATE;
+  BEGIN
+    -- Calculate consecutive days of learning
+    FOR check_date IN 
+      SELECT DISTINCT DATE(started_at) as session_date
+      FROM learning_sessions
+      WHERE user_id = p_user_id
+      ORDER BY session_date DESC
+    LOOP
+      IF check_date = current_date - streak THEN
+        streak := streak + 1;
+      ELSE
+        EXIT;
+      END IF;
+    END LOOP;
+    
+    RETURN streak;
+  END;
+  $$ LANGUAGE plpgsql;
+  ```
+- [ ] Run migration: `supabase migration up`
+- [ ] Verify all tables and RLS policies are created
 
-### 3. **Database Schema**
-- ✅ **vocabulary_entries**: Quản lý từ vựng với spaced repetition
-- ✅ **learning_sessions**: Theo dõi phiên học tập
-- ✅ **video_notes**: Ghi chú với timestamp
-- ✅ **RLS Policies**: Bảo mật dữ liệu người dùng
-- ✅ **Helper Functions**: Learning streak, vocabulary stats
-
-### 4. **Implemented Endpoints**
-- ✅ **POST /v1/learning/vocabulary** - Thêm từ vựng mới
-- ✅ **GET /v1/learning/vocabulary** - Liệt kê từ vựng (filter, sort, pagination)
-- ✅ **POST /v1/learning/notes** - Tạo ghi chú mới
-
-## 🎯 Key Features Implemented
-
-### 1. **Spaced Repetition System**
-- SM-2 algorithm với ease factor adjustment
-- Automatic review scheduling
-- Success rate tracking
-- Difficulty-based initial intervals
-
-### 2. **Smart Vocabulary Management**
-- Duplicate prevention
-- Context-aware vocabulary
-- Video timestamp linking
-- Due for review filtering
-- Full-text search
-
-### 3. **Note-Taking System**
-- Video timestamp synchronization
-- Tag-based organization
-- Privacy controls
-- Markdown support ready
-- Video access verification
-
-### 4. **Session Tracking Integration**
-- Automatic word count updates
-- Note count tracking
-- Session-aware operations
-
-## 📋 Còn lại cần implement
-
-### Vocabulary Endpoints:
-- [ ] PUT `/v1/learning/vocabulary/{id}` - Update & review
-- [ ] DELETE `/v1/learning/vocabulary/{id}` - Delete
-
-### Session Endpoints:
-- [ ] POST `/v1/learning/sessions` - Start/end session
-- [ ] GET `/v1/learning/sessions` - Session history
-
-### Notes Endpoints:
-- [ ] GET `/v1/learning/notes` - List notes
-- [ ] PUT `/v1/learning/notes/{id}` - Update
-- [ ] DELETE `/v1/learning/notes/{id}` - Delete
-
-### Analytics Endpoints:
-- [ ] GET `/v1/learning/analytics/overview` - Stats overview
-- [ ] GET `/v1/learning/analytics/dashboard` - Full dashboard
-
-## 🔧 Technical Highlights
-
-### 1. **Edge Functions Pattern**
-- Proper Deno imports (`std/http/server.ts`)
-- Supabase client initialization
-- JWT authentication
-- CORS & security headers
-
-### 2. **Database Design**
-- Optimized indexes for performance
-- Computed columns (duration_seconds)
-- Full-text search on notes
-- Unique constraints với NULL handling
-
-### 3. **Error Handling**
-- Structured error responses
-- Detailed validation errors
-- Proper HTTP status codes
-- Comprehensive logging
-
-### 4. **Performance Optimizations**
-- Efficient pagination
-- Strategic indexing
-- Minimal database queries
-- Cache-friendly design
-
-## 🚀 Next Steps
-
-1. **Complete CRUD operations** cho tất cả resources
-2. **Implement analytics** với trend analysis
-3. **Add export functionality** (CSV, JSON)
-4. **Write integration tests**
-5. **Create OpenAPI documentation**
-
-## 💡 Usage Examples
-
-### Add Vocabulary:
+### 3. **Edge Functions Deployment**
 ```bash
-curl -X POST https://your-project.supabase.co/functions/v1/learning_vocabulary-add \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "word": "ephemeral",
-    "definition": "lasting for a very short time",
-    "context": "The ephemeral nature of social media trends",
-    "video_id": "uuid-here",
-    "timestamp": 123.45,
-    "difficulty": "advanced"
-  }'
+# Deploy each function
+supabase functions deploy vocabulary-add
+supabase functions deploy vocabulary-list
+supabase functions deploy vocabulary-update
+supabase functions deploy vocabulary-delete
+supabase functions deploy sessions-track
+supabase functions deploy sessions-list
+supabase functions deploy notes-create
+supabase functions deploy notes-list
+supabase functions deploy notes-update
+supabase functions deploy notes-delete
+supabase functions deploy analytics-overview
+supabase functions deploy analytics-dashboard
 ```
 
-### List Vocabulary Due for Review:
+## 🧪 Testing Checklist
+
+### 1. **Unit Tests for Shared Utilities**
+- [ ] Test spaced repetition algorithm
+- [ ] Test validators with edge cases
+- [ ] Test type definitions
+
+### 2. **Integration Tests**
+- [ ] Test authentication flow
+- [ ] Test RLS policies
+- [ ] Test cross-endpoint data consistency
+- [ ] Test error handling scenarios
+
+### 3. **End-to-End Test Scenarios**
+
+#### Scenario 1: Complete Learning Flow
 ```bash
-curl -X GET "https://your-project.supabase.co/functions/v1/learning_vocabulary-list?due_for_review=true&limit=10" \
-  -H "Authorization: Bearer YOUR_TOKEN"
+# 1. Start a session
+POST /v1/learning/sessions
+
+# 2. Add vocabulary
+POST /v1/learning/vocabulary
+
+# 3. Create a note
+POST /v1/learning/notes
+
+# 4. End session
+POST /v1/learning/sessions (with session_id)
+
+# 5. Check analytics
+GET /v1/learning/analytics/overview
 ```
 
-### Create Note:
+#### Scenario 2: Spaced Repetition Flow
 ```bash
-curl -X POST https://your-project.supabase.co/functions/v1/learning_notes-create \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "video_id": "uuid-here",
-    "content": "Important concept about TypeScript generics",
-    "timestamp": 245.5,
-    "tags": ["typescript", "programming", "generics"],
-    "formatting": {
-      "type": "markdown",
-      "highlights": ["TypeScript generics"]
-    }
-  }'
+# 1. Add vocabulary
+POST /v1/learning/vocabulary
+
+# 2. Review vocabulary (success)
+PUT /v1/learning/vocabulary/{id} 
+  { "review_success": true }
+
+# 3. Check next review date
+GET /v1/learning/vocabulary?due_for_review=true
 ```
 
-## 🎉 Module 9 Foundation Complete!
+### 4. **Performance Tests**
+- [ ] Load test with 1000 vocabulary entries
+- [ ] Test pagination performance
+- [ ] Monitor query execution times
+- [ ] Check for N+1 queries
 
-The core architecture and key features of Module 9 are now in place. The remaining work is mostly implementing similar CRUD endpoints following the established patterns.
+### 5. **Security Tests**
+- [ ] Verify JWT authentication
+- [ ] Test RLS policies (user isolation)
+- [ ] Test input validation
+- [ ] Check for SQL injection vulnerabilities
+
+## 📝 Documentation Tasks
+
+### 1. **API Documentation**
+- [ ] Create OpenAPI/Swagger spec
+- [ ] Document all endpoints
+- [ ] Add request/response examples
+- [ ] Document error codes
+
+### 2. **Developer Guide**
+- [ ] Installation instructions
+- [ ] Configuration guide
+- [ ] Usage examples
+- [ ] Troubleshooting guide
+
+### 3. **User Documentation**
+- [ ] Feature overview
+- [ ] How spaced repetition works
+- [ ] Analytics interpretation guide
+- [ ] Best practices for learning
+
+## 🔍 Quality Assurance
+
+### Code Quality
+- [ ] Run linter on all TypeScript files
+- [ ] Check for unused imports
+- [ ] Ensure consistent error handling
+- [ ] Verify proper logging
+
+### Database Quality
+- [ ] Check index usage
+- [ ] Verify query performance
+- [ ] Test backup/restore procedures
+- [ ] Validate data integrity constraints
+
+### API Quality
+- [ ] Consistent response formats
+- [ ] Proper HTTP status codes
+- [ ] Clear error messages
+- [ ] Rate limiting configured
+
+## 📊 Monitoring Setup
+
+### 1. **Application Monitoring**
+- [ ] Set up error tracking (Sentry)
+- [ ] Configure performance monitoring
+- [ ] Set up uptime monitoring
+- [ ] Create alerting rules
+
+### 2. **Database Monitoring**
+- [ ] Monitor query performance
+- [ ] Track table sizes
+- [ ] Monitor connection pool
+- [ ] Set up slow query alerts
+
+### 3. **Business Metrics**
+- [ ] Track active users
+- [ ] Monitor vocabulary growth
+- [ ] Track session duration
+- [ ] Measure feature adoption
+
+## 🚦 Go-Live Checklist
+
+### Pre-Launch
+- [ ] All tests passing
+- [ ] Documentation complete
+- [ ] Monitoring configured
+- [ ] Backup strategy in place
+
+### Launch Day
+- [ ] Deploy to production
+- [ ] Verify all endpoints working
+- [ ] Monitor error rates
+- [ ] Check performance metrics
+
+### Post-Launch
+- [ ] Monitor user feedback
+- [ ] Track adoption metrics
+- [ ] Plan optimization updates
+- [ ] Schedule regular reviews
+
+## 🎯 Success Criteria
+
+- ✅ All endpoints return < 200ms response time
+- ✅ Zero critical security vulnerabilities
+- ✅ 99.9% uptime SLA
+- ✅ Comprehensive test coverage
+- ✅ Complete documentation
+
+## 🏁 Ready for Production!
+
+Once all items in this checklist are completed, Module 9 will be production-ready and can be integrated with the YouTube Learning Co-pilot extension frontend.

@@ -1,6 +1,12 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import type { SuccessResponse, ErrorResponse } from '../../_shared/types.ts';
+import { UpdateNoteSchema } from '../../_shared/validators.ts';
+import type { 
+  UpdateNoteRequest,
+  VideoNote,
+  SuccessResponse, 
+  ErrorResponse 
+} from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -47,7 +53,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
 // Extract ID from URL path
 function extractIdFromPath(url: string): string | null {
-  const pathMatch = url.match(/\/vocabulary\/([a-f0-9-]{36})$/);
+  const pathMatch = url.match(/\/notes\/([a-f0-9-]{36})$/);
   return pathMatch ? pathMatch[1] : null;
 }
 
@@ -57,13 +63,13 @@ serve(async (request: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Only allow DELETE
-  if (request.method !== 'DELETE') {
+  // Only allow PUT
+  if (request.method !== 'PUT') {
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only DELETE method is allowed'
+        message: 'Only PUT method is allowed'
       }
     };
     
@@ -77,14 +83,14 @@ serve(async (request: Request) => {
   }
 
   try {
-    // Extract vocabulary ID from URL
-    const vocabularyId = extractIdFromPath(request.url);
-    if (!vocabularyId) {
+    // Extract note ID from URL
+    const noteId = extractIdFromPath(request.url);
+    if (!noteId) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'INVALID_ID',
-          message: 'Invalid vocabulary ID format'
+          message: 'Invalid note ID format'
         }
       };
       
@@ -117,6 +123,31 @@ serve(async (request: Request) => {
       );
     }
 
+    // Parse and validate request body
+    const body = await request.json();
+    const validation = UpdateNoteSchema.safeParse(body);
+    
+    if (!validation.success) {
+      const errorResponse: ErrorResponse = {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request data',
+          details: validation.error.errors
+        }
+      };
+      
+      return new Response(
+        JSON.stringify(errorResponse),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, ...securityHeaders } 
+        }
+      );
+    }
+
+    const updateData = validation.data;
+    
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
@@ -124,12 +155,13 @@ serve(async (request: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // Check if vocabulary entry exists
+    // Get existing note
     const { data: existing, error: fetchError } = await supabase
-      .from('vocabulary_entries')
-      .select('id')
-      .eq('id', vocabularyId)
+      .from('video_notes')
+      .select('*')
+      .eq('id', noteId)
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .single();
 
     if (fetchError || !existing) {
@@ -137,7 +169,7 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Vocabulary entry not found'
+          message: 'Note not found'
         }
       };
       
@@ -150,25 +182,55 @@ serve(async (request: Request) => {
       );
     }
 
-    // Soft delete to preserve analytics
-    const { error: deleteError } = await supabase
-      .from('vocabulary_entries')
-      .update({
-        deleted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', vocabularyId)
-      .eq('user_id', user.id);
+    // Prepare update object
+    const updates: any = {
+      updated_at: new Date().toISOString()
+    };
 
-    if (deleteError) {
-      console.error('Database error:', deleteError);
+    // Update fields if provided
+    if (updateData.content !== undefined) {
+      updates.content = updateData.content;
+    }
+    
+    if (updateData.tags !== undefined) {
+      updates.tags = updateData.tags;
+    }
+    
+    if (updateData.is_private !== undefined) {
+      updates.is_private = updateData.is_private;
+    }
+    
+    if (updateData.formatting !== undefined) {
+      updates.formatting = updateData.formatting;
+    }
+
+    // Update note
+    const { data: updated, error: updateError } = await supabase
+      .from('video_notes')
+      .update(updates)
+      .eq('id', noteId)
+      .eq('user_id', user.id)
+      .select(`
+        *,
+        youtube_videos!video_id(
+          id,
+          title,
+          channel_name,
+          thumbnail_url,
+          duration
+        )
+      `)
+      .single();
+
+    if (updateError) {
+      console.error('Database error:', updateError);
       
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
-          message: 'Failed to delete vocabulary entry',
-          details: deleteError
+          message: 'Failed to update note',
+          details: updateError
         }
       };
       
@@ -181,32 +243,10 @@ serve(async (request: Request) => {
       );
     }
 
-    // Update learning session if active
-    const { data: activeSession } = await supabase
-      .from('learning_sessions')
-      .select('id, words_learned')
-      .eq('user_id', user.id)
-      .is('ended_at', null)
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (activeSession && activeSession.words_learned > 0) {
-      await supabase
-        .from('learning_sessions')
-        .update({
-          words_learned: activeSession.words_learned - 1
-        })
-        .eq('id', activeSession.id);
-    }
-
     // Return success response
     const successResponse: SuccessResponse = {
       success: true,
-      data: {
-        id: vocabularyId,
-        deleted: true
-      }
+      data: updated
     };
 
     return new Response(

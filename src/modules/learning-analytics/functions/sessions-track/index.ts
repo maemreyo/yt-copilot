@@ -1,13 +1,13 @@
-import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
-import { CreateSessionSchema, UpdateSessionSchema, validateRequest } from '_shared/validators.ts';
+import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+import { CreateSessionSchema, UpdateSessionSchema } from '../../_shared/validators.ts';
 import type { 
   CreateSessionRequest,
   UpdateSessionRequest,
   LearningSession,
   SuccessResponse, 
   ErrorResponse 
-} from '_shared/types.ts';
+} from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -52,43 +52,19 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
   }
 }
 
-// Check for active session
-async function getActiveSession(
-  supabase: any,
-  userId: string
-): Promise<LearningSession | null> {
-  const { data, error } = await supabase
-    .from('learning_sessions')
-    .select('*')
-    .eq('user_id', userId)
-    .is('ended_at', null)
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error || !data) {
-    return null;
+serve(async (request: Request) => {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  return data;
-}
-
-// Main handler
-serve(async (req) => {
-  // Handle CORS
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 204,
-      headers: corsHeaders 
-    });
-  }
-
-  if (req.method !== 'POST' && req.method !== 'PUT') {
+  // Only allow POST
+  if (request.method !== 'POST') {
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only POST and PUT methods allowed'
+        message: 'Only POST method is allowed'
       }
     };
     
@@ -103,13 +79,13 @@ serve(async (req) => {
 
   try {
     // Authenticate user
-    const user = await extractUser(req);
+    const user = await extractUser(request);
     if (!user) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Authentication required'
+          message: 'Invalid or missing authentication token'
         }
       };
       
@@ -123,51 +99,27 @@ serve(async (req) => {
     }
 
     // Parse request body
-    const body = await req.json();
-
+    const body = await request.json();
+    
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      { auth: { persistSession: false } }
     );
 
-    // Check for active session
-    const activeSession = await getActiveSession(supabase, user.id);
-
-    // Handle based on method
-    if (req.method === 'POST') {
-      // Start new session
+    // Check if this is a session end request (has session_id)
+    if (body.session_id) {
+      // Validate update request
+      const validation = UpdateSessionSchema.safeParse(body);
       
-      // Check if there's already an active session
-      if (activeSession) {
-        const errorResponse: ErrorResponse = {
-          success: false,
-          error: {
-            code: 'SESSION_ACTIVE',
-            message: 'You already have an active learning session',
-            details: { session_id: activeSession.id }
-          }
-        };
-        
-        return new Response(
-          JSON.stringify(errorResponse),
-          { 
-            status: 409, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
-        );
-      }
-
-      // Validate request
-      const validation = validateRequest(CreateSessionSchema, body);
-
-      if (!validation.isValid) {
+      if (!validation.success) {
         const errorResponse: ErrorResponse = {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: validation.errors?.errors
+            message: 'Invalid session update data',
+            details: validation.error.errors
           }
         };
         
@@ -180,31 +132,154 @@ serve(async (req) => {
         );
       }
 
-      const data = validation.data as CreateSessionRequest;
+      const updateData = validation.data;
+
+      // Get existing session
+      const { data: existingSession, error: fetchError } = await supabase
+        .from('learning_sessions')
+        .select('*')
+        .eq('id', body.session_id)
+        .eq('user_id', user.id)
+        .is('ended_at', null)
+        .single();
+
+      if (fetchError || !existingSession) {
+        const errorResponse: ErrorResponse = {
+          success: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Active session not found'
+          }
+        };
+        
+        return new Response(
+          JSON.stringify(errorResponse),
+          { 
+            status: 404, 
+            headers: { ...corsHeaders, ...securityHeaders } 
+          }
+        );
+      }
+
+      // Calculate duration if ending session
+      const startTime = new Date(existingSession.started_at).getTime();
+      const endTime = updateData.ended_at ? new Date(updateData.ended_at).getTime() : Date.now();
+      const duration_seconds = Math.floor((endTime - startTime) / 1000);
+
+      // Update session
+      const updates: any = {
+        ...updateData,
+        duration_seconds
+      };
+
+      const { data: updatedSession, error: updateError } = await supabase
+        .from('learning_sessions')
+        .update(updates)
+        .eq('id', body.session_id)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Database error:', updateError);
+        
+        const errorResponse: ErrorResponse = {
+          success: false,
+          error: {
+            code: 'DATABASE_ERROR',
+            message: 'Failed to update session',
+            details: updateError
+          }
+        };
+        
+        return new Response(
+          JSON.stringify(errorResponse),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, ...securityHeaders } 
+          }
+        );
+      }
+
+      // Return success response
+      const successResponse: SuccessResponse = {
+        success: true,
+        data: updatedSession
+      };
+
+      return new Response(
+        JSON.stringify(successResponse),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, ...securityHeaders } 
+        }
+      );
+
+    } else {
+      // This is a session start request
+      const validation = CreateSessionSchema.safeParse(body);
+      
+      if (!validation.success) {
+        const errorResponse: ErrorResponse = {
+          success: false,
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'Invalid session creation data',
+            details: validation.error.errors
+          }
+        };
+        
+        return new Response(
+          JSON.stringify(errorResponse),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, ...securityHeaders } 
+          }
+        );
+      }
+
+      const sessionData = validation.data;
+
+      // Check for existing active session
+      const { data: activeSession } = await supabase
+        .from('learning_sessions')
+        .select('id')
+        .eq('user_id', user.id)
+        .is('ended_at', null)
+        .single();
+
+      if (activeSession) {
+        // Auto-end previous session
+        await supabase
+          .from('learning_sessions')
+          .update({
+            ended_at: new Date().toISOString(),
+            duration_seconds: 0 // Will be calculated in a scheduled job
+          })
+          .eq('id', activeSession.id);
+      }
 
       // Verify video access if video_id provided
-      if (data.video_id) {
-        const { data: videoAccess } = await supabase
-          .from('user_video_history')
+      if (sessionData.video_id) {
+        const { data: video, error: videoError } = await supabase
+          .from('youtube_videos')
           .select('id')
-          .eq('user_id', user.id)
-          .eq('video_id', data.video_id)
+          .eq('id', sessionData.video_id)
           .single();
 
-        if (!videoAccess) {
+        if (videoError || !video) {
           const errorResponse: ErrorResponse = {
             success: false,
             error: {
-              code: 'FORBIDDEN',
-              message: 'You do not have access to this video',
-              details: { video_id: data.video_id }
+              code: 'INVALID_VIDEO',
+              message: 'Video not found or not accessible'
             }
           };
           
           return new Response(
             JSON.stringify(errorResponse),
             { 
-              status: 403, 
+              status: 400, 
               headers: { ...corsHeaders, ...securityHeaders } 
             }
           );
@@ -216,9 +291,10 @@ serve(async (req) => {
         .from('learning_sessions')
         .insert({
           user_id: user.id,
-          video_id: data.video_id,
-          session_type: data.session_type,
-          session_data: data.session_data,
+          video_id: sessionData.video_id,
+          session_type: sessionData.session_type,
+          session_data: sessionData.session_data || {},
+          started_at: new Date().toISOString(),
           words_learned: 0,
           notes_taken: 0,
           translations_requested: 0
@@ -233,7 +309,7 @@ serve(async (req) => {
           success: false,
           error: {
             code: 'DATABASE_ERROR',
-            message: 'Failed to create learning session',
+            message: 'Failed to create session',
             details: createError
           }
         };
@@ -247,7 +323,8 @@ serve(async (req) => {
         );
       }
 
-      const successResponse: SuccessResponse<LearningSession> = {
+      // Return success response
+      const successResponse: SuccessResponse = {
         success: true,
         data: newSession
       };
@@ -256,120 +333,6 @@ serve(async (req) => {
         JSON.stringify(successResponse),
         { 
           status: 201, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
-      );
-
-    } else {
-      // PUT - End or update session
-      
-      if (!activeSession) {
-        const errorResponse: ErrorResponse = {
-          success: false,
-          error: {
-            code: 'NO_ACTIVE_SESSION',
-            message: 'No active learning session found'
-          }
-        };
-        
-        return new Response(
-          JSON.stringify(errorResponse),
-          { 
-            status: 404, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
-        );
-      }
-
-      // Validate request
-      const validation = validateRequest(UpdateSessionSchema, body);
-
-      if (!validation.isValid) {
-        const errorResponse: ErrorResponse = {
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request data',
-            details: validation.errors?.errors
-          }
-        };
-        
-        return new Response(
-          JSON.stringify(errorResponse),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
-        );
-      }
-
-      const data = validation.data as UpdateSessionRequest;
-
-      // Prepare update data
-      const updateData: any = {};
-      
-      if (data.ended_at !== undefined) {
-        updateData.ended_at = data.ended_at || new Date().toISOString();
-      }
-      
-      if (data.words_learned !== undefined) {
-        updateData.words_learned = activeSession.words_learned + data.words_learned;
-      }
-      
-      if (data.notes_taken !== undefined) {
-        updateData.notes_taken = activeSession.notes_taken + data.notes_taken;
-      }
-      
-      if (data.translations_requested !== undefined) {
-        updateData.translations_requested = activeSession.translations_requested + data.translations_requested;
-      }
-      
-      if (data.session_data !== undefined) {
-        updateData.session_data = {
-          ...(activeSession.session_data || {}),
-          ...data.session_data
-        };
-      }
-
-      // Update session
-      const { data: updatedSession, error: updateError } = await supabase
-        .from('learning_sessions')
-        .update(updateData)
-        .eq('id', activeSession.id)
-        .eq('user_id', user.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('Database error:', updateError);
-        
-        const errorResponse: ErrorResponse = {
-          success: false,
-          error: {
-            code: 'DATABASE_ERROR',
-            message: 'Failed to update learning session',
-            details: updateError
-          }
-        };
-        
-        return new Response(
-          JSON.stringify(errorResponse),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, ...securityHeaders } 
-          }
-        );
-      }
-
-      const successResponse: SuccessResponse<LearningSession> = {
-        success: true,
-        data: updatedSession
-      };
-
-      return new Response(
-        JSON.stringify(successResponse),
-        { 
-          status: 200, 
           headers: { ...corsHeaders, ...securityHeaders } 
         }
       );

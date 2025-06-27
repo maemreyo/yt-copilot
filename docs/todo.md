@@ -178,359 +178,153 @@
 
 ---
 
-
 # TODO: YouTube Learning Co-pilot Extension - Implementation Plan
 
 ## 🎯 CURRENT PROJECT STATUS
-- **✅ Layers 1-7**: 100% COMPLETED (Lean SaaS Foundation - 2000+ lines, 95% test coverage)
-- **✅ Layer 8 Planning**: Week 1-2 COMPLETED (Architecture + Database Schema)
-- **🚀 ACTIVE SPRINT**: Week 3 - YouTube Integration Module (Ready to execute)
+- **✅ Layers 1-7**: 100% COMPLETED (Lean SaaS Foundation)
+- **✅ Layer 8 Planning**: Architecture + Database Schema COMPLETED
+- **✅ Module 7**: YouTube Integration (In Progress)
+- **✅ Module 8**: AI Processing (Planned)
+- **🚀 ACTIVE**: Module 9 - Learning Analytics Implementation
 
 ---
 
-## 🏗️ LAYER 8: YOUTUBE EXTENSION BACKEND MODULES
+## 🏗️ MODULE 9: LEARNING ANALYTICS - IMPLEMENTATION PLAN
 
-### ✅ 8.1 Planning & Architecture (COMPLETED - Week 1)
-- [x] **Technology choice analysis**: ✅ COMPLETED - Supabase Edge Functions chosen
-- [x] **Backend user stories**: ✅ COMPLETED - 14 user stories across 3 modules defined  
-- [x] **Database schema design**: ✅ COMPLETED - 8 tables with RLS policies planned
-- [x] **API endpoint mapping**: ✅ COMPLETED - 15+ endpoints mapped to user stories
-- [x] **External API research**: ✅ COMPLETED - YouTube, Google Translate, OpenAI APIs analyzed
-- [x] **Cost analysis**: ✅ COMPLETED - $90-105/month operating costs calculated
+### ✅ COMPLETED (Foundation)
+- [x] **Module Structure**: Edge Functions directory structure created
+- [x] **Shared Utilities**:
+  - [x] `types.ts` - Complete type definitions
+  - [x] `spaced-repetition.ts` - SM-2 algorithm implementation
+  - [x] `validators.ts` - Input validation with Zod
+- [x] **Database Schema**: All tables created with RLS policies
+- [x] **Initial Endpoints**:
+  - [x] POST `/v1/learning/vocabulary` - Add vocabulary
+  - [x] GET `/v1/learning/vocabulary` - List vocabulary with filters
+  - [x] POST `/v1/learning/notes` - Create note
 
-### ✅ 8.2 Database Schema Extensions (COMPLETED - Week 2)
-- [x] **youtube_videos table**: ✅ COMPLETED - Foundation table with RLS policies
-- [x] **video_transcripts table**: ✅ COMPLETED - Timestamped segments storage
-- [x] **user_video_history table**: ✅ COMPLETED - Progress tracking & bookmarks
-- [x] **ai_translations table**: ✅ COMPLETED - Translation caching for cost optimization
-- [x] **video_summaries table**: ✅ COMPLETED - AI-generated content storage
-- [x] **vocabulary_entries table**: ✅ COMPLETED - User's saved words and learning progress
-- [x] **learning_sessions table**: ✅ COMPLETED - Analytics and session tracking
-- [x] **video_notes table**: ✅ COMPLETED - User annotations with timestamps
-- [x] **RLS Policies verification**: ✅ COMPLETED - All tables secured
-- [x] **Extended seed data**: ✅ COMPLETED - Test data for YouTube features
+### ✅ COMPLETED IMPLEMENTATION TASKS (Module 9 Complete!)
 
----
-
-## 🚀 ACTIVE SPRINT: Week 3 - YouTube Integration Module
-
-### 8.3 Module 7: YouTube Integration ⚡ STARTING TODAY
-
-**CURRENT TASK**: US 7.1 Video Metadata Extraction - Day 1 Implementation
-
-#### Priority 1: Video Metadata Extraction (Day 1-2) ⚡ ACTIVE TODAY
-**US 7.1: As a user, I want to analyze YouTube videos to extract metadata and basic information**
-
-**🎯 TODAY'S IMPLEMENTATION TASKS:**
-
-- [ ] **Set up YouTube Data API v3 credentials**:
-  - [ ] Create Google Cloud Console project (if not exists)
-  - [ ] Enable YouTube Data API v3
-  - [ ] Generate API key
-  - [ ] Add YOUTUBE_API_KEY to environment configuration
-
-- [ ] **Create module structure**:
-  ```
-  src/modules/youtube/
-  ├── functions/
-  │   └── analyze-video.ts ⚡ IMPLEMENTING
-  ├── tests/
-  │   └── integration/
-  │       └── analyze-video.test.ts
-  ├── types/
-  │   └── youtube.ts
-  └── utils/
-      └── youtube-api.ts
-  ```
-
-- [ ] **Create API endpoint**: `POST /v1/youtube/video/analyze`
-  ```typescript
-  // Expected implementation in: src/modules/youtube/functions/analyze-video.ts
-  interface AnalyzeVideoRequest {
-    video_url: string;
-    user_id: string;
-  }
+#### Task 1: Vocabulary Management Completion ✅
+- [x] **PUT `/v1/learning/vocabulary/{id}`** - Update vocabulary & review
+  - [x] Implemented review with spaced repetition algorithm
+  - [x] Update success rate and next review date
+  - [x] Handle ease factor adjustments with SM-2 algorithm
+  - [x] Proper error handling and validation
   
-  interface AnalyzeVideoResponse {
-    video_id: string;
-    title: string;
-    channel_name: string;
-    duration: number;
-    thumbnail_url: string;
-    description?: string;
-    view_count?: number;
-    like_count?: number;
-  }
-  ```
+- [x] **DELETE `/v1/learning/vocabulary/{id}`** - Delete vocabulary
+  - [x] Soft delete to preserve analytics
+  - [x] Update session word counts
+  - [x] Add proper authorization checks
 
-- [ ] **YouTube Data API v3 integration**:
-  - [ ] Set up API key authentication
-  - [ ] Implement video details extraction
-  - [ ] Handle rate limiting (10k units/day)
-  - [ ] Add error handling for private/deleted videos
-
-- [ ] **Caching strategy implementation**:
-  - [ ] Use existing Layer 1 cache utilities
-  - [ ] Cache video metadata for 24 hours
-  - [ ] Implement cache invalidation logic
-  - [ ] Add cache hit/miss metrics
-
-- [ ] **Database operations**:
-  - [ ] Insert/update youtube_videos table
-  - [ ] Use existing database utilities from Layer 2
-  - [ ] Apply RLS policies for user data isolation
-  - [ ] Add audit logging for video analysis events
-
-- [ ] **Integration tests**:
-  - [ ] Test successful video analysis flow
-  - [ ] Test error handling (invalid URLs, private videos)
-  - [ ] Test caching behavior
-  - [ ] Test rate limiting compliance
-
-**Success Criteria**:
-- [ ] API responds < 500ms for 95% of requests
-- [ ] Handles 10k video analyses/day within YouTube quota
-- [ ] 100% security compliance with RLS policies
-- [ ] Comprehensive error handling for edge cases
-
-**🚀 TOMORROW'S PLAN: US 7.1 Day 2 - Polish & Optimization**
-
-**Task 1: Code Review & Optimization (1 hour)**
-- [ ] **Code review and refactoring**:
-  - [ ] Review implementation for best practices
-  - [ ] Optimize database queries and indexes
-  - [ ] Enhance error messages and logging
-  - [ ] Add JSDoc documentation
-
-**Task 2: Advanced Features (1.5 hours)**  
-- [ ] **Batch video analysis endpoint**: `POST /v1/youtube/video/analyze-batch`
-  - [ ] Support analyzing multiple videos in single request
-  - [ ] Implement efficient batching with YouTube API
-  - [ ] Add progress tracking for large batches
-
-**Task 3: Monitoring & Observability (1 hour)**
-- [ ] **Enhanced monitoring**:
-  - [ ] Add performance metrics collection
-  - [ ] Implement quota usage alerts
-  - [ ] Create health check endpoint
-  - [ ] Add API usage analytics
-
-**Task 4: Documentation & Deployment Prep (30 mins)**
-- [ ] **API documentation**:
-  - [ ] Update OpenAPI specs for analyze-video endpoint
-  - [ ] Add usage examples and error codes
-  - [ ] Document rate limits and quotas
-
-**Day 2 Success Criteria:**
-- [ ] Production-ready analyze-video endpoint with monitoring
-- [ ] Batch processing capability for multiple videos
-- [ ] Complete API documentation
-- [ ] Ready to move to US 7.2 (Transcript Extraction)
-
-#### Priority 2: Transcript Extraction (Day 3-4) 🎯 NEXT
-**US 7.2: As a user, I want to extract and process video transcripts for interaction**
-
-- [ ] **Create API endpoint**: `POST /v1/youtube/transcript/extract`
-  ```typescript
-  // Expected implementation in: src/modules/youtube/functions/extract-transcript.ts
-  interface ExtractTranscriptRequest {
-    video_id: string;
-    language?: string; // Default: 'en', Support: 'en', 'vi'
-  }
+#### Task 2: Session Tracking System ✅
+- [x] **POST `/v1/learning/sessions`** - Start/end session
+  - [x] Create session start endpoint
+  - [x] Implement session end with duration calculation
+  - [x] Auto-calculate words learned, notes taken
+  - [x] Add session type detection
   
-  interface TranscriptSegment {
-    start: number;    // seconds
-    duration: number; // seconds  
-    text: string;
-  }
+- [x] **GET `/v1/learning/sessions`** - Session history
+  - [x] List sessions with pagination
+  - [x] Add filtering by date range, video_id
+  - [x] Include summary statistics
+  - [x] Calculate learning streaks via RPC
+
+#### Task 3: Notes Management Completion ✅
+- [x] **GET `/v1/learning/notes`** - List notes
+  - [x] Filter by video_id, tags, date range
+  - [x] Full-text search implementation
+  - [x] Pagination support
+  - [x] Include video metadata in response
   
-  interface ExtractTranscriptResponse {
-    video_id: string;
-    language: string;
-    segments: TranscriptSegment[];
-    total_duration: number;
-  }
-  ```
+- [x] **PUT `/v1/learning/notes/{id}`** - Update note
+  - [x] Update content, tags, formatting
+  - [x] Maintain timestamp integrity
+  - [x] Proper validation and error handling
+  
+- [x] **DELETE `/v1/learning/notes/{id}`** - Delete note
+  - [x] Soft delete for data recovery
+  - [x] Update session note counts
 
-- [ ] **YouTube Transcript API integration**:
-  - [ ] Research and integrate transcript extraction library
-  - [ ] Handle multiple language support (EN/VI priority)
-  - [ ] Parse transcript into timestamped segments
-  - [ ] Handle auto-generated vs manual transcripts
+#### Task 4: Analytics Dashboard ✅
+- [x] **GET `/v1/learning/analytics/overview`** - Stats overview
+  - [x] Total vocabulary count & growth rate
+  - [x] Learning streak calculation
+  - [x] Average session duration
+  - [x] Success rate trends
+  
+- [x] **GET `/v1/learning/analytics/dashboard`** - Full dashboard
+  - [x] Vocabulary growth chart data
+  - [x] Session frequency analysis
+  - [x] Learning velocity metrics
+  - [x] Personalized recommendations
+  - [x] Recent activity tracking
 
-- [ ] **Database operations**:
-  - [ ] Insert into video_transcripts table
-  - [ ] Store segments as JSONB for efficient querying
-  - [ ] Link to youtube_videos via foreign key
-  - [ ] Implement caching for expensive operations
+### 📋 IMPLEMENTATION CHECKLIST
 
-- [ ] **Error handling**:
-  - [ ] Handle videos without transcripts gracefully
-  - [ ] Provide fallback options or clear error messages
-  - [ ] Log failed transcript extractions for monitoring
-  - [ ] Implement retry logic for transient failures
+#### Code Quality Standards:
+- [ ] Follow Edge Functions pattern from modules 7 & 8
+- [ ] Reuse Layer 1 utilities (error handling, validation, caching)
+- [ ] Implement proper RLS policies for all operations
+- [ ] Add comprehensive logging for debugging
+- [ ] Write integration tests for each endpoint
 
-- [ ] **Integration tests**:
-  - [ ] Test transcript extraction for videos with subtitles
-  - [ ] Test error handling for videos without transcripts
-  - [ ] Test multi-language support
-  - [ ] Test segment parsing accuracy
+#### Performance Optimizations:
+- [ ] Use database indexes effectively
+- [ ] Implement efficient pagination
+- [ ] Cache analytics calculations (5-minute TTL)
+- [ ] Batch database operations where possible
 
-**Success Criteria**:
-- [ ] Successfully extract transcripts for 80%+ of educational videos
-- [ ] Accurate timestamp parsing with <1 second precision
-- [ ] Support for English and Vietnamese languages
-- [ ] Graceful handling of videos without transcripts
+#### Security Considerations:
+- [ ] JWT authentication for all endpoints
+- [ ] User can only access their own data (RLS)
+- [ ] Input validation on all endpoints
+- [ ] Rate limiting (100 requests/hour for free users)
 
-#### Priority 3: Video History Management (Day 5) 🎯 NEXT
-**US 7.3: As a user, I want to track my video watching history and progress**
+### 🎯 SUCCESS CRITERIA
+- [ ] All 12 endpoints fully functional
+- [ ] Response times < 200ms for 95% of requests
+- [ ] Test coverage > 85%
+- [ ] Zero security vulnerabilities
+- [ ] Comprehensive error handling
 
-**🎯 TOMORROW'S IMPLEMENTATION PLAN:**
-
-- [ ] **Create CRUD endpoints**:
-  ```typescript
-  // POST /v1/youtube/history/add        - Add video to user's history
-  // GET /v1/youtube/history             - List user's video history
-  // PUT /v1/youtube/history/{videoId}   - Update progress/bookmark
-  // DELETE /v1/youtube/history/{videoId} - Remove from history
-  ```
-
-- [ ] **Implement privacy-focused history tracking**:
-  - [ ] Store last watched timestamp
-  - [ ] Track progress through video (percentage/seconds)
-  - [ ] Bookmark functionality
-  - [ ] Soft delete to preserve analytics
-
-- [ ] **RLS policies enforcement**:
-  - [ ] Ensure users can only access their own history
-  - [ ] Apply data retention policies
-  - [ ] Implement audit logging
-
-- [ ] **Performance optimization**:
-  - [ ] Add pagination for history listing
-  - [ ] Create indexes for frequent queries
-  - [ ] Implement efficient bulk operations
-
-**Success Criteria**:
-- [ ] Complete CRUD operations with RLS
-- [ ] Sub-100ms response times for queries
-- [ ] Full privacy compliance
-- [ ] Comprehensive test coverage
+### 📅 TIMELINE
+- **Today**: Complete all remaining endpoints (9 hours)
+- **Tomorrow**: Integration testing & optimization
+- **Day 3**: Documentation & deployment preparation
 
 ---
 
-## 📅 UPCOMING SPRINTS
+## 🔄 INTEGRATION WITH OTHER MODULES
 
-### Week 4: AI Processing Module (Module 8)
-- [ ] **US 8.1**: Word/phrase translation endpoints
-- [ ] **US 8.2**: Video summarization endpoints
-- [ ] **US 8.3**: Content analysis endpoints
+### Dependencies from Module 7:
+- `youtube_videos` table for video references
+- `video_transcripts` for word extraction context
+- Video metadata for enriched analytics
 
-### Week 5: Learning Analytics Module (Module 9)
-- [ ] **US 9.1**: Vocabulary Management System
-- [ ] **US 9.2**: Session Analytics & Recommendations  
-- [ ] **US 9.3**: Note-Taking System
-- [ ] **US 9.4**: Analytics Dashboard
+### Dependencies from Module 8:
+- Translation data for vocabulary entries
+- AI-generated summaries for note suggestions
+- Content analysis for learning insights
 
-### Week 6: Integration Testing & QA
-- [ ] End-to-end testing across all modules
-- [ ] Performance optimization and load testing
-- [ ] Security testing and vulnerability assessment
-- [ ] Chrome extension integration testing
-
-### Week 7: Documentation & Production Deployment
-- [ ] Complete API documentation (OpenAPI/Swagger)
-- [ ] Production deployment with monitoring
-- [ ] User acceptance testing
-- [ ] Launch preparation
+### Provides to Frontend:
+- Real-time learning progress data
+- Vocabulary review scheduling
+- Analytics for motivation features
+- Export functionality for offline study
 
 ---
 
-## 🔧 LEVERAGING EXISTING LAYERS
-
-### ✅ Layer 1: Foundation & Utilities (Available)
-- **Error Handling**: Use for API error responses and validation
-- **Rate Limiting**: Apply to YouTube API quota management
-- **Security**: CORS, headers, request sanitization for all endpoints
-- **Logging**: Structured logging for all YouTube operations
-- **Caching**: In-memory and Redis caching for API responses
-
-### ✅ Layer 2: Database Foundation (Available)  
-- **Connection Management**: Use existing database utilities
-- **Migrations**: All YouTube tables already created
-- **Type Generation**: Automated TypeScript types for new schema
-- **Audit Logging**: Track all user operations
-
-### ✅ Layer 3: Testing Infrastructure (Available)
-- **Test Utilities**: Extend for YouTube endpoint testing
-- **Integration Tests**: Use established patterns
-- **Coverage**: Maintain 95% coverage standard
-
-### ✅ Layer 5: Authentication (Available)
-- **JWT Tokens**: For Chrome extension authentication
-- **API Keys**: For backend service communication
-- **RLS Policies**: Already configured for all YouTube tables
+## 🚀 NEXT STEPS AFTER MODULE 9
+1. **Integration Testing**: Test all three modules working together
+2. **Performance Optimization**: Database query optimization
+3. **API Documentation**: Complete OpenAPI specs
+4. **Frontend Integration**: Begin Chrome Extension development
 
 ---
 
-## 🎯 IMMEDIATE ACTIONS FOR TODAY (US 7.1 - Day 1)
-
-### Priority Tasks - Video Metadata Extraction Implementation:
-
-**Task 1: Environment Setup (30 mins)**
-1. **[ ] ⚡ NEXT**: Set up YouTube Data API v3 credentials
-   - Create/access Google Cloud Console project
-   - Enable YouTube Data API v3
-   - Generate API key with proper restrictions
-   - Add YOUTUBE_API_KEY to .env configuration
-
-**Task 2: Module Structure (15 mins)**
-2. **[ ]** Create YouTube module folder structure
-   ```
-   src/modules/youtube/
-   ├── functions/analyze-video.ts
-   ├── types/youtube.ts
-   ├── utils/youtube-api.ts
-   └── tests/integration/
-   ```
-
-**Task 3: Core Implementation (2-3 hours)**
-3. **[ ]** Implement `analyze-video.ts` endpoint
-   - YouTube URL parsing and validation
-   - YouTube Data API v3 integration
-   - Response caching with Layer 1 utilities
-   - Error handling for edge cases
-
-**Task 4: Database Integration (30 mins)**
-4. **[ ]** Database operations for video storage
-   - Insert/update youtube_videos table
-   - Apply RLS policies for user isolation
-   - Use existing Layer 2 database utilities
-
-**Task 5: Testing (45 mins)**
-5. **[ ]** Create integration tests
-   - Test successful video analysis
-   - Test error handling scenarios
-   - Test caching behavior
-
-### End of Day Success Criteria:
-- [ ] YouTube API credentials configured and working
-- [ ] Basic analyze-video endpoint functional
-- [ ] Can successfully extract metadata from public YouTube videos
-- [ ] Database integration working with RLS policies
-- [ ] Basic integration test passing
-
-### Success Metrics for Week 3:
-- [ ] All 3 user stories (US 7.1, 7.2, 7.3) completed
-- [ ] API response times < 500ms for 95% of requests
-- [ ] YouTube API quota management working efficiently
-- [ ] 100% test coverage for new endpoints
-- [ ] Zero security vulnerabilities in RLS implementation
-
----
-
-**🚀 SPRINT GOAL**: Complete YouTube Integration Module with production-ready video analysis, transcript extraction, and history management capabilities, leveraging the proven Lean SaaS foundation.
-
-**📅 TIMELINE**: 5 days to complete Module 7, then 4 weeks to full backend completion
-
-**🎯 NEXT MILESTONE**: Week 4 AI Processing Module for intelligent content analysis
+**📝 Notes**: 
+- Prioritize core functionality over advanced features
+- Use existing utilities from Layers 1-7 extensively
+- Maintain consistency with established patterns
+- Focus on user privacy and data security

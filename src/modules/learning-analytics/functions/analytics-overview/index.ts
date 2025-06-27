@@ -1,10 +1,10 @@
-import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
+import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import type { 
   LearningAnalyticsOverview,
   SuccessResponse, 
   ErrorResponse 
-} from '_shared/types.ts';
+} from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -49,22 +49,19 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
   }
 }
 
-// Main handler
-serve(async (req) => {
-  // Handle CORS
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 204,
-      headers: corsHeaders 
-    });
+serve(async (request: Request) => {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  if (req.method !== 'GET') {
+  // Only allow GET
+  if (request.method !== 'GET') {
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only GET method allowed'
+        message: 'Only GET method is allowed'
       }
     };
     
@@ -79,13 +76,13 @@ serve(async (req) => {
 
   try {
     // Authenticate user
-    const user = await extractUser(req);
+    const user = await extractUser(request);
     if (!user) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Authentication required'
+          message: 'Invalid or missing authentication token'
         }
       };
       
@@ -101,49 +98,48 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      { auth: { persistSession: false } }
     );
 
-    // Get total videos watched (unique videos)
-    const { count: totalVideosWatched } = await supabase
+    // Get total videos watched
+    const { count: totalVideos } = await supabase
       .from('user_video_history')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
 
-    // Get total words learned
-    const { count: totalWordsLearned } = await supabase
+    // Get vocabulary statistics
+    const { count: totalWords } = await supabase
       .from('vocabulary_entries')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
 
-    // Get total notes taken
-    const { count: totalNotesTaken } = await supabase
+    // Get notes statistics
+    const { count: totalNotes } = await supabase
       .from('video_notes')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
 
-    // Get total learning time from sessions
-    const { data: sessions } = await supabase
+    // Get session statistics
+    const { data: sessionStats } = await supabase
       .from('learning_sessions')
       .select('duration_seconds')
-      .eq('user_id', user.id)
-      .not('duration_seconds', 'is', null);
+      .eq('user_id', user.id);
 
-    const totalLearningTime = sessions?.reduce(
-      (sum, session) => sum + (session.duration_seconds || 0), 
-      0
+    const totalLearningTime = sessionStats?.reduce((sum, session) => 
+      sum + (session.duration_seconds || 0), 0
     ) || 0;
 
-    // Calculate learning streak using the database function
-    const { data: streakData } = await supabase
-      .rpc('get_learning_streak', { p_user_id: user.id });
-    
-    const learningStreak = streakData || 0;
-
-    // Get average session time
-    const averageSessionTime = sessions && sessions.length > 0
-      ? Math.round(totalLearningTime / sessions.length)
+    const averageSessionTime = sessionStats && sessionStats.length > 0
+      ? Math.round(totalLearningTime / sessionStats.length)
       : 0;
+
+    // Calculate learning streak
+    const { data: streakData } = await supabase.rpc('calculate_learning_streak', {
+      p_user_id: user.id
+    });
 
     // Get last activity
     const { data: lastActivity } = await supabase
@@ -154,18 +150,19 @@ serve(async (req) => {
       .limit(1)
       .single();
 
-    // Prepare overview data
+    // Build overview response
     const overview: LearningAnalyticsOverview = {
-      total_videos_watched: totalVideosWatched || 0,
-      total_words_learned: totalWordsLearned || 0,
-      total_notes_taken: totalNotesTaken || 0,
+      total_videos_watched: totalVideos || 0,
+      total_words_learned: totalWords || 0,
+      total_notes_taken: totalNotes || 0,
       total_learning_time: totalLearningTime,
-      learning_streak: learningStreak,
+      learning_streak: streakData || 0,
       average_session_time: averageSessionTime,
-      last_activity_at: lastActivity?.started_at
+      last_activity_at: lastActivity?.started_at || undefined
     };
 
-    const successResponse: SuccessResponse<LearningAnalyticsOverview> = {
+    // Return success response
+    const successResponse: SuccessResponse = {
       success: true,
       data: overview
     };

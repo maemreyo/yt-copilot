@@ -1,13 +1,11 @@
-import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
-import { getDueItems } from '_shared/spaced-repetition.ts';
+import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
 import type { 
   LearningAnalyticsDashboard,
-  VocabularyEntry,
-  VideoNote,
+  LearningAnalyticsOverview,
   SuccessResponse, 
   ErrorResponse 
-} from '_shared/types.ts';
+} from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -52,49 +50,32 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
   }
 }
 
-// Get date range for trends (last 30 days)
-function getDateRange(days: number = 30): { start: Date; end: Date } {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - days);
-  return { start, end };
+// Get date ranges for trend analysis
+function getDateRanges() {
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  return {
+    now: now.toISOString(),
+    thirtyDaysAgo: thirtyDaysAgo.toISOString(),
+    sevenDaysAgo: sevenDaysAgo.toISOString()
+  };
 }
 
-// Group data by date
-function groupByDate<T extends { created_at?: string; learned_at?: string; started_at?: string }>(
-  items: T[],
-  dateField: keyof T
-): Map<string, T[]> {
-  const grouped = new Map<string, T[]>();
-  
-  items.forEach(item => {
-    const dateValue = item[dateField] as string | undefined;
-    if (!dateValue) return;
-    
-    const date = new Date(dateValue).toISOString().split('T')[0];
-    const existing = grouped.get(date) || [];
-    grouped.set(date, [...existing, item]);
-  });
-  
-  return grouped;
-}
-
-// Main handler
-serve(async (req) => {
-  // Handle CORS
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 204,
-      headers: corsHeaders 
-    });
+serve(async (request: Request) => {
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  if (req.method !== 'GET') {
+  // Only allow GET
+  if (request.method !== 'GET') {
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only GET method allowed'
+        message: 'Only GET method is allowed'
       }
     };
     
@@ -109,13 +90,13 @@ serve(async (req) => {
 
   try {
     // Authenticate user
-    const user = await extractUser(req);
+    const user = await extractUser(request);
     if (!user) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Authentication required'
+          message: 'Invalid or missing authentication token'
         }
       };
       
@@ -131,225 +112,238 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      { auth: { persistSession: false } }
     );
 
-    // Get date range for trends
-    const { start: startDate } = getDateRange(30);
+    const dates = getDateRanges();
 
-    // Fetch all necessary data in parallel
-    const [
-      overviewResult,
-      vocabularyResult,
-      sessionsResult,
-      recentVideosResult,
-      recentWordsResult,
-      recentNotesResult,
-      vocabularyStatsResult
-    ] = await Promise.all([
-      // Overview stats
-      Promise.all([
-        supabase.from('user_video_history').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('vocabulary_entries').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('video_notes').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
-        supabase.from('learning_sessions').select('duration_seconds').eq('user_id', user.id).not('duration_seconds', 'is', null),
-        supabase.rpc('get_learning_streak', { p_user_id: user.id })
-      ]),
-      
-      // Vocabulary for trends
-      supabase
-        .from('vocabulary_entries')
-        .select('learned_at, next_review_at')
-        .eq('user_id', user.id)
-        .gte('learned_at', startDate.toISOString())
-        .order('learned_at', { ascending: true }),
-      
-      // Sessions for trends
-      supabase
-        .from('learning_sessions')
-        .select('started_at, duration_seconds')
-        .eq('user_id', user.id)
-        .gte('started_at', startDate.toISOString())
-        .order('started_at', { ascending: true }),
-      
-      // Recent videos
-      supabase
-        .from('user_video_history')
-        .select(`
-          video_id,
-          last_watched_at,
-          youtube_videos!inner(title)
-        `)
-        .eq('user_id', user.id)
-        .order('last_watched_at', { ascending: false })
-        .limit(5),
-      
-      // Recent words
-      supabase
-        .from('vocabulary_entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('learned_at', { ascending: false })
-        .limit(10),
-      
-      // Recent notes
-      supabase
-        .from('video_notes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10),
-      
-      // Vocabulary stats
-      supabase.rpc('get_vocabulary_stats', { p_user_id: user.id })
-    ]);
+    // 1. Get Overview Statistics
+    const { count: totalVideos } = await supabase
+      .from('user_video_history')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id);
 
-    // Process overview data
-    const [videosCount, wordsCount, notesCount, sessionsData, streakData] = overviewResult;
-    const sessions = sessionsData.data || [];
-    const totalLearningTime = sessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
-    const averageSessionTime = sessions.length > 0 ? Math.round(totalLearningTime / sessions.length) : 0;
+    const { count: totalWords } = await supabase
+      .from('vocabulary_entries')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
 
-    // Process vocabulary stats
-    const vocabStats = vocabularyStatsResult.data?.[0] || {
-      total_words: 0,
-      words_due_for_review: 0,
-      average_success_rate: 0,
-      words_by_difficulty: { beginner: 0, intermediate: 0, advanced: 0 }
+    const { count: totalNotes } = await supabase
+      .from('video_notes')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
+
+    const { data: sessionStats } = await supabase
+      .from('learning_sessions')
+      .select('duration_seconds, started_at')
+      .eq('user_id', user.id);
+
+    const totalLearningTime = sessionStats?.reduce((sum, session) => 
+      sum + (session.duration_seconds || 0), 0
+    ) || 0;
+
+    const averageSessionTime = sessionStats && sessionStats.length > 0
+      ? Math.round(totalLearningTime / sessionStats.length)
+      : 0;
+
+    const { data: streakData } = await supabase.rpc('calculate_learning_streak', {
+      p_user_id: user.id
+    });
+
+    const lastActivity = sessionStats && sessionStats.length > 0
+      ? sessionStats.sort((a, b) => 
+          new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
+        )[0].started_at
+      : undefined;
+
+    const overview: LearningAnalyticsOverview = {
+      total_videos_watched: totalVideos || 0,
+      total_words_learned: totalWords || 0,
+      total_notes_taken: totalNotes || 0,
+      total_learning_time: totalLearningTime,
+      learning_streak: streakData || 0,
+      average_session_time: averageSessionTime,
+      last_activity_at: lastActivity
     };
 
-    // Generate vocabulary growth trend
-    const vocabularyGrowth: Array<{ date: string; count: number }> = [];
-    if (vocabularyResult.data) {
-      const grouped = groupByDate(vocabularyResult.data, 'learned_at');
-      let cumulativeCount = 0;
-      
-      // Fill in all days in the range
-      const current = new Date(startDate);
-      while (current <= new Date()) {
-        const dateStr = current.toISOString().split('T')[0];
-        const dayItems = grouped.get(dateStr) || [];
-        cumulativeCount += dayItems.length;
-        
-        vocabularyGrowth.push({
-          date: dateStr,
-          count: cumulativeCount
-        });
-        
-        current.setDate(current.getDate() + 1);
+    // 2. Get Vocabulary Statistics
+    const { data: vocabularyByDifficulty } = await supabase
+      .from('vocabulary_entries')
+      .select('difficulty')
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
+
+    const difficultyCount = {
+      beginner: 0,
+      intermediate: 0,
+      advanced: 0
+    };
+
+    vocabularyByDifficulty?.forEach(entry => {
+      if (entry.difficulty && entry.difficulty in difficultyCount) {
+        difficultyCount[entry.difficulty as keyof typeof difficultyCount]++;
       }
-    }
+    });
 
-    // Generate session frequency trend
-    const sessionFrequency: Array<{ date: string; sessions: number }> = [];
-    if (sessionsResult.data) {
-      const grouped = groupByDate(sessionsResult.data, 'started_at');
-      
-      // Group by week
-      const weeklyData = new Map<string, number>();
-      grouped.forEach((sessions, date) => {
-        const weekStart = new Date(date);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        const weekKey = weekStart.toISOString().split('T')[0];
-        
-        const existing = weeklyData.get(weekKey) || 0;
-        weeklyData.set(weekKey, existing + sessions.length);
-      });
-      
-      weeklyData.forEach((count, week) => {
-        sessionFrequency.push({ date: week, sessions: count });
-      });
-    }
+    const { count: dueForReview } = await supabase
+      .from('vocabulary_entries')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .is('deleted_at', null)
+      .lte('next_review_at', dates.now);
 
-    // Generate learning time trend
-    const learningTime: Array<{ date: string; minutes: number }> = [];
-    if (sessionsResult.data) {
-      const grouped = groupByDate(sessionsResult.data, 'started_at');
-      
-      grouped.forEach((sessions, date) => {
-        const totalMinutes = sessions.reduce(
-          (sum, s) => sum + Math.round((s.duration_seconds || 0) / 60),
-          0
-        );
-        learningTime.push({ date, minutes: totalMinutes });
-      });
-    }
+    const { data: successRates } = await supabase
+      .from('vocabulary_entries')
+      .select('success_rate')
+      .eq('user_id', user.id)
+      .is('deleted_at', null)
+      .gt('review_count', 0);
 
-    // Generate recommendations
-    const recommendations: any[] = [];
-    
-    // Due vocabulary review recommendation
-    if (vocabStats.words_due_for_review > 0) {
+    const averageSuccessRate = successRates && successRates.length > 0
+      ? successRates.reduce((sum, entry) => sum + (entry.success_rate || 0), 0) / successRates.length
+      : 0;
+
+    // 3. Get Progress Trends (Last 30 days)
+    const { data: vocabularyGrowth } = await supabase
+      .from('vocabulary_entries')
+      .select('learned_at')
+      .eq('user_id', user.id)
+      .gte('learned_at', dates.thirtyDaysAgo)
+      .order('learned_at');
+
+    // Group by date
+    const vocabularyByDate = new Map<string, number>();
+    vocabularyGrowth?.forEach(entry => {
+      const date = new Date(entry.learned_at).toISOString().split('T')[0];
+      vocabularyByDate.set(date, (vocabularyByDate.get(date) || 0) + 1);
+    });
+
+    // Create cumulative growth
+    let cumulativeCount = totalWords! - (vocabularyGrowth?.length || 0);
+    const vocabularyTrend = Array.from(vocabularyByDate.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => {
+        cumulativeCount += count;
+        return { date, count: cumulativeCount };
+      });
+
+    // Session frequency by week
+    const { data: sessionsByWeek } = await supabase
+      .from('learning_sessions')
+      .select('started_at')
+      .eq('user_id', user.id)
+      .gte('started_at', dates.thirtyDaysAgo)
+      .order('started_at');
+
+    const sessionFrequency = new Map<string, number>();
+    sessionsByWeek?.forEach(session => {
+      const date = new Date(session.started_at);
+      const week = `${date.getFullYear()}-W${Math.ceil((date.getDate() + 6 - date.getDay()) / 7).toString().padStart(2, '0')}`;
+      sessionFrequency.set(week, (sessionFrequency.get(week) || 0) + 1);
+    });
+
+    const sessionTrend = Array.from(sessionFrequency.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, sessions]) => ({ date, sessions }));
+
+    // Learning time by day
+    const learningTimeByDay = new Map<string, number>();
+    sessionStats?.forEach(session => {
+      if (new Date(session.started_at) >= new Date(dates.thirtyDaysAgo)) {
+        const date = new Date(session.started_at).toISOString().split('T')[0];
+        const minutes = Math.round((session.duration_seconds || 0) / 60);
+        learningTimeByDay.set(date, (learningTimeByDay.get(date) || 0) + minutes);
+      }
+    });
+
+    const learningTimeTrend = Array.from(learningTimeByDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, minutes]) => ({ date, minutes }));
+
+    // 4. Generate Recommendations
+    const recommendations = [];
+
+    if (dueForReview && dueForReview > 0) {
       recommendations.push({
-        type: 'vocabulary_review',
-        message: `You have ${vocabStats.words_due_for_review} words due for review`,
+        type: 'vocabulary_review' as const,
+        message: `You have ${dueForReview} words due for review`,
         action: 'review_vocabulary'
       });
     }
-    
-    // Learning streak recommendation
-    const streak = streakData.data || 0;
-    if (streak === 0) {
+
+    if (streakData === 0) {
       recommendations.push({
-        type: 'learning_pattern',
-        message: 'Start a learning session today to build your streak!',
+        type: 'learning_pattern' as const,
+        message: 'Start a learning streak by studying every day',
         action: 'start_session'
       });
-    } else if (streak > 7) {
+    } else if (streakData && streakData >= 7) {
       recommendations.push({
-        type: 'learning_pattern',
-        message: `Great job! You're on a ${streak} day learning streak!`,
+        type: 'learning_pattern' as const,
+        message: `Great job! You've maintained a ${streakData}-day learning streak`,
         action: 'continue_streak'
       });
     }
-    
-    // Vocabulary difficulty recommendation
-    if (vocabStats.words_by_difficulty.beginner > vocabStats.words_by_difficulty.advanced * 3) {
+
+    if (averageSuccessRate < 0.7 && successRates && successRates.length > 10) {
       recommendations.push({
-        type: 'content_suggestion',
-        message: 'Try learning more advanced vocabulary to challenge yourself',
-        action: 'explore_advanced'
+        type: 'vocabulary_review' as const,
+        message: 'Your vocabulary success rate is low. Consider reviewing more frequently',
+        action: 'adjust_difficulty'
       });
     }
 
-    // Format recent activity
-    const recentVideos = recentVideosResult.data?.map(item => ({
-      video_id: item.video_id,
-      title: item.youtube_videos?.title,
-      last_watched: item.last_watched_at
-    })) || [];
+    // 5. Get Recent Activity
+    const { data: recentVideos } = await supabase
+      .from('user_video_history')
+      .select(`
+        video_id,
+        last_watched_at,
+        youtube_videos!inner(title, channel_name, duration)
+      `)
+      .eq('user_id', user.id)
+      .order('last_watched_at', { ascending: false })
+      .limit(5);
+
+    const { data: recentWords } = await supabase
+      .from('vocabulary_entries')
+      .select('word, learned_at')
+      .eq('user_id', user.id)
+      .is('deleted_at', null)
+      .order('learned_at', { ascending: false })
+      .limit(10);
 
     // Build dashboard response
     const dashboard: LearningAnalyticsDashboard = {
-      overview: {
-        total_videos_watched: videosCount.count || 0,
-        total_words_learned: wordsCount.count || 0,
-        total_notes_taken: notesCount.count || 0,
-        total_learning_time: totalLearningTime,
-        learning_streak: streak,
-        average_session_time: averageSessionTime,
-        last_activity_at: sessions[0]?.started_at
-      },
+      overview,
       vocabulary_stats: {
-        total: vocabStats.total_words,
-        by_difficulty: vocabStats.words_by_difficulty,
-        due_for_review: vocabStats.words_due_for_review,
-        average_success_rate: Number(vocabStats.average_success_rate) || 0
+        total: totalWords || 0,
+        by_difficulty: difficultyCount,
+        due_for_review: dueForReview || 0,
+        average_success_rate: Math.round(averageSuccessRate * 100) / 100
       },
       progress_trends: {
-        vocabulary_growth: vocabularyGrowth.slice(-30), // Last 30 days
-        session_frequency: sessionFrequency.slice(-4), // Last 4 weeks
-        learning_time: learningTime.slice(-30) // Last 30 days
+        vocabulary_growth: vocabularyTrend,
+        session_frequency: sessionTrend,
+        learning_time: learningTimeTrend
       },
       recommendations,
       recent_activity: {
-        recent_videos: recentVideos,
-        recent_words: recentWordsResult.data || [],
-        recent_notes: recentNotesResult.data || []
+        recent_videos: recentVideos?.map(item => ({
+          video_id: item.video_id,
+          title: item.youtube_videos.title,
+          channel_name: item.youtube_videos.channel_name,
+          last_watched_at: item.last_watched_at
+        })) || [],
+        recent_words: recentWords || []
       }
     };
 
-    const successResponse: SuccessResponse<LearningAnalyticsDashboard> = {
+    // Return success response
+    const successResponse: SuccessResponse = {
       success: true,
       data: dashboard
     };

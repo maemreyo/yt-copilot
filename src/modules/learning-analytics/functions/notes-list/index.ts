@@ -1,10 +1,8 @@
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
-import { UpdateVocabularySchema } from '../../_shared/validators.ts';
-import { calculateNextReview, getNextReviewDate } from '../../_shared/spaced-repetition.ts';
+import { NoteListSchema } from '../../_shared/validators.ts';
 import type { 
-  UpdateVocabularyRequest, 
-  VocabularyEntry,
+  NoteListRequest,
   SuccessResponse, 
   ErrorResponse 
 } from '../../_shared/types.ts';
@@ -52,10 +50,106 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
   }
 }
 
-// Extract ID from URL path
-function extractIdFromPath(url: string): string | null {
-  const pathMatch = url.match(/\/vocabulary\/([a-f0-9-]{36})$/);
-  return pathMatch ? pathMatch[1] : null;
+// Parse query parameters
+function parseQueryParams(url: string): NoteListRequest {
+  const params = new URL(url).searchParams;
+  
+  const request: NoteListRequest = {
+    limit: parseInt(params.get('limit') || '20'),
+    offset: parseInt(params.get('offset') || '0'),
+    filter: {},
+    sort_by: 'created_at',
+    order: 'desc'
+  };
+
+  // Parse filters
+  if (params.get('video_id')) {
+    request.filter!.video_id = params.get('video_id')!;
+  }
+  
+  if (params.get('tags')) {
+    request.filter!.tags = params.get('tags')!.split(',').map(t => t.trim());
+  }
+  
+  if (params.get('search')) {
+    request.filter!.search = params.get('search')!;
+  }
+  
+  if (params.get('is_private') !== null) {
+    request.filter!.is_private = params.get('is_private') === 'true';
+  }
+
+  // Parse sorting
+  const sortBy = params.get('sort_by');
+  if (sortBy && ['created_at', 'updated_at', 'timestamp'].includes(sortBy)) {
+    request.sort_by = sortBy as any;
+  }
+  
+  const order = params.get('order');
+  if (order && ['asc', 'desc'].includes(order)) {
+    request.order = order as any;
+  }
+
+  return request;
+}
+
+// Build query based on filters
+function buildQuery(
+  supabase: any,
+  userId: string,
+  params: NoteListRequest
+) {
+  let query = supabase
+    .from('video_notes')
+    .select(`
+      *,
+      youtube_videos!video_id(
+        id,
+        title,
+        channel_name,
+        thumbnail_url,
+        duration
+      )
+    `, { count: 'exact' })
+    .eq('user_id', userId)
+    .is('deleted_at', null);
+
+  // Apply filters
+  if (params.filter) {
+    if (params.filter.video_id) {
+      query = query.eq('video_id', params.filter.video_id);
+    }
+    
+    if (params.filter.tags && params.filter.tags.length > 0) {
+      // PostgreSQL array overlap operator
+      query = query.overlaps('tags', params.filter.tags);
+    }
+    
+    if (params.filter.search) {
+      // Full-text search on content
+      query = query.textSearch('content', params.filter.search, {
+        type: 'websearch',
+        config: 'english'
+      });
+    }
+    
+    if (params.filter.is_private !== undefined) {
+      query = query.eq('is_private', params.filter.is_private);
+    }
+  }
+
+  // Apply sorting
+  query = query.order(params.sort_by || 'created_at', { 
+    ascending: params.order === 'asc' 
+  });
+
+  // Apply pagination
+  query = query.range(
+    params.offset || 0,
+    (params.offset || 0) + (params.limit || 20) - 1
+  );
+
+  return query;
 }
 
 serve(async (request: Request) => {
@@ -64,13 +158,13 @@ serve(async (request: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // Only allow PUT
-  if (request.method !== 'PUT') {
+  // Only allow GET
+  if (request.method !== 'GET') {
     const errorResponse: ErrorResponse = {
       success: false,
       error: {
         code: 'METHOD_NOT_ALLOWED',
-        message: 'Only PUT method is allowed'
+        message: 'Only GET method is allowed'
       }
     };
     
@@ -84,26 +178,6 @@ serve(async (request: Request) => {
   }
 
   try {
-    // Extract vocabulary ID from URL
-    const vocabularyId = extractIdFromPath(request.url);
-    if (!vocabularyId) {
-      const errorResponse: ErrorResponse = {
-        success: false,
-        error: {
-          code: 'INVALID_ID',
-          message: 'Invalid vocabulary ID format'
-        }
-      };
-      
-      return new Response(
-        JSON.stringify(errorResponse),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
-      );
-    }
-
     // Authenticate user
     const user = await extractUser(request);
     if (!user) {
@@ -124,16 +198,16 @@ serve(async (request: Request) => {
       );
     }
 
-    // Parse and validate request body
-    const body = await request.json();
-    const validation = UpdateVocabularySchema.safeParse(body);
+    // Parse and validate query parameters
+    const params = parseQueryParams(request.url);
+    const validation = NoteListSchema.safeParse(params);
     
     if (!validation.success) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'Invalid request data',
+          message: 'Invalid query parameters',
           details: validation.error.errors
         }
       };
@@ -147,7 +221,7 @@ serve(async (request: Request) => {
       );
     }
 
-    const updateData = validation.data;
+    const validatedParams = validation.data;
     
     // Initialize Supabase client
     const supabase = createClient(
@@ -156,92 +230,19 @@ serve(async (request: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // Get existing vocabulary entry
-    const { data: existing, error: fetchError } = await supabase
-      .from('vocabulary_entries')
-      .select('*')
-      .eq('id', vocabularyId)
-      .eq('user_id', user.id)
-      .single();
+    // Build and execute query
+    const query = buildQuery(supabase, user.id, validatedParams);
+    const { data: notes, error, count } = await query;
 
-    if (fetchError || !existing) {
-      const errorResponse: ErrorResponse = {
-        success: false,
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Vocabulary entry not found'
-        }
-      };
-      
-      return new Response(
-        JSON.stringify(errorResponse),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, ...securityHeaders } 
-        }
-      );
-    }
-
-    // Prepare update object
-    const updates: any = {
-      updated_at: new Date().toISOString()
-    };
-
-    // Handle review update (spaced repetition)
-    if (updateData.review_success !== undefined) {
-      const reviewSuccess = updateData.review_success;
-      const currentReviewCount = existing.review_count || 0;
-      const currentSuccessRate = existing.success_rate || 0;
-      
-      // Calculate new success rate
-      const newSuccessRate = (currentSuccessRate * currentReviewCount + (reviewSuccess ? 1 : 0)) / (currentReviewCount + 1);
-      
-      // Calculate next review date using SM-2 algorithm
-      const { interval, easeFactor } = calculateNextReview(
-        currentReviewCount + 1,
-        reviewSuccess ? 4 : 1, // Quality: 4 for success, 1 for failure
-        existing.ease_factor || 2.5
-      );
-      
-      updates.review_count = currentReviewCount + 1;
-      updates.success_rate = Math.round(newSuccessRate * 100) / 100; // Round to 2 decimals
-      updates.next_review_at = getNextReviewDate(interval).toISOString();
-      updates.ease_factor = easeFactor;
-      
-      // Reset to beginning if failed
-      if (!reviewSuccess && currentReviewCount > 2) {
-        updates.review_count = 0;
-        updates.next_review_at = getNextReviewDate(1).toISOString();
-      }
-    }
-
-    // Update other fields if provided
-    if (updateData.definition) {
-      updates.definition = updateData.definition;
-    }
-    
-    if (updateData.difficulty) {
-      updates.difficulty = updateData.difficulty;
-    }
-
-    // Update vocabulary entry
-    const { data: updated, error: updateError } = await supabase
-      .from('vocabulary_entries')
-      .update(updates)
-      .eq('id', vocabularyId)
-      .eq('user_id', user.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error('Database error:', updateError);
+    if (error) {
+      console.error('Database error:', error);
       
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
-          message: 'Failed to update vocabulary entry',
-          details: updateError
+          message: 'Failed to fetch notes',
+          details: error
         }
       };
       
@@ -254,10 +255,31 @@ serve(async (request: Request) => {
       );
     }
 
+    // Get unique tags for the user
+    const { data: allTags } = await supabase
+      .from('video_notes')
+      .select('tags')
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
+
+    const uniqueTags = new Set<string>();
+    if (allTags) {
+      allTags.forEach(note => {
+        if (note.tags && Array.isArray(note.tags)) {
+          note.tags.forEach((tag: string) => uniqueTags.add(tag));
+        }
+      });
+    }
+
     // Return success response
     const successResponse: SuccessResponse = {
       success: true,
-      data: updated
+      data: {
+        notes: notes || [],
+        total: count || 0,
+        has_more: (count || 0) > (validatedParams.offset || 0) + (notes?.length || 0),
+        available_tags: Array.from(uniqueTags).sort()
+      }
     };
 
     return new Response(

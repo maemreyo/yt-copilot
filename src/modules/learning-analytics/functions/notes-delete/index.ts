@@ -47,7 +47,7 @@ async function extractUser(request: Request): Promise<{ id: string; email: strin
 
 // Extract ID from URL path
 function extractIdFromPath(url: string): string | null {
-  const pathMatch = url.match(/\/vocabulary\/([a-f0-9-]{36})$/);
+  const pathMatch = url.match(/\/notes\/([a-f0-9-]{36})$/);
   return pathMatch ? pathMatch[1] : null;
 }
 
@@ -77,14 +77,14 @@ serve(async (request: Request) => {
   }
 
   try {
-    // Extract vocabulary ID from URL
-    const vocabularyId = extractIdFromPath(request.url);
-    if (!vocabularyId) {
+    // Extract note ID from URL
+    const noteId = extractIdFromPath(request.url);
+    if (!noteId) {
       const errorResponse: ErrorResponse = {
         success: false,
         error: {
           code: 'INVALID_ID',
-          message: 'Invalid vocabulary ID format'
+          message: 'Invalid note ID format'
         }
       };
       
@@ -124,12 +124,13 @@ serve(async (request: Request) => {
       { auth: { persistSession: false } }
     );
 
-    // Check if vocabulary entry exists
+    // Check if note exists
     const { data: existing, error: fetchError } = await supabase
-      .from('vocabulary_entries')
+      .from('video_notes')
       .select('id')
-      .eq('id', vocabularyId)
+      .eq('id', noteId)
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .single();
 
     if (fetchError || !existing) {
@@ -137,7 +138,7 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Vocabulary entry not found'
+          message: 'Note not found'
         }
       };
       
@@ -150,14 +151,14 @@ serve(async (request: Request) => {
       );
     }
 
-    // Soft delete to preserve analytics
+    // Soft delete to preserve data integrity
     const { error: deleteError } = await supabase
-      .from('vocabulary_entries')
+      .from('video_notes')
       .update({
         deleted_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
-      .eq('id', vocabularyId)
+      .eq('id', noteId)
       .eq('user_id', user.id);
 
     if (deleteError) {
@@ -167,7 +168,7 @@ serve(async (request: Request) => {
         success: false,
         error: {
           code: 'DATABASE_ERROR',
-          message: 'Failed to delete vocabulary entry',
+          message: 'Failed to delete note',
           details: deleteError
         }
       };
@@ -184,18 +185,18 @@ serve(async (request: Request) => {
     // Update learning session if active
     const { data: activeSession } = await supabase
       .from('learning_sessions')
-      .select('id, words_learned')
+      .select('id, notes_taken')
       .eq('user_id', user.id)
       .is('ended_at', null)
       .order('started_at', { ascending: false })
       .limit(1)
       .single();
 
-    if (activeSession && activeSession.words_learned > 0) {
+    if (activeSession && activeSession.notes_taken > 0) {
       await supabase
         .from('learning_sessions')
         .update({
-          words_learned: activeSession.words_learned - 1
+          notes_taken: activeSession.notes_taken - 1
         })
         .eq('id', activeSession.id);
     }
@@ -204,7 +205,7 @@ serve(async (request: Request) => {
     const successResponse: SuccessResponse = {
       success: true,
       data: {
-        id: vocabularyId,
+        id: noteId,
         deleted: true
       }
     };
