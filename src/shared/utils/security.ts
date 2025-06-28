@@ -73,8 +73,7 @@ export class CorsHandler {
   constructor(config: Partial<CorsConfig> = {}) {
     this.config = {
       origin: config.origin || this.getDefaultOrigins(),
-      methods: config.methods ||
-        ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+      methods: config.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
       allowedHeaders: config.allowedHeaders || [
         'Origin',
         'X-Requested-With',
@@ -106,19 +105,13 @@ export class CorsHandler {
     const origins = [env.APP_URL];
 
     if (environment.isDevelopment()) {
-      origins.push(
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3000',
-      );
+      origins.push('http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000');
     }
 
     // Add additional allowed origins from environment
     const additionalOrigins = Deno.env.get('CORS_ALLOWED_ORIGINS');
     if (additionalOrigins) {
-      origins.push(
-        ...additionalOrigins.split(',').map((origin) => origin.trim()),
-      );
+      origins.push(...additionalOrigins.split(',').map(origin => origin.trim()));
     }
 
     return origins;
@@ -170,15 +163,12 @@ export class CorsHandler {
 
     // Handle allowed headers
     if (this.config.allowedHeaders.length > 0) {
-      headers['Access-Control-Allow-Headers'] = this.config.allowedHeaders.join(
-        ', ',
-      );
+      headers['Access-Control-Allow-Headers'] = this.config.allowedHeaders.join(', ');
     }
 
     // Handle exposed headers
     if (this.config.exposedHeaders.length > 0) {
-      headers['Access-Control-Expose-Headers'] = this.config.exposedHeaders
-        .join(', ');
+      headers['Access-Control-Expose-Headers'] = this.config.exposedHeaders.join(', ');
     }
 
     // Handle max age for preflight
@@ -244,23 +234,19 @@ export class SecurityHeaders {
 
   constructor(config: Partial<SecurityHeadersConfig> = {}) {
     this.config = {
-      contentSecurityPolicy: config.contentSecurityPolicy ??
-        this.getDefaultCSP(),
-      crossOriginEmbedderPolicy: config.crossOriginEmbedderPolicy ??
-        'require-corp',
+      contentSecurityPolicy: config.contentSecurityPolicy ?? this.getDefaultCSP(),
+      crossOriginEmbedderPolicy: config.crossOriginEmbedderPolicy ?? 'require-corp',
       crossOriginOpenerPolicy: config.crossOriginOpenerPolicy ?? 'same-origin',
-      crossOriginResourcePolicy: config.crossOriginResourcePolicy ??
-        'same-origin',
+      crossOriginResourcePolicy: config.crossOriginResourcePolicy ?? 'same-origin',
       originAgentCluster: config.originAgentCluster ?? true,
       referrerPolicy: config.referrerPolicy ?? 'no-referrer',
-      strictTransportSecurity: config.strictTransportSecurity ??
-        'max-age=63072000; includeSubDomains; preload',
+      strictTransportSecurity:
+        config.strictTransportSecurity ?? 'max-age=63072000; includeSubDomains; preload',
       xContentTypeOptions: config.xContentTypeOptions ?? 'nosniff',
       xDnsPrefetchControl: config.xDnsPrefetchControl ?? 'off',
       xDownloadOptions: config.xDownloadOptions ?? 'noopen',
       xFrameOptions: config.xFrameOptions ?? 'DENY',
-      xPermittedCrossDomainPolicies: config.xPermittedCrossDomainPolicies ??
-        'none',
+      xPermittedCrossDomainPolicies: config.xPermittedCrossDomainPolicies ?? 'none',
       xPoweredBy: config.xPoweredBy ?? false,
       xXssProtection: config.xXssProtection ?? '1; mode=block',
     };
@@ -303,18 +289,15 @@ export class SecurityHeaders {
     }
 
     if (this.config.crossOriginEmbedderPolicy) {
-      headers['Cross-Origin-Embedder-Policy'] =
-        this.config.crossOriginEmbedderPolicy;
+      headers['Cross-Origin-Embedder-Policy'] = this.config.crossOriginEmbedderPolicy;
     }
 
     if (this.config.crossOriginOpenerPolicy) {
-      headers['Cross-Origin-Opener-Policy'] =
-        this.config.crossOriginOpenerPolicy;
+      headers['Cross-Origin-Opener-Policy'] = this.config.crossOriginOpenerPolicy;
     }
 
     if (this.config.crossOriginResourcePolicy) {
-      headers['Cross-Origin-Resource-Policy'] =
-        this.config.crossOriginResourcePolicy;
+      headers['Cross-Origin-Resource-Policy'] = this.config.crossOriginResourcePolicy;
     }
 
     if (this.config.originAgentCluster) {
@@ -326,8 +309,7 @@ export class SecurityHeaders {
     }
 
     if (this.config.strictTransportSecurity && !environment.isDevelopment()) {
-      headers['Strict-Transport-Security'] =
-        this.config.strictTransportSecurity;
+      headers['Strict-Transport-Security'] = this.config.strictTransportSecurity;
     }
 
     if (this.config.xContentTypeOptions) {
@@ -347,8 +329,7 @@ export class SecurityHeaders {
     }
 
     if (this.config.xPermittedCrossDomainPolicies) {
-      headers['X-Permitted-Cross-Domain-Policies'] =
-        this.config.xPermittedCrossDomainPolicies;
+      headers['X-Permitted-Cross-Domain-Policies'] = this.config.xPermittedCrossDomainPolicies;
     }
 
     if (!this.config.xPoweredBy) {
@@ -437,14 +418,8 @@ export class RequestSanitizer {
 
     // Remove script tags
     if (this.config.removeScriptTags) {
-      sanitized = sanitized.replace(
-        /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
-        '',
-      );
-      sanitized = sanitized.replace(
-        /<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi,
-        '',
-      );
+      sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      sanitized = sanitized.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
     }
 
     // Remove HTML tags (except allowed ones)
@@ -453,10 +428,7 @@ export class RequestSanitizer {
         sanitized = sanitized.replace(/<[^>]*>/g, '');
       } else {
         const allowedPattern = this.config.allowedHtmlTags.join('|');
-        const regex = new RegExp(
-          `<(?!/?(?:${allowedPattern})(?:\\s|>))[^>]*>`,
-          'gi',
-        );
+        const regex = new RegExp(`<(?!/?(?:${allowedPattern})(?:\\s|>))[^>]*>`, 'gi');
         sanitized = sanitized.replace(regex, '');
       }
     }
@@ -474,10 +446,7 @@ export class RequestSanitizer {
    */
   sanitizeObject(obj: any, depth: number = 0): any {
     if (depth > this.config.maxObjectDepth) {
-      throw new AppError(
-        ErrorCode.VALIDATION_ERROR,
-        'Object depth exceeded maximum allowed',
-      );
+      throw new AppError(ErrorCode.VALIDATION_ERROR, 'Object depth exceeded maximum allowed');
     }
 
     if (obj === null || obj === undefined) {
@@ -493,7 +462,7 @@ export class RequestSanitizer {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map((item) => this.sanitizeObject(item, depth + 1));
+      return obj.map(item => this.sanitizeObject(item, depth + 1));
     }
 
     if (typeof obj === 'object') {
@@ -543,10 +512,7 @@ export class RequestSanitizer {
 
         // Sanitize body if present
         let sanitizedBody = null;
-        if (
-          request.body &&
-          request.headers.get('content-type')?.includes('application/json')
-        ) {
+        if (request.body && request.headers.get('content-type')?.includes('application/json')) {
           try {
             const bodyText = await request.text();
             const bodyJson = JSON.parse(bodyText);
@@ -584,7 +550,7 @@ export class SecurityMiddleware {
   constructor(
     corsConfig: Partial<CorsConfig> = {},
     headersConfig: Partial<SecurityHeadersConfig> = {},
-    sanitizationConfig: Partial<SanitizationConfig> = {},
+    sanitizationConfig: Partial<SanitizationConfig> = {}
   ) {
     this.cors = new CorsHandler(corsConfig);
     this.headers = new SecurityHeaders(headersConfig);
@@ -633,14 +599,12 @@ export const securityUtils = {
   /**
    * Create security headers handler
    */
-  createSecurityHeaders: (config?: Partial<SecurityHeadersConfig>) =>
-    new SecurityHeaders(config),
+  createSecurityHeaders: (config?: Partial<SecurityHeadersConfig>) => new SecurityHeaders(config),
 
   /**
    * Create request sanitizer
    */
-  createSanitizer: (config?: Partial<SanitizationConfig>) =>
-    new RequestSanitizer(config),
+  createSanitizer: (config?: Partial<SanitizationConfig>) => new RequestSanitizer(config),
 
   /**
    * Create combined security middleware
@@ -648,14 +612,17 @@ export const securityUtils = {
   createSecurityMiddleware: (
     corsConfig?: Partial<CorsConfig>,
     headersConfig?: Partial<SecurityHeadersConfig>,
-    sanitizationConfig?: Partial<SanitizationConfig>,
+    sanitizationConfig?: Partial<SanitizationConfig>
   ) => new SecurityMiddleware(corsConfig, headersConfig, sanitizationConfig),
 
   /**
    * Validate and sanitize email
    */
   sanitizeEmail: (email: string): string => {
-    return email.toLowerCase().trim().replace(/[<>\"'&]/g, '');
+    return email
+      .toLowerCase()
+      .trim()
+      .replace(/[<>\"'&]/g, '');
   },
 
   /**
@@ -679,9 +646,7 @@ export const securityUtils = {
   generateSecureToken: (length: number = 32): string => {
     const bytes = new Uint8Array(length);
     crypto.getRandomValues(bytes);
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
-      '',
-    );
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
   },
 
   /**
