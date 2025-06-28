@@ -1,8 +1,8 @@
 // CREATED: 2025-06-24 - Comprehensive billing integration tests for all endpoints
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import crypto from 'node:crypto';
 import { request } from 'supertest';
-import crypto from 'crypto';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const BASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 
@@ -66,9 +66,7 @@ describe('Billing Module Integration Tests', () => {
       expect(response.body.url).toBeDefined();
       expect(response.body.customerId).toBeDefined();
       expect(response.body.expiresAt).toBeDefined();
-      expect(response.body.message).toBe(
-        'Checkout session created successfully',
-      );
+      expect(response.body.message).toBe('Checkout session created successfully');
 
       // Verify session ID format (Stripe format: cs_...)
       expect(response.body.sessionId).toMatch(/^cs_/);
@@ -146,12 +144,8 @@ describe('Billing Module Integration Tests', () => {
         .options('/billing_create-checkout-session')
         .expect(200);
 
-      expect(response.headers['access-control-allow-methods']).toContain(
-        'POST',
-      );
-      expect(response.headers['access-control-allow-headers']).toContain(
-        'Authorization',
-      );
+      expect(response.headers['access-control-allow-methods']).toContain('POST');
+      expect(response.headers['access-control-allow-headers']).toContain('Authorization');
     });
   });
 
@@ -217,12 +211,10 @@ describe('Billing Module Integration Tests', () => {
   describe('Subscription Retrieval Integration Test', () => {
     beforeEach(async () => {
       // Set up user with subscription for testing
-      stripeSubscriptionId = 'sub_test_' +
-        crypto.randomBytes(8).toString('hex');
+      stripeSubscriptionId = 'sub_test_' + crypto.randomBytes(8).toString('hex');
 
       await globalThis.testDb.updateUserProfile(testUser.id, {
-        stripe_customer_id: stripeCustomerId ||
-          'cus_test_' + crypto.randomBytes(8).toString('hex'),
+        stripe_customer_id: stripeCustomerId || 'cus_test_' + crypto.randomBytes(8).toString('hex'),
         stripe_subscription_id: stripeSubscriptionId,
         stripe_subscription_status: 'active',
       });
@@ -252,9 +244,7 @@ describe('Billing Module Integration Tests', () => {
       expect(response2.body.cacheKey).toBeDefined();
 
       // Both responses should have identical subscription data
-      expect(response2.body.subscription.id).toBe(
-        response1.body.subscription.id,
-      );
+      expect(response2.body.subscription.id).toBe(response1.body.subscription.id);
     });
 
     it('should handle user without subscription', async () => {
@@ -309,22 +299,20 @@ describe('Billing Module Integration Tests', () => {
 
     it('should apply rate limiting', async () => {
       // Make multiple rapid requests to test rate limiting
-      const promises = Array.from(
-        { length: 25 },
-        () =>
-          request(`${BASE_URL}/functions/v1`)
-            .get('/billing_get-subscription')
-            .set('Authorization', `Bearer ${testUserToken}`),
+      const promises = Array.from({ length: 25 }, () =>
+        request(`${BASE_URL}/functions/v1`)
+          .get('/billing_get-subscription')
+          .set('Authorization', `Bearer ${testUserToken}`)
       );
 
       const responses = await Promise.all(promises);
 
       // Some requests should be rate limited (429 status)
-      const statusCodes = responses.map((r) => r.status);
+      const statusCodes = responses.map(r => r.status);
       const hasRateLimit = statusCodes.includes(429);
 
       if (hasRateLimit) {
-        const rateLimitedResponse = responses.find((r) => r.status === 429);
+        const rateLimitedResponse = responses.find(r => r.status === 429);
         expect(rateLimitedResponse!.body.error.code).toBe('RATE_LIMIT_ERROR');
       }
     });
@@ -344,10 +332,9 @@ describe('Billing Module Integration Tests', () => {
         data: {
           object: {
             id: 'cs_test_' + crypto.randomBytes(8).toString('hex'),
-            customer: stripeCustomerId ||
-              'cus_test_' + crypto.randomBytes(8).toString('hex'),
-            subscription: stripeSubscriptionId ||
-              'sub_test_' + crypto.randomBytes(8).toString('hex'),
+            customer: stripeCustomerId || 'cus_test_' + crypto.randomBytes(8).toString('hex'),
+            subscription:
+              stripeSubscriptionId || 'sub_test_' + crypto.randomBytes(8).toString('hex'),
             metadata: {
               supabase_user_id: testUser.id,
             },
@@ -356,8 +343,7 @@ describe('Billing Module Integration Tests', () => {
       };
 
       // Generate mock webhook signature (in real tests, this would be Stripe's signature)
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
-        'whsec_test_secret';
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test_secret';
       const timestamp = Math.floor(Date.now() / 1000);
       const payload = JSON.stringify(webhookPayload);
 
@@ -383,15 +369,9 @@ describe('Billing Module Integration Tests', () => {
       expect(response.body.processingTime).toBeGreaterThan(0);
 
       // Verify database was updated
-      const updatedProfile = await globalThis.testDb.getUserProfile(
-        testUser.id,
-      );
-      expect(updatedProfile.stripe_customer_id).toBe(
-        webhookPayload.data.object.customer,
-      );
-      expect(updatedProfile.stripe_subscription_id).toBe(
-        webhookPayload.data.object.subscription,
-      );
+      const updatedProfile = await globalThis.testDb.getUserProfile(testUser.id);
+      expect(updatedProfile.stripe_customer_id).toBe(webhookPayload.data.object.customer);
+      expect(updatedProfile.stripe_subscription_id).toBe(webhookPayload.data.object.subscription);
     });
 
     it('should process subscription.updated webhook', async () => {
@@ -400,7 +380,7 @@ describe('Billing Module Integration Tests', () => {
       webhookPayload.data.object = {
         id: stripeSubscriptionId,
         status: 'past_due',
-        customer: stripeCustomerId
+        customer: stripeCustomerId,
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
@@ -412,9 +392,7 @@ describe('Billing Module Integration Tests', () => {
       expect(response.body.received).toBe(true);
 
       // Verify subscription status was updated
-      const updatedProfile = await globalThis.testDb.getUserProfile(
-        testUser.id,
-      );
+      const updatedProfile = await globalThis.testDb.getUserProfile(testUser.id);
       expect(updatedProfile.stripe_subscription_status).toBe('past_due');
     });
 
@@ -454,12 +432,11 @@ describe('Billing Module Integration Tests', () => {
 
     it('should handle old webhook events (replay attack prevention)', async () => {
       // Create webhook with old timestamp (older than 5 minutes)
-      const oldTimestamp = Math.floor(Date.now() / 1000) - (6 * 60); // 6 minutes ago
+      const oldTimestamp = Math.floor(Date.now() / 1000) - 6 * 60; // 6 minutes ago
       webhookPayload.created = oldTimestamp;
 
       // Recreate signature with old timestamp
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
-        'whsec_test_secret';
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test_secret';
       const payload = JSON.stringify(webhookPayload);
       const hmac = crypto.createHmac('sha256', webhookSecret);
       hmac.update(`${oldTimestamp}.${payload}`);
@@ -513,8 +490,7 @@ describe('Billing Module Integration Tests', () => {
       // Generate proper webhook signature
       const timestamp = Math.floor(Date.now() / 1000);
       const payload = JSON.stringify(webhookPayload);
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
-        'whsec_test_secret';
+      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_test_secret';
       const hmac = crypto.createHmac('sha256', webhookSecret);
       hmac.update(`${timestamp}.${payload}`);
       const signature = hmac.digest('hex');
@@ -533,9 +509,7 @@ describe('Billing Module Integration Tests', () => {
         .expect(200);
 
       expect(subscriptionResponse.body.subscription).toBeDefined();
-      expect(subscriptionResponse.body.subscription.customerId).toBe(
-        customerId,
-      );
+      expect(subscriptionResponse.body.subscription.customerId).toBe(customerId);
 
       // 4. Access customer portal
       const portalResponse = await request(`${BASE_URL}/functions/v1`)
@@ -613,8 +587,7 @@ describe('Billing Module Integration Tests', () => {
         .expect(200);
 
       // Response should include request ID for tracking
-      expect(response.headers['x-request-id'] || response.body.requestId)
-        .toBeDefined();
+      expect(response.headers['x-request-id'] || response.body.requestId).toBeDefined();
 
       // Timestamp should be present and valid
       expect(response.body.timestamp).toBeDefined();

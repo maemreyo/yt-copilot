@@ -63,7 +63,7 @@ class ConfigurationService {
     /credential/i,
     /_dsn$/i,
     /webhook/i,
-    /private/i
+    /private/i,
   ];
 
   private startTime: number;
@@ -76,7 +76,7 @@ class ConfigurationService {
    * Check if a key contains sensitive information
    */
   private isSensitive(key: string): boolean {
-    return this.sensitivePatterns.some(pattern => pattern.test(key));
+    return this.sensitivePatterns.some((pattern) => pattern.test(key));
   }
 
   /**
@@ -98,7 +98,9 @@ class ConfigurationService {
   /**
    * Determine variable type
    */
-  private determineType(value: string): 'string' | 'number' | 'boolean' | 'url' | 'email' {
+  private determineType(
+    value: string,
+  ): 'string' | 'number' | 'boolean' | 'url' | 'email' {
     // Check for boolean
     if (value === 'true' || value === 'false') {
       return 'boolean';
@@ -162,8 +164,8 @@ class ConfigurationService {
       'SUPABASE_URL',
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
-      'SUPABASE_PROJECT_ID'
-    ].forEach(key => {
+      'SUPABASE_PROJECT_ID',
+    ].forEach((key) => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -186,8 +188,8 @@ class ConfigurationService {
     [
       'STRIPE_SECRET_KEY',
       'STRIPE_WEBHOOK_SECRET',
-      'STRIPE_PRICE_ID'
-    ].forEach(key => {
+      'STRIPE_PRICE_ID',
+    ].forEach((key) => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -201,7 +203,7 @@ class ConfigurationService {
       type: 'string' as const,
       sensitive: false,
       source: 'computed' as const,
-      description: 'Stripe operating mode'
+      description: 'Stripe operating mode',
     };
 
     return {
@@ -221,8 +223,8 @@ class ConfigurationService {
       'APP_URL',
       'APP_NAME',
       'APP_VERSION',
-      'NODE_ENV'
-    ].forEach(key => {
+      'NODE_ENV',
+    ].forEach((key) => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -246,8 +248,8 @@ class ConfigurationService {
       'JWT_SECRET',
       'ENCRYPTION_KEY',
       'RATE_LIMIT_REQUESTS_PER_MINUTE',
-      'RATE_LIMIT_WINDOW_MS'
-    ].forEach(key => {
+      'RATE_LIMIT_WINDOW_MS',
+    ].forEach((key) => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -271,8 +273,8 @@ class ConfigurationService {
       'LOG_LEVEL',
       'METRICS_ENABLED',
       'SENTRY_DSN',
-      'ANALYTICS_ENABLED'
-    ].forEach(key => {
+      'ANALYTICS_ENABLED',
+    ].forEach((key) => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -296,8 +298,8 @@ class ConfigurationService {
       'DATABASE_MAX_CONNECTIONS',
       'DATABASE_TIMEOUT',
       'CACHE_ENABLED',
-      'CACHE_TTL'
-    ].forEach(key => {
+      'CACHE_TTL',
+    ].forEach((key) => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -316,7 +318,7 @@ class ConfigurationService {
    */
   private getFeatureFlags(): FeatureFlags {
     const env = Deno.env.get('NODE_ENV') || 'development';
-    
+
     return {
       development: {
         debugMode: env === 'development',
@@ -368,13 +370,19 @@ class ConfigurationService {
     if (env === 'production') {
       const jwtSecret = Deno.env.get('JWT_SECRET') || '';
       const encryptionKey = Deno.env.get('ENCRYPTION_KEY') || '';
-      
+
       if (jwtSecret.includes('dev-') || jwtSecret.includes('development')) {
-        warnings.push('JWT_SECRET appears to be a development key in production');
+        warnings.push(
+          'JWT_SECRET appears to be a development key in production',
+        );
       }
-      
-      if (encryptionKey.includes('dev-') || encryptionKey.includes('development')) {
-        warnings.push('ENCRYPTION_KEY appears to be a development key in production');
+
+      if (
+        encryptionKey.includes('dev-') || encryptionKey.includes('development')
+      ) {
+        warnings.push(
+          'ENCRYPTION_KEY appears to be a development key in production',
+        );
       }
 
       const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
@@ -400,7 +408,7 @@ class ConfigurationService {
    */
   generateConfig(): ConfigurationResponse {
     const env = Deno.env.get('NODE_ENV') || 'development';
-    
+
     return {
       timestamp: new Date().toISOString(),
       environment: env,
@@ -432,7 +440,7 @@ const securityHeaders = {
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
-  'Expires': '0'
+  'Expires': '0',
 };
 
 /**
@@ -468,20 +476,21 @@ serve(async (req) => {
           ...securityHeaders,
           'Allow': 'GET, OPTIONS',
         },
-      }
+      },
     );
   }
 
   try {
     const environment = Deno.env.get('NODE_ENV') || 'development';
-    
+
     // Restrict access to development environment only
     if (environment !== 'development') {
       return new Response(
         JSON.stringify({
           error: {
             code: 'ACCESS_DENIED',
-            message: 'Configuration endpoint is only available in development environment',
+            message:
+              'Configuration endpoint is only available in development environment',
             environment,
           },
           timestamp: new Date().toISOString(),
@@ -489,7 +498,7 @@ serve(async (req) => {
         {
           status: 403,
           headers: securityHeaders,
-        }
+        },
       );
     }
 
@@ -517,22 +526,24 @@ serve(async (req) => {
         'X-Warning-Count': config.warnings.length.toString(),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Configuration endpoint error:', error);
-    
+
     return new Response(
       JSON.stringify({
         error: {
           code: 'CONFIG_GENERATION_ERROR',
           message: 'Failed to generate configuration',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+          details: Deno.env.get('NODE_ENV') === 'development'
+            ? error.message
+            : undefined,
         },
         timestamp: new Date().toISOString(),
       }),
       {
         status: 500,
         headers: securityHeaders,
-      }
+      },
     );
   }
 });

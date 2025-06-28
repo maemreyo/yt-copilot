@@ -140,10 +140,10 @@ class MetricsService {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
       {
         auth: { persistSession: false },
-        global: { 
-          headers: { 'x-application-name': 'metrics-service' } 
-        }
-      }
+        global: {
+          headers: { 'x-application-name': 'metrics-service' },
+        },
+      },
     );
   }
 
@@ -167,16 +167,16 @@ class MetricsService {
         memoryMetrics = {
           used: memory.usedJSHeapSize || 0,
           total: memory.totalJSHeapSize || 0,
-          percentage: memory.totalJSHeapSize 
+          percentage: memory.totalJSHeapSize
             ? Math.round((memory.usedJSHeapSize / memory.totalJSHeapSize) * 100)
             : 0,
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn('Memory metrics not available:', error);
     }
 
-    const averageResponseTime = this.requestCounter > 0 
+    const averageResponseTime = this.requestCounter > 0
       ? Math.round(this.totalResponseTime / this.requestCounter)
       : 0;
 
@@ -236,7 +236,7 @@ class MetricsService {
           { name: 'error_reports', rowCount: 0, size: 'unknown' },
         ],
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to collect database metrics:', error);
       return {
         connectionHealth: {
@@ -282,9 +282,18 @@ class MetricsService {
         api: apiCacheStats,
       };
 
-      const totalRequests = Object.values(stores).reduce((sum, store) => sum + store.totalRequests, 0);
-      const totalHits = Object.values(stores).reduce((sum, store) => sum + store.totalHits, 0);
-      const totalMemoryUsage = Object.values(stores).reduce((sum, store) => sum + store.memoryUsage, 0);
+      const totalRequests = Object.values(stores).reduce(
+        (sum, store) => sum + store.totalRequests,
+        0,
+      );
+      const totalHits = Object.values(stores).reduce(
+        (sum, store) => sum + store.totalHits,
+        0,
+      );
+      const totalMemoryUsage = Object.values(stores).reduce(
+        (sum, store) => sum + store.memoryUsage,
+        0,
+      );
 
       return {
         stores,
@@ -294,7 +303,7 @@ class MetricsService {
           totalMemoryUsage,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to collect cache metrics:', error);
       return {
         stores: {},
@@ -321,7 +330,7 @@ class MetricsService {
       const [
         { count: errors24h },
         { count: errors1h },
-        { count: errors15m }
+        { count: errors15m },
       ] = await Promise.all([
         this.supabase
           .from('error_reports')
@@ -334,7 +343,7 @@ class MetricsService {
         this.supabase
           .from('error_reports')
           .select('*', { count: 'exact', head: true })
-          .gte('created_at', last15m.toISOString())
+          .gte('created_at', last15m.toISOString()),
       ]);
 
       // Get errors by module
@@ -376,7 +385,7 @@ class MetricsService {
         bySeverity: bySeverity || {},
         topErrors: topErrors || [],
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to collect error metrics:', error);
       return {
         rates: { last24h: 0, last1h: 0, last15m: 0 },
@@ -396,11 +405,11 @@ class MetricsService {
       // For now, we simulate based on request counter and patterns
       const simulatedEndpoints = [
         '/v1/health',
-        '/v1/version', 
+        '/v1/version',
         '/v1/error-reporting/report',
         '/v1/metrics',
         '/v1/api-keys/create',
-        '/v1/billing/checkout'
+        '/v1/billing/checkout',
       ];
 
       const endpoints: Record<string, any> = {};
@@ -430,7 +439,9 @@ class MetricsService {
           '/v1/api-keys/create': Math.floor(totalRequests * 0.01),
           '/v1/error-reporting/report': Math.floor(totalRequests * 0.005),
         },
-        averageRequestRate: totalRequests > 0 ? totalRequests / Math.max(1, (Date.now() - this.startTime) / 60000) : 0,
+        averageRequestRate: totalRequests > 0
+          ? totalRequests / Math.max(1, (Date.now() - this.startTime) / 60000)
+          : 0,
       };
 
       return {
@@ -438,7 +449,7 @@ class MetricsService {
         authentication,
         rateLimiting,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to collect API usage metrics:', error);
       return {
         endpoints: {},
@@ -460,7 +471,11 @@ class MetricsService {
   /**
    * Calculate overall health score
    */
-  calculateHealthScore(system: SystemMetrics, database: DatabaseMetrics, errors: ErrorMetrics): number {
+  calculateHealthScore(
+    system: SystemMetrics,
+    database: DatabaseMetrics,
+    errors: ErrorMetrics,
+  ): number {
     let score = 100;
 
     // Database health impact (30%)
@@ -502,13 +517,13 @@ class MetricsService {
    */
   async collectAllMetrics(): Promise<MetricsResponse> {
     const startTime = Date.now();
-    
+
     try {
       // Collect all metrics in parallel for better performance
       const [system, database, cache, errors, api] = await Promise.all([
         this.collectSystemMetrics(),
         this.collectDatabaseMetrics(),
-        this.collectCacheMetrics(),  
+        this.collectCacheMetrics(),
         this.collectErrorMetrics(),
         this.collectApiUsageMetrics(),
       ]);
@@ -516,18 +531,24 @@ class MetricsService {
       // Update system metrics with current response time
       const responseTime = Date.now() - startTime;
       system.performance.responseTime = responseTime;
-      
+
       // Update counters
       this.requestCounter++;
       this.totalResponseTime += responseTime;
 
       // Calculate health score
       const healthScore = this.calculateHealthScore(system, database, errors);
-      
+
       const health = {
-        overallStatus: healthScore >= 80 ? 'healthy' : healthScore >= 60 ? 'degraded' : 'unhealthy' as const,
+        overallStatus: healthScore >= 80
+          ? 'healthy'
+          : healthScore >= 60
+          ? 'degraded'
+          : 'unhealthy' as const,
         services: {
-          database: database.connectionHealth.status === 'healthy' ? 'up' : 'down' as const,
+          database: database.connectionHealth.status === 'healthy'
+            ? 'up'
+            : 'down' as const,
           cache: cache.global.totalCaches > 0 ? 'up' : 'degraded' as const,
           errors: errors.rates.last15m < 10 ? 'up' : 'degraded' as const,
         },
@@ -543,7 +564,7 @@ class MetricsService {
         api,
         health,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to collect metrics:', error);
       throw error;
     }
@@ -554,47 +575,63 @@ class MetricsService {
    */
   convertToPrometheus(metrics: MetricsResponse): string {
     const lines: string[] = [];
-    
+
     // System metrics
-    lines.push(`# HELP system_uptime_milliseconds System uptime in milliseconds`);
+    lines.push(
+      `# HELP system_uptime_milliseconds System uptime in milliseconds`,
+    );
     lines.push(`# TYPE system_uptime_milliseconds counter`);
     lines.push(`system_uptime_milliseconds ${metrics.system.uptime}`);
-    
+
     lines.push(`# HELP system_memory_usage_bytes Memory usage in bytes`);
     lines.push(`# TYPE system_memory_usage_bytes gauge`);
     lines.push(`system_memory_usage_bytes ${metrics.system.memory.used}`);
-    
+
     lines.push(`# HELP system_memory_usage_percentage Memory usage percentage`);
     lines.push(`# TYPE system_memory_usage_percentage gauge`);
-    lines.push(`system_memory_usage_percentage ${metrics.system.memory.percentage}`);
+    lines.push(
+      `system_memory_usage_percentage ${metrics.system.memory.percentage}`,
+    );
 
     // Database metrics
-    lines.push(`# HELP database_connection_latency_milliseconds Database connection latency`);
+    lines.push(
+      `# HELP database_connection_latency_milliseconds Database connection latency`,
+    );
     lines.push(`# TYPE database_connection_latency_milliseconds gauge`);
-    lines.push(`database_connection_latency_milliseconds ${metrics.database.connectionHealth.latency}`);
-    
-    lines.push(`# HELP database_query_average_time_milliseconds Average database query time`);
+    lines.push(
+      `database_connection_latency_milliseconds ${metrics.database.connectionHealth.latency}`,
+    );
+
+    lines.push(
+      `# HELP database_query_average_time_milliseconds Average database query time`,
+    );
     lines.push(`# TYPE database_query_average_time_milliseconds gauge`);
-    lines.push(`database_query_average_time_milliseconds ${metrics.database.queryPerformance.averageQueryTime}`);
+    lines.push(
+      `database_query_average_time_milliseconds ${metrics.database.queryPerformance.averageQueryTime}`,
+    );
 
     // Error metrics
     lines.push(`# HELP errors_total_24h Total errors in last 24 hours`);
     lines.push(`# TYPE errors_total_24h counter`);
     lines.push(`errors_total_24h ${metrics.errors.rates.last24h}`);
-    
+
     lines.push(`# HELP errors_total_1h Total errors in last hour`);
     lines.push(`# TYPE errors_total_1h counter`);
     lines.push(`errors_total_1h ${metrics.errors.rates.last1h}`);
 
     // Health score
-    lines.push(`# HELP health_score_percentage Overall health score percentage`);
+    lines.push(
+      `# HELP health_score_percentage Overall health score percentage`,
+    );
     lines.push(`# TYPE health_score_percentage gauge`);
     lines.push(`health_score_percentage ${metrics.health.score}`);
 
     // Cache metrics
     lines.push(`# HELP cache_hit_rate_percentage Cache hit rate percentage`);
     lines.push(`# TYPE cache_hit_rate_percentage gauge`);
-    lines.push(`cache_hit_rate_percentage ${metrics.cache.global.totalHitRate * 100}`);
+    lines.push(
+      `cache_hit_rate_percentage ${metrics.cache.global.totalHitRate * 100}`,
+    );
 
     return lines.join('\n') + '\n';
   }
@@ -610,7 +647,7 @@ const securityHeaders = {
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
   'Pragma': 'no-cache',
-  'Expires': '0'
+  'Expires': '0',
 };
 
 /**
@@ -647,7 +684,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           'Allow': 'GET, OPTIONS',
         },
-      }
+      },
     );
   }
 
@@ -655,7 +692,7 @@ serve(async (req) => {
     const url = new URL(req.url);
     const format = url.searchParams.get('format') || 'json';
     const service = new MetricsService();
-    
+
     // Collect all metrics
     const metrics = await service.collectAllMetrics();
 
@@ -682,15 +719,17 @@ serve(async (req) => {
         'X-Health-Score': metrics.health.score.toString(),
       },
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Metrics endpoint error:', error);
-    
+
     return new Response(
       JSON.stringify({
         error: {
           code: 'METRICS_COLLECTION_ERROR',
           message: 'Failed to collect metrics',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+          details: Deno.env.get('NODE_ENV') === 'development'
+            ? error.message
+            : undefined,
         },
         timestamp: new Date().toISOString(),
       }),
@@ -700,7 +739,7 @@ serve(async (req) => {
           ...securityHeaders,
           'Content-Type': 'application/json',
         },
-      }
+      },
     );
   }
 });

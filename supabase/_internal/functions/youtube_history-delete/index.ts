@@ -2,7 +2,7 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '_shared/cors.ts';
+import { corsHeaders } from '@/cors';
 
 /**
  * Response interface
@@ -34,7 +34,9 @@ const securityHeaders = {
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(request: Request): Promise<string | null> {
+async function extractUserFromRequest(
+  request: Request,
+): Promise<string | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -42,10 +44,10 @@ async function extractUserFromRequest(request: Request): Promise<string | null> 
     }
 
     const token = authHeader.substring(7);
-    
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -54,7 +56,7 @@ async function extractUserFromRequest(request: Request): Promise<string | null> 
     }
 
     return user.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -101,7 +103,7 @@ serve(async (req) => {
           ...corsHeaders,
           'Allow': 'DELETE, OPTIONS',
         },
-      }
+      },
     );
   }
 
@@ -120,7 +122,7 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -138,14 +140,14 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
     }
@@ -172,7 +174,7 @@ serve(async (req) => {
         {
           status: 404,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -198,7 +200,7 @@ serve(async (req) => {
           {
             status: 404,
             headers: { ...securityHeaders, ...corsHeaders },
-          }
+          },
         );
       }
 
@@ -218,10 +220,9 @@ serve(async (req) => {
       {
         status: 200,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Request failed:', error);
 
     return new Response(
@@ -235,7 +236,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
   }
 });

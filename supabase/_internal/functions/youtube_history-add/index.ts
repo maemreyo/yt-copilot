@@ -2,7 +2,7 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '_shared/cors.ts';
+import { corsHeaders } from '@/cors';
 
 /**
  * Request interface
@@ -45,7 +45,9 @@ const securityHeaders = {
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(request: Request): Promise<string | null> {
+async function extractUserFromRequest(
+  request: Request,
+): Promise<string | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -53,10 +55,10 @@ async function extractUserFromRequest(request: Request): Promise<string | null> 
     }
 
     const token = authHeader.substring(7);
-    
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -65,7 +67,7 @@ async function extractUserFromRequest(request: Request): Promise<string | null> 
     }
 
     return user.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -95,9 +97,11 @@ function validateRequest(data: any): { isValid: boolean; errors: string[] } {
   }
 
   if (data.playbackRate !== undefined) {
-    if (typeof data.playbackRate !== 'number' || 
-        data.playbackRate < 0.25 || 
-        data.playbackRate > 2.0) {
+    if (
+      typeof data.playbackRate !== 'number' ||
+      data.playbackRate < 0.25 ||
+      data.playbackRate > 2.0
+    ) {
       errors.push('playbackRate must be between 0.25 and 2.0');
     }
   }
@@ -140,7 +144,7 @@ serve(async (req) => {
           ...corsHeaders,
           'Allow': 'POST, OPTIONS',
         },
-      }
+      },
     );
   }
 
@@ -159,7 +163,7 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -167,7 +171,7 @@ serve(async (req) => {
     let requestData: AddToHistoryRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
+    } catch (error: any) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -179,7 +183,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -198,14 +202,14 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
     }
@@ -233,14 +237,15 @@ serve(async (req) => {
         {
           status: 404,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
     // Check if video is completed
     let completed = false;
     if (requestData.progressSeconds && video.duration_seconds) {
-      completed = requestData.progressSeconds >= (video.duration_seconds * 0.95);
+      completed =
+        requestData.progressSeconds >= (video.duration_seconds * 0.95);
     }
 
     // Upsert history record
@@ -262,7 +267,7 @@ serve(async (req) => {
 
     if (historyError) {
       console.error('Failed to add to history:', historyError);
-      
+
       // Check for specific errors
       if (historyError.code === '23505') { // Unique violation
         // Update existing record
@@ -296,7 +301,7 @@ serve(async (req) => {
           {
             status: 200,
             headers: { ...securityHeaders, ...corsHeaders },
-          }
+          },
         );
       }
 
@@ -316,10 +321,9 @@ serve(async (req) => {
       {
         status: 201,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Request failed:', error);
 
     return new Response(
@@ -334,7 +338,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
   }
 });

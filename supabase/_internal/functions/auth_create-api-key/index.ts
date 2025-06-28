@@ -1,9 +1,19 @@
 // - Enhanced API key creation with proper validation, rate limiting, and security
 
 import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { hash } from 'https://deno.land/x/bcrypt@v0.4.1/mod.ts';
-import { corsHeaders } from '_shared/cors.ts';
+import {
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
 
 /**
  * API Key creation request interface
@@ -30,17 +40,7 @@ interface CreateApiKeyResponse {
   metadata?: Record<string, unknown>;
 }
 
-/**
- * Security headers for responses
- */
-const securityHeaders = {
-  'Content-Type': 'application/json',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-};
+// Security headers are now imported from @/shared-security
 
 /**
  * API Key generator utility
@@ -53,7 +53,8 @@ class ApiKeyGenerator {
     // Generate 32 bytes of random data and convert to hex
     const randomBytes = new Uint8Array(32);
     crypto.getRandomValues(randomBytes);
-    return Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(randomBytes, (byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
   }
 
   /**
@@ -68,7 +69,7 @@ class ApiKeyGenerator {
    */
   static async hashApiKey(apiKey: string): Promise<string> {
     const saltRounds = 12;
-    return await hash(apiKey, saltRounds);
+    return await hash(String(apiKey), String(saltRounds));
   }
 
   /**
@@ -142,10 +143,13 @@ class RequestValidator {
         errors.push('Permissions must be an array');
       } else {
         const validPermissions = data.permissions.filter(
-          perm => typeof perm === 'string' && perm.length > 0 && perm.length <= 100
+          (perm) =>
+            typeof perm === 'string' && perm.length > 0 && perm.length <= 100,
         );
         if (validPermissions.length !== data.permissions.length) {
-          errors.push('All permissions must be non-empty strings with max 100 characters');
+          errors.push(
+            'All permissions must be non-empty strings with max 100 characters',
+          );
         } else {
           sanitized.permissions = validPermissions;
         }
@@ -184,7 +188,10 @@ class RequestValidator {
  * Rate limiter for API key creation
  */
 class RateLimiter {
-  private static userRequests = new Map<string, { count: number; resetTime: number }>();
+  private static userRequests = new Map<
+    string,
+    { count: number; resetTime: number }
+  >();
 
   /**
    * Check if user can create API key
@@ -206,16 +213,16 @@ class RateLimiter {
     }
 
     if (userLimit.count >= maxRequests) {
-      return { 
-        allowed: false, 
+      return {
+        allowed: false,
         resetTime: userLimit.resetTime,
         remaining: 0,
       };
     }
 
     userLimit.count++;
-    return { 
-      allowed: true, 
+    return {
+      allowed: true,
       remaining: maxRequests - userLimit.count,
     };
   }
@@ -225,13 +232,17 @@ class RateLimiter {
  * API Key service
  */
 class ApiKeyService {
-  private supabase: any;
+  private supabase: SupabaseClient;
 
   constructor() {
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
+  }
+
+  async getUser(token: string) {
+    return await this.supabase.auth.getUser(token);
   }
 
   /**
@@ -273,7 +284,7 @@ class ApiKeyService {
       permissions?: string[];
       description?: string;
       metadata?: Record<string, unknown>;
-    }
+    },
   ): Promise<any> {
     const { data, error } = await this.supabase
       .from('api_keys')
@@ -283,11 +294,15 @@ class ApiKeyService {
         key_prefix: keyData.prefix,
         name: keyData.name,
         expires_at: keyData.expiresAt,
-        permissions: keyData.permissions ? JSON.stringify(keyData.permissions) : null,
+        permissions: keyData.permissions
+          ? JSON.stringify(keyData.permissions)
+          : null,
         description: keyData.description,
         metadata: keyData.metadata ? JSON.stringify(keyData.metadata) : null,
       })
-      .select('id, key_prefix, name, expires_at, permissions, description, metadata, created_at')
+      .select(
+        'id, key_prefix, name, expires_at, permissions, description, metadata, created_at',
+      )
       .single();
 
     if (error) {
@@ -320,36 +335,26 @@ class ApiKeyService {
  * Main serve function
  */
 serve(async (req) => {
+  // Generate a request ID for tracking
+  const requestId = crypto.randomUUID();
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: { ...corsHeaders },
-    });
+    return createCorsResponse();
   }
 
   // Only allow POST requests
   if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'METHOD_NOT_ALLOWED',
-          message: 'Only POST method is allowed',
-        },
-        timestamp: new Date().toISOString(),
-      }),
+    return createCorsErrorResponse(
+      'Only POST method is allowed',
+      405,
+      requestId,
       {
-        status: 405,
-        headers: {
-          ...corsHeaders,
-          ...securityHeaders,
-          'Allow': 'POST, OPTIONS',
-        },
-      }
+        code: 'METHOD_NOT_ALLOWED',
+        allowedMethods: ['POST'],
+      },
     );
   }
-
-  const requestId = crypto.randomUUID();
 
   try {
     // Initialize services
@@ -358,69 +363,46 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_ERROR',
-            message: 'Missing or invalid authorization header',
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+      throw createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        'Missing or invalid authorization header',
+        { code: 'AUTHENTICATION_ERROR' },
+        requestId,
       );
     }
 
     const token = authHeader.substring(7);
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await apiKeyService.supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await apiKeyService.getUser(
+      token,
+    );
 
     if (userError || !user) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_ERROR',
-            message: 'Invalid or expired token',
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+      throw createAppError(
+        ErrorType.AUTHENTICATION_ERROR,
+        'Invalid or expired token',
+        { code: 'AUTHENTICATION_ERROR' },
+        requestId,
       );
     }
 
     // Check rate limiting
     const rateLimitResult = RateLimiter.canCreateApiKey(user.id);
     if (!rateLimitResult.allowed) {
-      const retryAfter = Math.ceil((rateLimitResult.resetTime! - Date.now()) / 1000);
-      
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: 'Too many API key creation requests',
-            details: { retryAfter },
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
+      const retryAfter = Math.ceil(
+        (rateLimitResult.resetTime! - Date.now()) / 1000,
+      );
+
+      throw createAppError(
+        ErrorType.RATE_LIMIT_ERROR,
+        'Too many API key creation requests',
         {
-          status: 429,
-          headers: {
-            ...corsHeaders,
-            ...securityHeaders,
-            'Retry-After': retryAfter.toString(),
-            'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': rateLimitResult.resetTime!.toString(),
-          },
-        }
+          code: 'RATE_LIMIT_EXCEEDED',
+          retryAfter,
+          resetTime: rateLimitResult.resetTime,
+        },
+        requestId,
       );
     }
 
@@ -428,71 +410,54 @@ serve(async (req) => {
     let requestData: CreateApiKeyRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid JSON in request body',
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+    } catch (error: any) {
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        'Invalid JSON in request body',
+        { code: 'VALIDATION_ERROR' },
+        requestId,
       );
     }
 
     // Validate request data
     const validation = RequestValidator.validateRequest(requestData);
     if (!validation.isValid) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Request validation failed',
-            details: validation.errors,
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        'Request validation failed',
         {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+          code: 'VALIDATION_ERROR',
+          details: validation.errors,
+        },
+        requestId,
       );
     }
 
     // Check user's API key limit
     const keyLimit = await apiKeyService.checkUserKeyLimit(user.id);
     if (!keyLimit.canCreate) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'BUSINESS_RULE_VIOLATION',
-            message: `API key limit exceeded. Maximum ${keyLimit.limit} keys allowed.`,
-            details: { current: keyLimit.count, limit: keyLimit.limit },
-          },
-          timestamp: new Date().toISOString(),
-          requestId,
-        }),
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        `API key limit exceeded. Maximum ${keyLimit.limit} keys allowed.`,
         {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        }
+          code: 'BUSINESS_RULE_VIOLATION',
+          details: { current: keyLimit.count, limit: keyLimit.limit },
+        },
+        requestId,
       );
     }
 
     // Generate API key
-    const { apiKey, prefix, hash } = await ApiKeyGenerator.generateWithMetadata();
+    const { apiKey, prefix, hash } = await ApiKeyGenerator
+      .generateWithMetadata();
 
     // Calculate expiration date
     let expiresAt: string | undefined;
     if (validation.sanitized.expiresInDays) {
       const expireDate = new Date();
-      expireDate.setDate(expireDate.getDate() + validation.sanitized.expiresInDays);
+      expireDate.setDate(
+        expireDate.getDate() + validation.sanitized.expiresInDays,
+      );
       expiresAt = expireDate.toISOString();
     }
 
@@ -514,41 +479,33 @@ serve(async (req) => {
       keyPrefix: apiKeyData.key_prefix,
       name: apiKeyData.name,
       expiresAt: apiKeyData.expires_at,
-      permissions: apiKeyData.permissions ? JSON.parse(apiKeyData.permissions) : undefined,
+      permissions: apiKeyData.permissions
+        ? JSON.parse(apiKeyData.permissions)
+        : undefined,
       createdAt: apiKeyData.created_at,
-      metadata: apiKeyData.metadata ? JSON.parse(apiKeyData.metadata) : undefined,
+      metadata: apiKeyData.metadata
+        ? JSON.parse(apiKeyData.metadata)
+        : undefined,
     };
 
-    return new Response(
-      JSON.stringify(response, null, 2),
+    return createCorsSuccessResponse(
+      response,
+      201,
+      requestId,
       {
-        status: 201,
-        headers: {
-          ...corsHeaders,
-          ...securityHeaders,
-          'X-Request-ID': requestId,
-          'X-RateLimit-Remaining': rateLimitResult.remaining?.toString() || '0',
-        },
-      }
+        'X-RateLimit-Remaining': rateLimitResult.remaining?.toString() || '0',
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('API key creation error:', error);
 
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Internal server error',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
-        },
-        timestamp: new Date().toISOString(),
-        requestId,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, ...securityHeaders },
-      }
-    );
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 });

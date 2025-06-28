@@ -2,7 +2,7 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '_shared/cors.ts';
+import { corsHeaders } from '@/cors';
 
 /**
  * Request interface
@@ -44,16 +44,9 @@ interface ExtractTranscriptResponse {
 }
 
 /**
- * Security headers
+ * Import security headers from shared utilities
  */
-const securityHeaders = {
-  'Content-Type': 'application/json',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-};
+import { securityHeaders } from '@/shared-security';
 
 /**
  * Caption track interface
@@ -68,37 +61,78 @@ interface CaptionTrack {
 }
 
 /**
+ * Import validation utilities
+ */
+import { validateRequestBody, ValidationSchema } from '@/shared-validation';
+
+/**
+ * Validate YouTube video ID
+ */
+function validateVideoId(
+  value: unknown,
+): { isValid: boolean; errors: string[] } {
+  if (typeof value !== 'string') {
+    return { isValid: false, errors: ['Must be a string'] };
+  }
+
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(value)) {
+    return { isValid: false, errors: ['Invalid YouTube video ID format'] };
+  }
+
+  return { isValid: true, errors: [] };
+}
+
+/**
+ * Validate language code
+ */
+function validateLanguageCode(
+  value: unknown,
+): { isValid: boolean; errors: string[] } {
+  if (typeof value !== 'string') {
+    return { isValid: false, errors: ['Must be a string'] };
+  }
+
+  if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(value)) {
+    return {
+      isValid: false,
+      errors: ['Must be a valid ISO 639-1 code (e.g., en, vi)'],
+    };
+  }
+
+  return { isValid: true, errors: [] };
+}
+
+/**
+ * Request validation schema
+ */
+const transcriptRequestSchema: ValidationSchema<ExtractTranscriptRequest> = {
+  videoId: {
+    required: true,
+    type: 'string',
+    validate: validateVideoId,
+  },
+  language: {
+    required: false,
+    type: 'string',
+    validate: validateLanguageCode,
+  },
+  options: {
+    required: false,
+    type: 'object',
+  },
+};
+
+/**
  * Request validation
  */
 function validateRequest(data: any): { isValid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  if (!data || typeof data !== 'object') {
-    errors.push('Request body must be an object');
-    return { isValid: false, errors };
-  }
-
-  if (!data.videoId || typeof data.videoId !== 'string') {
-    errors.push('videoId is required and must be a string');
-  } else if (!/^[a-zA-Z0-9_-]{11}$/.test(data.videoId)) {
-    errors.push('Invalid video ID format');
-  }
-
-  if (data.language !== undefined) {
-    if (typeof data.language !== 'string') {
-      errors.push('language must be a string');
-    } else if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(data.language)) {
-      errors.push('language must be a valid ISO 639-1 code (e.g., en, vi)');
-    }
-  }
-
-  if (data.options && typeof data.options !== 'object') {
-    errors.push('options must be an object');
-  }
-
+  const result = validateRequestBody<ExtractTranscriptRequest>(
+    data,
+    transcriptRequestSchema,
+  );
   return {
-    isValid: errors.length === 0,
-    errors,
+    isValid: result.isValid,
+    errors: result.errors,
   };
 }
 
@@ -108,7 +142,7 @@ function validateRequest(data: any): { isValid: boolean; errors: string[] } {
 async function getCachedTranscript(
   supabase: any,
   videoId: string,
-  language: string
+  language: string,
 ): Promise<any | null> {
   try {
     // First get the video record
@@ -137,14 +171,15 @@ async function getCachedTranscript(
     // Check if cache is still valid (7 days for transcripts)
     const createdAt = new Date(transcript.created_at);
     const now = new Date();
-    const daysSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    const daysSinceCreation = (now.getTime() - createdAt.getTime()) /
+      (1000 * 60 * 60 * 24);
 
     if (daysSinceCreation > 7) {
       return null; // Cache expired
     }
 
     return transcript;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Cache lookup failed:', error);
     return null;
   }
@@ -156,7 +191,7 @@ async function getCachedTranscript(
 async function saveTranscript(
   supabase: any,
   videoId: string,
-  transcript: any
+  transcript: any,
 ): Promise<void> {
   try {
     // First ensure video exists
@@ -174,7 +209,7 @@ async function saveTranscript(
     // Calculate metadata
     const characterCount = transcript.segments.reduce(
       (sum: number, seg: any) => sum + seg.text.length,
-      0
+      0,
     );
 
     // Save transcript
@@ -197,7 +232,7 @@ async function saveTranscript(
     if (error) {
       console.error('Failed to save transcript:', error);
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Save transcript failed:', error);
   }
 }
@@ -210,7 +245,8 @@ async function getAvailableLanguages(videoId: string): Promise<any[]> {
   const response = await fetch(videoUrl, {
     headers: {
       'Accept-Language': 'en-US,en;q=0.9',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     },
   });
 
@@ -227,8 +263,8 @@ async function getAvailableLanguages(videoId: string): Promise<any[]> {
   }
 
   const captionTracks: CaptionTrack[] = JSON.parse(captionTracksMatch[1]);
-  
-  return captionTracks.map(track => ({
+
+  return captionTracks.map((track) => ({
     code: track.languageCode,
     name: track.name.simpleText,
     isAutoGenerated: track.kind === 'asr',
@@ -241,17 +277,17 @@ async function getAvailableLanguages(videoId: string): Promise<any[]> {
  */
 async function fetchTranscript(
   videoId: string,
-  languageCode: string
+  languageCode: string,
 ): Promise<any> {
   // Get available languages first
   const languages = await getAvailableLanguages(videoId);
-  
+
   if (languages.length === 0) {
     throw new Error('No transcripts available for this video');
   }
 
   // Find requested language
-  let selectedLanguage = languages.find(l => l.code === languageCode);
+  let selectedLanguage = languages.find((l) => l.code === languageCode);
   if (!selectedLanguage) {
     // Fallback to first available
     selectedLanguage = languages[0];
@@ -264,7 +300,8 @@ async function fetchTranscript(
   const response = await fetch(transcriptUrl.toString(), {
     headers: {
       'Accept': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     },
   });
 
@@ -311,38 +348,42 @@ async function fetchTranscript(
 }
 
 /**
+ * Import additional shared utilities
+ */
+import {
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
+
+/**
  * Main serve function
  */
 serve(async (req) => {
+  // Generate a request ID for tracking
+  const requestId = crypto.randomUUID();
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        ...securityHeaders,
-        ...corsHeaders,
-      },
-    });
+    return createCorsResponse();
   }
 
   // Only allow POST requests
   if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: {
-          code: 'METHOD_NOT_ALLOWED',
-          message: 'Only POST method is allowed',
-        },
-      }),
+    return createCorsErrorResponse(
+      'Only POST method is allowed',
+      405,
+      requestId,
       {
-        status: 405,
-        headers: {
-          ...securityHeaders,
-          ...corsHeaders,
-          'Allow': 'POST, OPTIONS',
-        },
-      }
+        code: 'METHOD_NOT_ALLOWED',
+        allowedMethods: ['POST'],
+      },
     );
   }
 
@@ -351,38 +392,26 @@ serve(async (req) => {
     let requestData: ExtractTranscriptRequest;
     try {
       requestData = await req.json();
-    } catch (error) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid JSON in request body',
-          },
-        }),
-        {
-          status: 400,
-          headers: { ...securityHeaders, ...corsHeaders },
-        }
+    } catch (error: any) {
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        'Invalid JSON in request body',
+        { code: 'INVALID_REQUEST' },
+        requestId,
       );
     }
 
     // Validate request
     const validation = validateRequest(requestData);
     if (!validation.isValid) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request parameters',
-            details: validation.errors,
-          },
-        }),
+      throw createAppError(
+        ErrorType.VALIDATION_ERROR,
+        'Invalid request parameters',
         {
-          status: 400,
-          headers: { ...securityHeaders, ...corsHeaders },
-        }
+          code: 'VALIDATION_ERROR',
+          details: validation.errors,
+        },
+        requestId,
       );
     }
 
@@ -392,7 +421,7 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
     }
@@ -403,9 +432,9 @@ serve(async (req) => {
     const cached = await getCachedTranscript(supabase, videoId, language);
     if (cached) {
       console.log('Returning cached transcript');
-      
-      return new Response(
-        JSON.stringify({
+
+      return createCorsSuccessResponse(
+        {
           success: true,
           data: {
             videoId,
@@ -418,11 +447,9 @@ serve(async (req) => {
             characterCount: cached.character_count,
             processedAt: cached.created_at,
           },
-        } as ExtractTranscriptResponse),
-        {
-          status: 200,
-          headers: { ...securityHeaders, ...corsHeaders },
-        }
+        } as ExtractTranscriptResponse,
+        200,
+        requestId,
       );
     }
 
@@ -433,15 +460,15 @@ serve(async (req) => {
     // Calculate character count
     const characterCount = transcript.segments.reduce(
       (sum: number, seg: any) => sum + seg.text.length,
-      0
+      0,
     );
 
     // Save to cache
     await saveTranscript(supabase, videoId, transcript);
 
     // Return response
-    return new Response(
-      JSON.stringify({
+    return createCorsSuccessResponse(
+      {
         success: true,
         data: {
           videoId,
@@ -454,48 +481,50 @@ serve(async (req) => {
           characterCount,
           processedAt: new Date().toISOString(),
         },
-      } as ExtractTranscriptResponse),
-      {
-        status: 200,
-        headers: { ...securityHeaders, ...corsHeaders },
-      }
+      } as ExtractTranscriptResponse,
+      200,
+      requestId,
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Request failed:', error);
 
-    let errorCode = 'INTERNAL_ERROR';
-    let errorMessage = 'An unexpected error occurred';
-    let statusCode = 500;
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
 
+    // Map specific error messages to appropriate error types
     if (error instanceof Error) {
       if (error.message.includes('No transcripts available')) {
-        errorCode = 'NO_TRANSCRIPTS';
-        errorMessage = 'No transcripts available for this video';
-        statusCode = 404;
-      } else if (error.message.includes('Failed to fetch video page')) {
-        errorCode = 'VIDEO_NOT_FOUND';
-        errorMessage = 'Video not found or is private';
-        statusCode = 404;
-      } else if (error.message.includes('Failed to fetch transcript')) {
-        errorCode = 'TRANSCRIPT_FETCH_FAILED';
-        errorMessage = 'Failed to fetch transcript from YouTube';
+        return createCorsErrorResponse(
+          'No transcripts available for this video',
+          404,
+          requestId,
+          { code: 'NO_TRANSCRIPTS' },
+        );
+      }
+
+      if (error.message.includes('Failed to fetch video page')) {
+        return createCorsErrorResponse(
+          'Video not found or is private',
+          404,
+          requestId,
+          { code: 'VIDEO_NOT_FOUND' },
+        );
+      }
+
+      if (error.message.includes('Failed to fetch transcript')) {
+        return createCorsErrorResponse(
+          'Failed to fetch transcript from YouTube',
+          502,
+          requestId,
+          { code: 'TRANSCRIPT_FETCH_FAILED' },
+        );
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: {
-          code: errorCode,
-          message: errorMessage,
-          details: error instanceof Error ? error.message : undefined,
-        },
-      } as ExtractTranscriptResponse),
-      {
-        status: statusCode,
-        headers: { ...securityHeaders, ...corsHeaders },
-      }
-    );
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 });

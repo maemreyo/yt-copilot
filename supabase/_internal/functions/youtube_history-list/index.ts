@@ -2,7 +2,7 @@
 
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '_shared/cors.ts';
+import { corsHeaders } from '@/cors';
 
 /**
  * Query parameters interface
@@ -65,7 +65,9 @@ const securityHeaders = {
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(request: Request): Promise<string | null> {
+async function extractUserFromRequest(
+  request: Request,
+): Promise<string | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -73,10 +75,10 @@ async function extractUserFromRequest(request: Request): Promise<string | null> 
     }
 
     const token = authHeader.substring(7);
-    
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -85,7 +87,7 @@ async function extractUserFromRequest(request: Request): Promise<string | null> 
     }
 
     return user.id;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -117,7 +119,9 @@ function parseQueryParams(url: URL): ListHistoryParams {
 
   // Parse filter
   const filter = url.searchParams.get('filter');
-  if (filter && ['all', 'bookmarked', 'completed', 'in-progress'].includes(filter)) {
+  if (
+    filter && ['all', 'bookmarked', 'completed', 'in-progress'].includes(filter)
+  ) {
     params.filter = filter as any;
   } else {
     params.filter = 'all';
@@ -166,7 +170,7 @@ serve(async (req) => {
           ...corsHeaders,
           'Allow': 'GET, OPTIONS',
         },
-      }
+      },
     );
   }
 
@@ -185,7 +189,7 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...securityHeaders, ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -196,7 +200,7 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
     }
@@ -206,7 +210,8 @@ serve(async (req) => {
     // Build query
     let query = supabase
       .from('user_video_history')
-      .select(`
+      .select(
+        `
         id,
         progress_seconds,
         completed,
@@ -224,7 +229,9 @@ serve(async (req) => {
           thumbnail_url,
           duration_seconds
         )
-      `, { count: 'exact' })
+      `,
+        { count: 'exact' },
+      )
       .eq('user_id', userId);
 
     // Apply filters
@@ -246,7 +253,9 @@ serve(async (req) => {
         query = query.order('youtube_videos(title)', { ascending: true });
         break;
       case 'duration':
-        query = query.order('youtube_videos(duration_seconds)', { ascending: false });
+        query = query.order('youtube_videos(duration_seconds)', {
+          ascending: false,
+        });
         break;
       case 'recent':
       default:
@@ -256,8 +265,8 @@ serve(async (req) => {
 
     // Apply pagination
     query = query.range(
-      params.offset!, 
-      params.offset! + params.limit! - 1
+      params.offset!,
+      params.offset! + params.limit! - 1,
     );
 
     // Execute query
@@ -269,22 +278,24 @@ serve(async (req) => {
     }
 
     // Transform data
-    const transformedHistory: VideoHistoryEntry[] = (history || []).map(item => ({
-      historyId: item.id,
-      videoId: item.youtube_videos.video_id,
-      videoTitle: item.youtube_videos.title,
-      channelName: item.youtube_videos.channel_name,
-      thumbnailUrl: item.youtube_videos.thumbnail_url,
-      durationSeconds: item.youtube_videos.duration_seconds,
-      progressSeconds: item.progress_seconds,
-      completed: item.completed,
-      isBookmarked: item.is_bookmarked,
-      lastWatchedAt: item.last_watched_at,
-      watchCount: item.watch_count,
-      playbackRate: item.playback_rate,
-      notes: item.notes,
-      tags: item.tags,
-    }));
+    const transformedHistory: VideoHistoryEntry[] = (history || []).map(
+      (item) => ({
+        historyId: item.id,
+        videoId: item.youtube_videos.video_id,
+        videoTitle: item.youtube_videos.title,
+        channelName: item.youtube_videos.channel_name,
+        thumbnailUrl: item.youtube_videos.thumbnail_url,
+        durationSeconds: item.youtube_videos.duration_seconds,
+        progressSeconds: item.progress_seconds,
+        completed: item.completed,
+        isBookmarked: item.is_bookmarked,
+        lastWatchedAt: item.last_watched_at,
+        watchCount: item.watch_count,
+        playbackRate: item.playback_rate,
+        notes: item.notes,
+        tags: item.tags,
+      }),
+    );
 
     // Calculate if there are more results
     const total = count || 0;
@@ -303,10 +314,9 @@ serve(async (req) => {
       {
         status: 200,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Request failed:', error);
 
     return new Response(
@@ -320,7 +330,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...securityHeaders, ...corsHeaders },
-      }
+      },
     );
   }
 });

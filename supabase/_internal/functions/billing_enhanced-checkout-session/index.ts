@@ -3,6 +3,17 @@
 import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import {
+  createCorsErrorResponse,
+  createCorsResponse,
+  createCorsSuccessResponse,
+} from '@/cors';
+import {
+  AppError,
+  createAppError,
+  ErrorType,
+  handleUnknownError,
+} from '@/shared-errors';
 
 /**
  * Checkout session request interface
@@ -49,10 +60,10 @@ class EnhancedCheckoutService {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
       {
         auth: { persistSession: false },
-        global: { 
-          headers: { 'x-application-name': 'enhanced-checkout-service' } 
-        }
-      }
+        global: {
+          headers: { 'x-application-name': 'enhanced-checkout-service' },
+        },
+      },
     );
   }
 
@@ -104,7 +115,10 @@ class EnhancedCheckoutService {
 
     // Validate quantity (optional)
     if (request.quantity !== undefined) {
-      if (typeof request.quantity !== 'number' || request.quantity < 1 || request.quantity > 100) {
+      if (
+        typeof request.quantity !== 'number' || request.quantity < 1 ||
+        request.quantity > 100
+      ) {
         errors.push('quantity must be a number between 1 and 100');
       } else {
         sanitized.quantity = Math.floor(request.quantity);
@@ -120,18 +134,20 @@ class EnhancedCheckoutService {
         if (metadataKeys.length > 50) {
           errors.push('metadata cannot have more than 50 keys');
         }
-        
+
         for (const [key, value] of Object.entries(request.metadata)) {
           if (typeof key !== 'string' || key.length > 40) {
             errors.push('metadata keys must be strings with max 40 characters');
             break;
           }
           if (typeof value !== 'string' || value.length > 500) {
-            errors.push('metadata values must be strings with max 500 characters');
+            errors.push(
+              'metadata values must be strings with max 500 characters',
+            );
             break;
           }
         }
-        
+
         if (errors.length === 0) {
           sanitized.metadata = request.metadata;
         }
@@ -181,7 +197,7 @@ class EnhancedCheckoutService {
     return {
       isValid: errors.length === 0,
       errors,
-      sanitized
+      sanitized,
     };
   }
 
@@ -189,9 +205,9 @@ class EnhancedCheckoutService {
    * Create checkout session
    */
   async createCheckoutSession(
-    userId: string, 
-    userEmail: string, 
-    request: CheckoutSessionRequest
+    userId: string,
+    userEmail: string,
+    request: CheckoutSessionRequest,
   ): Promise<CheckoutSessionResponse> {
     try {
       // Get or create Stripe customer
@@ -210,8 +226,12 @@ class EnhancedCheckoutService {
           },
         ],
         mode: 'subscription',
-        success_url: request.successUrl || `${Deno.env.get('APP_URL')}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: request.cancelUrl || `${Deno.env.get('APP_URL')}/billing/cancel`,
+        success_url: request.successUrl ||
+          `${
+            Deno.env.get('APP_URL')
+          }/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: request.cancelUrl ||
+          `${Deno.env.get('APP_URL')}/billing/cancel`,
         subscription_data: {
           metadata: {
             supabase_user_id: userId,
@@ -220,10 +240,14 @@ class EnhancedCheckoutService {
           },
         },
         customer_update: {
-          address: request.billingAddressCollection === 'required' ? 'required' : 'auto',
+          address: request.billingAddressCollection === 'required'
+            ? 'required'
+            : 'auto',
         },
         billing_address_collection: request.billingAddressCollection || 'auto',
-        allow_promotion_codes: request.allowPromotionCodes !== undefined ? request.allowPromotionCodes : true,
+        allow_promotion_codes: request.allowPromotionCodes !== undefined
+          ? request.allowPromotionCodes
+          : true,
         locale: request.locale as any,
         expires_at: Math.floor(Date.now() / 1000) + (30 * 60), // 30 minutes from now
         metadata: {
@@ -246,11 +270,11 @@ class EnhancedCheckoutService {
         url: session.url || '',
         expiresAt: new Date(session.expires_at * 1000).toISOString(),
         customerId,
-        message: 'Checkout session created successfully'
+        message: 'Checkout session created successfully',
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating checkout session:', error);
-      
+
       // Log checkout error
       await this.logCheckoutEvent(userId, 'checkout_session_error', {
         error: error.message,
@@ -264,7 +288,10 @@ class EnhancedCheckoutService {
   /**
    * Get or create Stripe customer
    */
-  private async getOrCreateCustomer(userId: string, userEmail: string): Promise<string> {
+  private async getOrCreateCustomer(
+    userId: string,
+    userEmail: string,
+  ): Promise<string> {
     try {
       // Get user profile
       const { data: profile, error: profileError } = await this.supabase
@@ -296,9 +323,9 @@ class EnhancedCheckoutService {
       // Update profile with customer ID
       const { error: updateError } = await this.supabase
         .from('profiles')
-        .update({ 
+        .update({
           stripe_customer_id: customer.id,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', userId);
 
@@ -308,7 +335,7 @@ class EnhancedCheckoutService {
       }
 
       return customer.id;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting or creating customer:', error);
       throw new Error('Failed to get or create customer');
     }
@@ -320,7 +347,7 @@ class EnhancedCheckoutService {
   private async validatePrice(priceId: string): Promise<void> {
     try {
       const price = await this.stripe.prices.retrieve(priceId);
-      
+
       if (!price.active) {
         throw new Error('Price is not active');
       }
@@ -328,7 +355,7 @@ class EnhancedCheckoutService {
       if (price.type !== 'recurring') {
         throw new Error('Price must be for recurring subscription');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error validating price:', error);
       throw new Error(`Invalid price ID: ${error.message}`);
     }
@@ -338,9 +365,9 @@ class EnhancedCheckoutService {
    * Log checkout event for audit trail
    */
   private async logCheckoutEvent(
-    userId: string, 
-    action: string, 
-    details: Record<string, unknown>
+    userId: string,
+    action: string,
+    details: Record<string, unknown>,
   ): Promise<void> {
     try {
       const auditEntry = {
@@ -350,15 +377,15 @@ class EnhancedCheckoutService {
         resource_id: details.sessionId || 'unknown',
         details: JSON.stringify({
           ...details,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         }),
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       };
 
       await this.supabase
         .from('audit_logs')
         .insert(auditEntry);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to log checkout event:', error);
       // Don't throw - audit logging failure shouldn't break the operation
     }
@@ -385,24 +412,14 @@ class EnhancedCheckoutService {
   }
 }
 
-/**
- * Security headers for responses
- */
-const securityHeaders = {
-  'Content-Type': 'application/json',
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0'
-};
+// Security headers are now imported from @/shared-security
 
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(request: Request): Promise<{ userId: string; email: string } | null> {
+async function extractUserFromRequest(
+  request: Request,
+): Promise<{ userId: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -410,10 +427,10 @@ async function extractUserFromRequest(request: Request): Promise<{ userId: strin
     }
 
     const token = authHeader.substring(7);
-    
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
+      Deno.env.get('SUPABASE_ANON_KEY') || '',
     );
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -423,9 +440,9 @@ async function extractUserFromRequest(request: Request): Promise<{ userId: strin
 
     return {
       userId: user.id,
-      email: user.email || ''
+      email: user.email || '',
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error extracting user from request:', error);
     return null;
   }
@@ -450,36 +467,24 @@ async function checkRateLimit(userId: string): Promise<boolean> {
  * Main serve function
  */
 serve(async (req) => {
+  // Generate a request ID for tracking
+  const requestId = crypto.randomUUID();
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: {
-        ...securityHeaders,
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+    return createCorsResponse();
   }
 
   // Only allow POST requests
   if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: 'METHOD_NOT_ALLOWED',
-          message: 'Only POST method is allowed',
-        },
-        timestamp: new Date().toISOString(),
-      }),
+    return createCorsErrorResponse(
+      'Only POST method is allowed',
+      405,
+      requestId,
       {
-        status: 405,
-        headers: {
-          ...securityHeaders,
-          'Allow': 'POST, OPTIONS',
-        },
-      }
+        code: 'METHOD_NOT_ALLOWED',
+        allowedMethods: ['POST'],
+      },
     );
   }
 
@@ -487,63 +492,44 @@ serve(async (req) => {
     // Extract authenticated user
     const userInfo = await extractUserFromRequest(req);
     if (!userInfo) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'AUTHENTICATION_REQUIRED',
-            message: 'Valid authentication token required',
-          },
-          timestamp: new Date().toISOString(),
-        }),
-        {
-          status: 401,
-          headers: securityHeaders,
-        }
+      return createCorsErrorResponse(
+        'Valid authentication token required',
+        401,
+        requestId,
+        { code: 'AUTHENTICATION_REQUIRED' },
       );
     }
 
     // Check rate limit
     const rateLimitAllowed = await checkRateLimit(userInfo.userId);
     if (!rateLimitAllowed) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: 'Too many checkout requests. Please try again later.',
-          },
-          timestamp: new Date().toISOString(),
-        }),
+      return createCorsErrorResponse(
+        'Too many checkout requests. Please try again later.',
+        429,
+        requestId,
         {
-          status: 429,
-          headers: {
-            ...securityHeaders,
-            'Retry-After': '60',
-          },
-        }
+          code: 'RATE_LIMIT_EXCEEDED',
+          retryAfter: 60,
+        },
       );
     }
 
     // Parse request body
     const body = await req.json();
-    
+
     // Create service and validate request
     const service = new EnhancedCheckoutService();
     const validation = service.validateRequest(body);
-    
+
     if (!validation.isValid) {
-      return new Response(
-        JSON.stringify({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid request parameters',
-            details: validation.errors,
-          },
-          timestamp: new Date().toISOString(),
-        }),
+      return createCorsErrorResponse(
+        'Invalid request parameters',
+        400,
+        requestId,
         {
-          status: 400,
-          headers: securityHeaders,
-        }
+          code: 'VALIDATION_ERROR',
+          details: validation.errors,
+        },
       );
     }
 
@@ -551,44 +537,32 @@ serve(async (req) => {
     const result = await service.createCheckoutSession(
       userInfo.userId,
       userInfo.email,
-      validation.sanitized
+      validation.sanitized,
     );
 
-    return new Response(
-      JSON.stringify({
+    return createCorsSuccessResponse(
+      {
         ...result,
         timestamp: new Date().toISOString(),
-      }),
-      {
-        status: 200,
-        headers: {
-          ...securityHeaders,
-          'Access-Control-Allow-Origin': '*',
-        },
-      }
+      },
+      200,
+      requestId,
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Enhanced checkout session error:', error);
-    
+
     // Determine error type
     const isStripeError = error.type && error.type.startsWith('Stripe');
-    const isValidationError = error.message.includes('Invalid') || error.message.includes('must be');
-    
-    return new Response(
-      JSON.stringify({
-        error: {
-          code: isStripeError ? 'STRIPE_ERROR' : 
-                 isValidationError ? 'VALIDATION_ERROR' : 'CHECKOUT_ERROR',
-          message: isStripeError ? 'Payment processing error' : 
-                   isValidationError ? error.message : 'Failed to create checkout session',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
-        },
-        timestamp: new Date().toISOString(),
-      }),
-      {
-        status: isStripeError ? 402 : isValidationError ? 400 : 500,
-        headers: securityHeaders,
-      }
-    );
+    const isValidationError = error.message.includes('Invalid') ||
+      error.message.includes('must be');
+
+    // If it's already an AppError, return it directly
+    if (error instanceof AppError) {
+      return error.toHttpResponse();
+    }
+
+    // For any other unknown errors
+    const appError = handleUnknownError(error, requestId);
+    return appError.toHttpResponse();
   }
 });

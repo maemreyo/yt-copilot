@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
 // Import Layer 1 utilities
-import { createAppError, ErrorType } from '@/errors';  
+import { createAppError, ErrorType } from '@/shared-errors';
 import { Logger } from '@/logging';
 import { SecurityService } from '@/security';
 import { ValidationService } from '@/validation';
@@ -32,18 +32,18 @@ class EnhancedStripeWebhookService {
     this.stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
-    
+
     this.supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
-    
+
     this.logger = new Logger({
       service: 'stripe-webhooks',
       level: 'info',
-      enablePerformanceTracking: true
+      enablePerformanceTracking: true,
     });
-    
+
     this.security = new SecurityService();
     this.validator = new ValidationService();
     this.database = new DatabaseService();
@@ -56,14 +56,14 @@ class EnhancedStripeWebhookService {
   async processWebhook(req: Request): Promise<Response> {
     const startTime = Date.now();
     const requestId = crypto.randomUUID();
-    
+
     try {
       // Log incoming webhook
       this.logger.info('Webhook received', {
         requestId,
         headers: Object.fromEntries(req.headers.entries()),
         method: req.method,
-        url: req.url
+        url: req.url,
       });
 
       // Handle CORS preflight
@@ -76,7 +76,7 @@ class EnhancedStripeWebhookService {
         throw createAppError(
           ErrorType.VALIDATION_ERROR,
           'Method not allowed',
-          { method: req.method }
+          { method: req.method },
         );
       }
 
@@ -86,7 +86,7 @@ class EnhancedStripeWebhookService {
         throw createAppError(
           ErrorType.VALIDATION_ERROR,
           'Missing Stripe signature',
-          { headers: Object.fromEntries(req.headers.entries()) }
+          { headers: Object.fromEntries(req.headers.entries()) },
         );
       }
 
@@ -95,24 +95,24 @@ class EnhancedStripeWebhookService {
       if (!body) {
         throw createAppError(
           ErrorType.VALIDATION_ERROR,
-          'Empty request body'
+          'Empty request body',
         );
       }
 
       // Verify webhook signature
       const event = await this.verifyWebhookSignature(body, signature);
-      
+
       // Log verified event
       this.logger.info('Webhook signature verified', {
         requestId,
         eventId: event.id,
         eventType: event.type,
-        created: event.created
+        created: event.created,
       });
 
       // Process the event
       const result = await this.processStripeEvent(event, requestId);
-      
+
       // Log successful processing
       const processingTime = Date.now() - startTime;
       this.logger.info('Webhook processed successfully', {
@@ -120,7 +120,7 @@ class EnhancedStripeWebhookService {
         eventId: event.id,
         eventType: event.type,
         processingTime,
-        result
+        result,
       });
 
       // Audit log successful webhook processing
@@ -132,13 +132,13 @@ class EnhancedStripeWebhookService {
         details: {
           eventType: event.type,
           processingTime,
-          result
+          result,
         },
         metadata: {
           requestId,
           source: 'stripe',
-          success: true
-        }
+          success: true,
+        },
       });
 
       // Return success response
@@ -146,10 +146,9 @@ class EnhancedStripeWebhookService {
         received: true,
         eventId: event.id,
         eventType: event.type,
-        processingTime
+        processingTime,
       });
-
-    } catch (error) {
+    } catch (error: any) {
       // Log error with comprehensive details
       const processingTime = Date.now() - startTime;
       this.logger.error('Webhook processing failed', {
@@ -157,7 +156,7 @@ class EnhancedStripeWebhookService {
         error: error.message,
         stack: error.stack,
         processingTime,
-        headers: Object.fromEntries(req.headers.entries())
+        headers: Object.fromEntries(req.headers.entries()),
       });
 
       // Audit log failed webhook processing
@@ -168,13 +167,13 @@ class EnhancedStripeWebhookService {
         resourceId: null,
         details: {
           error: error.message,
-          processingTime
+          processingTime,
         },
         metadata: {
           requestId,
           success: false,
-          errorType: error.type || 'unknown'
-        }
+          errorType: error.type || 'unknown',
+        },
       });
 
       // Return error response
@@ -185,20 +184,23 @@ class EnhancedStripeWebhookService {
   /**
    * Verify webhook signature with comprehensive validation
    */
-  private async verifyWebhookSignature(body: string, signature: string): Promise<Stripe.Event> {
+  private async verifyWebhookSignature(
+    body: string,
+    signature: string,
+  ): Promise<Stripe.Event> {
     try {
       const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
       if (!webhookSecret) {
         throw createAppError(
           ErrorType.CONFIGURATION_ERROR,
-          'Stripe webhook secret not configured'
+          'Stripe webhook secret not configured',
         );
       }
 
       const event = this.stripe.webhooks.constructEvent(
         body,
         signature,
-        webhookSecret
+        webhookSecret,
       );
 
       // Additional validation
@@ -206,29 +208,29 @@ class EnhancedStripeWebhookService {
         throw createAppError(
           ErrorType.VALIDATION_ERROR,
           'Invalid webhook event structure',
-          { eventId: event.id, eventType: event.type }
+          { eventId: event.id, eventType: event.type },
         );
       }
 
       // Check event age (prevent replay attacks)
       const eventAge = Date.now() - (event.created * 1000);
       const maxEventAge = 5 * 60 * 1000; // 5 minutes
-      
+
       if (eventAge > maxEventAge) {
         throw createAppError(
           ErrorType.VALIDATION_ERROR,
           'Webhook event too old',
-          { eventAge, maxEventAge, eventId: event.id }
+          { eventAge, maxEventAge, eventId: event.id },
         );
       }
 
       return event;
-    } catch (error) {
+    } catch (error: any) {
       if (error.type === 'StripeSignatureVerificationError') {
         throw createAppError(
           ErrorType.AUTHENTICATION_ERROR,
           'Webhook signature verification failed',
-          { originalError: error.message }
+          { originalError: error.message },
         );
       }
       throw error;
@@ -238,37 +240,40 @@ class EnhancedStripeWebhookService {
   /**
    * Process different Stripe event types
    */
-  private async processStripeEvent(event: Stripe.Event, requestId: string): Promise<any> {
+  private async processStripeEvent(
+    event: Stripe.Event,
+    requestId: string,
+  ): Promise<any> {
     this.logger.info('Processing Stripe event', {
       requestId,
       eventId: event.id,
-      eventType: event.type
+      eventType: event.type,
     });
 
     switch (event.type) {
       case 'checkout.session.completed':
         return await this.handleCheckoutSessionCompleted(event, requestId);
-      
+
       case 'customer.subscription.created':
         return await this.handleSubscriptionCreated(event, requestId);
-      
+
       case 'customer.subscription.updated':
         return await this.handleSubscriptionUpdated(event, requestId);
-      
+
       case 'customer.subscription.deleted':
         return await this.handleSubscriptionDeleted(event, requestId);
-      
+
       case 'invoice.payment_succeeded':
         return await this.handlePaymentSucceeded(event, requestId);
-      
+
       case 'invoice.payment_failed':
         return await this.handlePaymentFailed(event, requestId);
-      
+
       default:
         this.logger.info('Unhandled event type', {
           requestId,
           eventType: event.type,
-          eventId: event.id
+          eventId: event.id,
         });
         return { handled: false, reason: 'Unhandled event type' };
     }
@@ -277,14 +282,17 @@ class EnhancedStripeWebhookService {
   /**
    * Handle checkout session completed
    */
-  private async handleCheckoutSessionCompleted(event: Stripe.Event, requestId: string) {
+  private async handleCheckoutSessionCompleted(
+    event: Stripe.Event,
+    requestId: string,
+  ) {
     const session = event.data.object as Stripe.Checkout.Session;
-    
+
     this.logger.info('Processing checkout session completed', {
       requestId,
       sessionId: session.id,
       customerId: session.customer,
-      subscriptionId: session.subscription
+      subscriptionId: session.subscription,
     });
 
     // Get subscription details
@@ -292,23 +300,23 @@ class EnhancedStripeWebhookService {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         'No subscription found in checkout session',
-        { sessionId: session.id }
+        { sessionId: session.id },
       );
     }
 
     const subscription = await this.stripe.subscriptions.retrieve(
-      session.subscription as string
+      session.subscription as string,
     );
 
     // Extract user ID from metadata
-    const supabaseUserId = subscription.metadata?.supabase_user_id || 
-                          subscription.metadata?.supabase_id;
-    
+    const supabaseUserId = subscription.metadata?.supabase_user_id ||
+      subscription.metadata?.supabase_id;
+
     if (!supabaseUserId) {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         'No Supabase user ID found in subscription metadata',
-        { subscriptionId: subscription.id }
+        { subscriptionId: subscription.id },
       );
     }
 
@@ -319,7 +327,7 @@ class EnhancedStripeWebhookService {
         stripe_customer_id: session.customer,
         stripe_subscription_id: session.subscription,
         stripe_subscription_status: subscription.status,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', supabaseUserId);
 
@@ -327,7 +335,7 @@ class EnhancedStripeWebhookService {
       throw createAppError(
         ErrorType.DATABASE_ERROR,
         'Failed to update user profile after checkout',
-        { error: error.message, userId: supabaseUserId }
+        { error: error.message, userId: supabaseUserId },
       );
     }
 
@@ -340,13 +348,13 @@ class EnhancedStripeWebhookService {
       details: {
         customerId: session.customer,
         subscriptionStatus: subscription.status,
-        checkoutSessionId: session.id
+        checkoutSessionId: session.id,
       },
       metadata: {
         requestId,
         source: 'stripe_webhook',
-        eventType: 'checkout.session.completed'
-      }
+        eventType: 'checkout.session.completed',
+      },
     });
 
     return {
@@ -354,30 +362,33 @@ class EnhancedStripeWebhookService {
       action: 'profile_updated',
       userId: supabaseUserId,
       subscriptionId: subscription.id,
-      status: subscription.status
+      status: subscription.status,
     };
   }
 
   /**
    * Handle subscription created
    */
-  private async handleSubscriptionCreated(event: Stripe.Event, requestId: string) {
+  private async handleSubscriptionCreated(
+    event: Stripe.Event,
+    requestId: string,
+  ) {
     const subscription = event.data.object as Stripe.Subscription;
-    
+
     this.logger.info('Processing subscription created', {
       requestId,
       subscriptionId: subscription.id,
       customerId: subscription.customer,
-      status: subscription.status
+      status: subscription.status,
     });
 
-    const supabaseUserId = subscription.metadata?.supabase_user_id || 
-                          subscription.metadata?.supabase_id;
+    const supabaseUserId = subscription.metadata?.supabase_user_id ||
+      subscription.metadata?.supabase_id;
 
     if (!supabaseUserId) {
       this.logger.warning('No Supabase user ID in subscription metadata', {
         requestId,
-        subscriptionId: subscription.id
+        subscriptionId: subscription.id,
       });
       return { handled: false, reason: 'No user ID in metadata' };
     }
@@ -388,7 +399,7 @@ class EnhancedStripeWebhookService {
       .update({
         stripe_subscription_id: subscription.id,
         stripe_subscription_status: subscription.status,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('id', supabaseUserId);
 
@@ -396,7 +407,7 @@ class EnhancedStripeWebhookService {
       throw createAppError(
         ErrorType.DATABASE_ERROR,
         'Failed to update subscription status',
-        { error: error.message, userId: supabaseUserId }
+        { error: error.message, userId: supabaseUserId },
       );
     }
 
@@ -404,20 +415,23 @@ class EnhancedStripeWebhookService {
       handled: true,
       action: 'subscription_created',
       userId: supabaseUserId,
-      subscriptionId: subscription.id
+      subscriptionId: subscription.id,
     };
   }
 
   /**
    * Handle subscription updated
    */
-  private async handleSubscriptionUpdated(event: Stripe.Event, requestId: string) {
+  private async handleSubscriptionUpdated(
+    event: Stripe.Event,
+    requestId: string,
+  ) {
     const subscription = event.data.object as Stripe.Subscription;
-    
+
     this.logger.info('Processing subscription updated', {
       requestId,
       subscriptionId: subscription.id,
-      status: subscription.status
+      status: subscription.status,
     });
 
     // Update all profiles with this subscription
@@ -425,7 +439,7 @@ class EnhancedStripeWebhookService {
       .from('profiles')
       .update({
         stripe_subscription_status: subscription.status,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('stripe_subscription_id', subscription.id);
 
@@ -433,7 +447,7 @@ class EnhancedStripeWebhookService {
       throw createAppError(
         ErrorType.DATABASE_ERROR,
         'Failed to update subscription status',
-        { error: error.message, subscriptionId: subscription.id }
+        { error: error.message, subscriptionId: subscription.id },
       );
     }
 
@@ -441,19 +455,22 @@ class EnhancedStripeWebhookService {
       handled: true,
       action: 'subscription_updated',
       subscriptionId: subscription.id,
-      status: subscription.status
+      status: subscription.status,
     };
   }
 
   /**
    * Handle subscription deleted
    */
-  private async handleSubscriptionDeleted(event: Stripe.Event, requestId: string) {
+  private async handleSubscriptionDeleted(
+    event: Stripe.Event,
+    requestId: string,
+  ) {
     const subscription = event.data.object as Stripe.Subscription;
-    
+
     this.logger.info('Processing subscription deleted', {
       requestId,
-      subscriptionId: subscription.id
+      subscriptionId: subscription.id,
     });
 
     // Update profile to remove subscription
@@ -462,7 +479,7 @@ class EnhancedStripeWebhookService {
       .update({
         stripe_subscription_id: null,
         stripe_subscription_status: 'canceled',
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
       .eq('stripe_subscription_id', subscription.id);
 
@@ -470,14 +487,14 @@ class EnhancedStripeWebhookService {
       throw createAppError(
         ErrorType.DATABASE_ERROR,
         'Failed to update profile after subscription deletion',
-        { error: error.message, subscriptionId: subscription.id }
+        { error: error.message, subscriptionId: subscription.id },
       );
     }
 
     return {
       handled: true,
       action: 'subscription_deleted',
-      subscriptionId: subscription.id
+      subscriptionId: subscription.id,
     };
   }
 
@@ -486,12 +503,12 @@ class EnhancedStripeWebhookService {
    */
   private async handlePaymentSucceeded(event: Stripe.Event, requestId: string) {
     const invoice = event.data.object as Stripe.Invoice;
-    
+
     this.logger.info('Processing payment succeeded', {
       requestId,
       invoiceId: invoice.id,
       subscriptionId: invoice.subscription,
-      amount: invoice.amount_paid
+      amount: invoice.amount_paid,
     });
 
     // Could add logic to update payment history, send notifications, etc.
@@ -499,7 +516,7 @@ class EnhancedStripeWebhookService {
       handled: true,
       action: 'payment_succeeded',
       invoiceId: invoice.id,
-      amount: invoice.amount_paid
+      amount: invoice.amount_paid,
     };
   }
 
@@ -508,12 +525,12 @@ class EnhancedStripeWebhookService {
    */
   private async handlePaymentFailed(event: Stripe.Event, requestId: string) {
     const invoice = event.data.object as Stripe.Invoice;
-    
+
     this.logger.error('Payment failed', {
       requestId,
       invoiceId: invoice.id,
       subscriptionId: invoice.subscription,
-      attemptCount: invoice.attempt_count
+      attemptCount: invoice.attempt_count,
     });
 
     // Could add logic to notify user, pause service, etc.
@@ -521,7 +538,7 @@ class EnhancedStripeWebhookService {
       handled: true,
       action: 'payment_failed',
       invoiceId: invoice.id,
-      attemptCount: invoice.attempt_count
+      attemptCount: invoice.attempt_count,
     };
   }
 
@@ -531,7 +548,7 @@ class EnhancedStripeWebhookService {
   private createCorsResponse(): Response {
     return new Response(null, {
       status: 200,
-      headers: this.security.getCorsHeaders()
+      headers: this.security.getCorsHeaders(),
     });
   }
 
@@ -547,8 +564,8 @@ class EnhancedStripeWebhookService {
           ...this.security.getCorsHeaders(),
           ...this.security.getSecurityHeaders(),
           'Content-Type': 'application/json',
-        }
-      }
+        },
+      },
     );
   }
 
@@ -557,15 +574,15 @@ class EnhancedStripeWebhookService {
    */
   private createErrorResponse(error: any, requestId: string): Response {
     const isAppError = error.type && error.code;
-    
+
     const response = {
       error: {
         code: isAppError ? error.code : 'WEBHOOK_ERROR',
         message: isAppError ? error.message : 'Webhook processing failed',
-        details: isAppError ? error.details : { originalError: error.message }
+        details: isAppError ? error.details : { originalError: error.message },
       },
       timestamp: new Date().toISOString(),
-      requestId
+      requestId,
     };
 
     const status = isAppError ? this.getStatusFromErrorType(error.type) : 500;
@@ -578,8 +595,8 @@ class EnhancedStripeWebhookService {
           ...this.security.getCorsHeaders(),
           ...this.security.getSecurityHeaders(),
           'Content-Type': 'application/json',
-        }
-      }
+        },
+      },
     );
   }
 

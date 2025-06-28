@@ -1,0 +1,125 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": [
+            "ES2022",
+            "DOM",
+            "DOM.Iterable"
+        ],
+        "allowJs": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "strict": true,
+        "noEmit": true,
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "isolatedModules": true,
+        "noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        // Deno-specific configurations
+        "allowImportingTsExtensions": true,
+        "types": [
+            "deno"
+        ],
+        // Path mappings for Deno modules (following import_map.json)
+        "baseUrl": ".",
+        "paths": {
+            // Shared utilities (Deno runtime)
+            "_shared/*": [
+                "./supabase/_internal/functions/_shared/*"
+            ],
+            "../_shared/*": [
+                "./supabase/_internal/functions/_shared/*"
+            ],
+            "./_shared/*": [
+                "./supabase/_internal/functions/_shared/*"
+            ],
+            // Standard library
+            "std/*": [
+                "https://deno.land/std@0.168.0/*"
+            ],
+            // External dependencies
+            "@supabase/supabase-js": [
+                "https://esm.sh/@supabase/supabase-js@2.38.4"
+            ],
+            "stripe": [
+                "https://esm.sh/stripe@12.18.0"
+            ],
+            "zod": [
+                "https://esm.sh/zod@3.22.4"
+            ],
+            // Source utilities (for modules)
+            "@/*": [
+                "./src/*"
+            ],
+            "@/rate-limiting": [
+                "./src/shared/utils/rate-limiting.ts"
+            ],
+            "@/errors": [
+                "./src/shared/utils/errors.ts"
+            ],
+            "@/auth": [
+                "./src/shared/utils/auth.ts"
+            ],
+            "@/logging": [
+                "./src/shared/utils/logging.ts"
+            ],
+            "@/cache": [
+                "./src/shared/utils/cache.ts"
+            ],
+            "@/security": [
+                "./src/shared/utils/security.ts"
+            ],
+            "@/environment": [
+                "./src/shared/config/environment.ts"
+            ],
+            "@/config": [
+                "./src/shared/config/index.ts"
+            ],
+            "@/validation": [
+                "./src/shared/utils/validation.ts"
+            ],
+            "@/audit-logging": [
+                "./src/shared/utils/audit-logging.ts"
+            ],
+            "@/shared/utils/database": [
+                "./src/shared/utils/database.ts"
+            ],
+            // Edge function shared utilities
+            "@/cors": [
+                "./src/shared/edge-functions/_shared/cors.ts"
+            ],
+            "@/shared-errors": [
+                "./src/shared/edge-functions/_shared/errors.ts"
+            ],
+            "@/shared-security": [
+                "./src/shared/edge-functions/_shared/security.ts"
+            ],
+            "@/shared-validation": [
+                "./src/shared/edge-functions/_shared/validation.ts"
+            ]
+        }
+    },
+    "include": [
+        "src/modules/**/*.ts",
+        "src/modules/**/*.tsx",
+        "supabase/functions/**/*.ts",
+        "supabase/_internal/functions/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "build",
+        ".next",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx"
+    ]
+}

@@ -2,81 +2,55 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext",
-      "webworker"
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
     ],
     "allowJs": true,
     "skipLibCheck": true,
-    "strict": false,
-    "noImplicitAny": false,
-    "noEmit": true,
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "incremental": true,
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
+    "jsx": "preserve",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
     "baseUrl": ".",
     "paths": {
-      // Main source paths
+      // Package paths for workspace
+      "@lean-saas/ui": [
+        "./packages/ui/index.ts"
+      ],
+      "@lean-saas/ui/*": [
+        "./packages/ui/*"
+      ],
+      "@lean-saas/config": [
+        "./packages/config/index.ts"
+      ],
+      "@lean-saas/config/*": [
+        "./packages/config/*"
+      ],
+      "@lean-saas/db-types": [
+        "./packages/db-types/index.ts"
+      ],
+      "@lean-saas/db-types/*": [
+        "./packages/db-types/*"
+      ],
+      // Source paths (Node.js environment only)
       "@/*": [
         "./src/*"
       ],
       "@shared/*": [
         "./src/shared/*"
       ],
-      "@modules/*": [
-        "./src/modules/*"
-      ],
-      // Package paths with correct scoped names
-      "@lean-saas/db-types/*": [
-        "./packages/db-types/*"
-      ],
-      "@lean-saas/ui/*": [
-        "./packages/ui/*"
-      ],
-      "@lean-saas/config/*": [
-        "./packages/config/*"
-      ],
-      // Legacy short names for backward compatibility
-      "@db-types/*": [
-        "./packages/db-types/*"
-      ],
-      "@ui/*": [
-        "./packages/ui/*"
-      ],
-      "@config/*": [
-        "./packages/config/*"
-      ],
-      // Shared utility paths (more specific)
-      "@utils/*": [
-        "./src/shared/utils/*"
-      ],
-      "@types/*": [
-        "./src/shared/types/*"
-      ],
-      "@constants/*": [
-        "./src/shared/constants/*"
-      ],
-      "@tests/*": [
-        "./src/shared/tests/*"
-      ],
-      // Convenience paths for frequently used utilities (with fallback)
-      "@/config": [
-        "./src/shared/config/index",
-        "./src/shared/config"
-      ],
-      "@/environment": [
-        "./src/shared/config/environment"
-      ],
+      // Utility convenience paths (Node.js utilities)
       "@/auth": [
         "./src/shared/utils/auth"
       ],
@@ -98,30 +72,39 @@
       "@/rate-limiting": [
         "./src/shared/utils/rate-limiting"
       ],
-      // Database types convenience path
-      "@/db-types": [
-        "./packages/db-types"
+      "@/audit-logging": [
+        "./src/shared/utils/audit-logging"
       ],
-      "@/db": [
-        "./packages/db-types"
+      // Configuration paths
+      "@/config": [
+        "./src/shared/config"
+      ],
+      "@/environment": [
+        "./src/shared/config/environment"
+      ],
+      "@/constants": [
+        "./src/shared/constants"
+      ],
+      // Database and testing utilities
+      "@/database": [
+        "./src/shared/utils/database"
+      ],
+      "@/testing": [
+        "./src/shared/testing"
+      ],
+      // Fallback paths for better resolution
+      "@config/*": [
+        "./packages/config/*"
+      ],
+      "@ui/*": [
+        "./packages/ui/*"
+      ],
+      "@db-types/*": [
+        "./packages/db-types/*"
       ]
     },
-    "types": [
-      "vitest/globals",
-      "@types/node"
-    ],
-    "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true,
-    "verbatimModuleSyntax": false,
-    "declaration": false,
-    "declarationMap": false,
-    "sourceMap": false,
-    "removeComments": false,
-    "importsNotUsedAsValues": "remove",
-    "allowUnusedLabels": false,
-    "allowUnreachableCode": false,
-    "exactOptionalPropertyTypes": false,
-    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": false,
@@ -136,7 +119,7 @@
     "**/*.js",
     "**/*.jsx",
     ".next/types/**/*.ts",
-    "src/**/*",
+    "src/shared/**/*",
     "packages/**/*",
     "apps/**/*",
     "scripts/**/*"
@@ -152,7 +135,11 @@
     "docs/generated",
     "supabase/_internal",
     "packages/db-types/index.ts",
-    // ADDED: Exclude generated/built files to fix TS6305 errors
+    // CRITICAL: Exclude Deno modules from Node.js TypeScript context
+    "src/modules",
+    "supabase/functions",
+    "supabase/_internal/functions",
+    // Exclude generated/built files to fix TS6305 errors
     "**/*.d.ts",
     "**/dist/**/*",
     "**/build/**/*",

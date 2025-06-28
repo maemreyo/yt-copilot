@@ -27,7 +27,8 @@
       "@lean-saas/db-types/*": [
         "../../packages/db-types/*"
       ]
-    }
+    },
+    "module": "esnext"
   },
   "include": [
     "next-env.d.ts",
