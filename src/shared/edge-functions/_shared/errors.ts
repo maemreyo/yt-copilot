@@ -45,7 +45,7 @@ export class AppError extends Error {
     type: ErrorType,
     message: string,
     details?: Record<string, unknown>,
-    requestId?: string,
+    requestId?: string
   ) {
     super(message);
     this.name = 'AppError';
@@ -75,11 +75,11 @@ export class AppError extends Error {
     };
 
     if (this.requestId) {
-      response.error = { ...response.error, requestId: this.requestId };
+      response.error = Object.assign({}, response.error as object, { requestId: this.requestId });
     }
 
     if (this.details) {
-      response.error = { ...response.error, details: this.details };
+      response.error = Object.assign({}, response.error as object, { details: this.details });
     }
 
     return response;
@@ -108,7 +108,7 @@ export function createAppError(
   type: ErrorType,
   message: string,
   details?: Record<string, unknown>,
-  requestId?: string,
+  requestId?: string
 ): AppError {
   return new AppError(type, message, details, requestId);
 }
@@ -116,10 +116,7 @@ export function createAppError(
 /**
  * Handle unknown errors and convert to AppError
  */
-export function handleUnknownError(
-  error: unknown,
-  requestId?: string,
-): AppError {
+export function handleUnknownError(error: unknown, requestId?: string): AppError {
   // If it's already an AppError, return as is
   if (error instanceof AppError) {
     return error;
@@ -131,7 +128,7 @@ export function handleUnknownError(
       ErrorType.INTERNAL_ERROR,
       error.message,
       { originalError: error.name, stack: error.stack },
-      requestId,
+      requestId
     );
   }
 
@@ -140,22 +137,19 @@ export function handleUnknownError(
     ErrorType.INTERNAL_ERROR,
     'An unexpected error occurred',
     { originalError: String(error) },
-    requestId,
+    requestId
   );
 }
 
 /**
  * Create validation error response
  */
-export function createValidationErrorResponse(
-  errors: string[],
-  requestId?: string,
-): Response {
+export function createValidationErrorResponse(errors: string[], requestId?: string): Response {
   const error = createAppError(
     ErrorType.VALIDATION_ERROR,
     'Validation failed',
     { errors },
-    requestId,
+    requestId
   );
 
   return error.toHttpResponse();
@@ -166,14 +160,9 @@ export function createValidationErrorResponse(
  */
 export function createAuthErrorResponse(
   message: string = 'Authentication required',
-  requestId?: string,
+  requestId?: string
 ): Response {
-  const error = createAppError(
-    ErrorType.AUTHENTICATION_ERROR,
-    message,
-    undefined,
-    requestId,
-  );
+  const error = createAppError(ErrorType.AUTHENTICATION_ERROR, message, undefined, requestId);
 
   return error.toHttpResponse();
 }
@@ -184,7 +173,7 @@ export function createAuthErrorResponse(
 export function createRateLimitErrorResponse(
   limit: number,
   windowMs: number,
-  requestId?: string,
+  requestId?: string
 ): Response {
   const error = createAppError(
     ErrorType.RATE_LIMIT_ERROR,
@@ -194,7 +183,7 @@ export function createRateLimitErrorResponse(
       windowMs,
       retryAfter: Math.ceil(windowMs / 1000),
     },
-    requestId,
+    requestId
   );
 
   const response = error.toHttpResponse();
@@ -216,13 +205,13 @@ export function createRateLimitErrorResponse(
  */
 export function createMethodNotAllowedResponse(
   allowedMethods: string[],
-  requestId?: string,
+  requestId?: string
 ): Response {
   const error = createAppError(
     ErrorType.VALIDATION_ERROR,
     `Method not allowed. Allowed methods: ${allowedMethods.join(', ')}`,
     { allowedMethods },
-    requestId,
+    requestId
   );
 
   const response = error.toHttpResponse();
@@ -243,7 +232,7 @@ export function createMethodNotAllowedResponse(
 export function logError(
   error: AppError | Error,
   request?: Request,
-  additionalContext?: Record<string, unknown>,
+  additionalContext?: Record<string, unknown>
 ): void {
   const logData: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
@@ -257,13 +246,12 @@ export function logError(
 
   // Add AppError specific fields
   if (error instanceof AppError) {
-    logData.error = {
-      ...logData.error,
+    logData.error = Object.assign({}, logData.error as object, {
       type: error.type,
       status: error.status,
       details: error.details,
       requestId: error.requestId,
-    };
+    });
   }
 
   // Add request context if available
@@ -273,8 +261,8 @@ export function logError(
       url: request.url,
       headers: {
         'user-agent': request.headers.get('user-agent'),
-        'origin': request.headers.get('origin'),
-        'referer': request.headers.get('referer'),
+        origin: request.headers.get('origin'),
+        referer: request.headers.get('referer'),
       },
     };
   }
@@ -315,11 +303,9 @@ export function createErrorHandler(requestId?: string) {
 /**
  * Wrap function with error handling
  */
-export function withErrorHandling<
-  T extends (...args: any[]) => Promise<Response>,
->(
+export function withErrorHandling<T extends (...args: any[]) => Promise<Response>>(
   fn: T,
-  requestId?: string,
+  requestId?: string
 ): T {
   return (async (...args: Parameters<T>): Promise<Response> => {
     try {
@@ -337,7 +323,7 @@ export function withErrorHandling<
 export function throwValidationError(
   message: string,
   details?: Record<string, unknown>,
-  requestId?: string,
+  requestId?: string
 ): never {
   throw createAppError(ErrorType.VALIDATION_ERROR, message, details, requestId);
 }
@@ -347,27 +333,14 @@ export function throwValidationError(
  */
 export function throwAuthError(
   message: string = 'Authentication required',
-  requestId?: string,
+  requestId?: string
 ): never {
-  throw createAppError(
-    ErrorType.AUTHENTICATION_ERROR,
-    message,
-    undefined,
-    requestId,
-  );
+  throw createAppError(ErrorType.AUTHENTICATION_ERROR, message, undefined, requestId);
 }
 
 /**
  * Not found error helper
  */
-export function throwNotFoundError(
-  resource: string,
-  requestId?: string,
-): never {
-  throw createAppError(
-    ErrorType.NOT_FOUND_ERROR,
-    `${resource} not found`,
-    undefined,
-    requestId,
-  );
+export function throwNotFoundError(resource: string, requestId?: string): never {
+  throw createAppError(ErrorType.NOT_FOUND_ERROR, `${resource} not found`, undefined, requestId);
 }

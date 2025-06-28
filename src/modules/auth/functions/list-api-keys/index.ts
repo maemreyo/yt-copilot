@@ -1,20 +1,11 @@
 // - API key listing with pagination, filtering, and comprehensive metadata (secure - no plain text keys)
 
-import { serve } from 'std/http/server.ts';
+import { denoEnv } from '../../../../shared/edge-functions/_shared/deno-env.ts';
+
+import { createCorsErrorResponse, createCorsResponse, createCorsSuccessResponse } from '@/cors';
+import { AppError, createAppError, ErrorType, handleUnknownError } from '@/shared-errors';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import {
-  corsHeaders,
-  createCorsErrorResponse,
-  createCorsResponse,
-  createCorsSuccessResponse,
-} from '@/cors';
-import { createSecureResponse, securityHeaders } from '@/shared-security';
-import {
-  AppError,
-  createAppError,
-  ErrorType,
-  handleUnknownError,
-} from '@/shared-errors';
+import { serve } from 'std/http/server.ts';
 
 /**
  * API Key listing query parameters interface
@@ -196,8 +187,8 @@ class ApiKeyListingService {
 
   constructor() {
     this.supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
   }
 
@@ -234,9 +225,7 @@ class ApiKeyListingService {
       if (query.status === 'revoked') {
         dbQuery = dbQuery.not('revoked_at', 'is', null);
       } else if (query.status === 'expired') {
-        dbQuery = dbQuery
-          .is('revoked_at', null)
-          .lt('expires_at', new Date().toISOString());
+        dbQuery = dbQuery.is('revoked_at', null).lt('expires_at', new Date().toISOString());
       } else if (query.status === 'active') {
         dbQuery = dbQuery
           .is('revoked_at', null)
@@ -247,15 +236,12 @@ class ApiKeyListingService {
     // Search filter
     if (query.search) {
       dbQuery = dbQuery.or(
-        `name.ilike.%${query.search}%,description.ilike.%${query.search}%,key_prefix.ilike.%${query.search}%`,
+        `name.ilike.%${query.search}%,description.ilike.%${query.search}%,key_prefix.ilike.%${query.search}%`
       );
     }
 
     // Exclude revoked keys unless explicitly requested
-    if (
-      !query.includeRevoked && query.status !== 'revoked' &&
-      query.status !== 'all'
-    ) {
+    if (!query.includeRevoked && query.status !== 'revoked' && query.status !== 'all') {
       dbQuery = dbQuery.is('revoked_at', null);
     }
 
@@ -289,15 +275,11 @@ class ApiKeyListingService {
       keyPrefix: record.key_prefix,
       name: record.name,
       description: record.description,
-      permissions: record.permissions
-        ? JSON.parse(record.permissions)
-        : undefined,
+      permissions: record.permissions ? JSON.parse(record.permissions) : undefined,
       status,
       createdAt: record.created_at,
       expiresAt: record.expires_at,
-      lastUsedAt: record.updated_at !== record.created_at
-        ? record.updated_at
-        : undefined,
+      lastUsedAt: record.updated_at !== record.created_at ? record.updated_at : undefined,
       revokedAt: record.revoked_at,
       revocationReason: record.revocation_reason,
       usageStats: {
@@ -369,10 +351,7 @@ class ApiKeyListingService {
   /**
    * List API keys with pagination and filtering
    */
-  async listApiKeys(
-    userId: string,
-    query: ListApiKeysQuery,
-  ): Promise<ListApiKeysResponse> {
+  async listApiKeys(userId: string, query: ListApiKeysQuery): Promise<ListApiKeysResponse> {
     // Build and execute query
     let dbQuery = this.buildQueryFilters(query, userId);
     dbQuery = this.applySorting(dbQuery, query.sortBy!, query.sortOrder!);
@@ -385,9 +364,7 @@ class ApiKeyListingService {
     }
 
     // Transform to metadata objects
-    const transformedKeys = (apiKeys || []).map((key: any) =>
-      this.transformToMetadata(key)
-    );
+    const transformedKeys = (apiKeys || []).map((key: any) => this.transformToMetadata(key));
 
     // Calculate pagination info
     const total = count || 0;
@@ -416,7 +393,7 @@ class ApiKeyListingService {
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Generate a request ID for tracking
   const requestId = crypto.randomUUID();
 
@@ -427,15 +404,10 @@ serve(async (req) => {
 
   // Only allow GET requests
   if (req.method !== 'GET') {
-    return createCorsErrorResponse(
-      'Only GET method is allowed',
-      405,
-      requestId,
-      {
-        code: 'METHOD_NOT_ALLOWED',
-        allowedMethods: ['GET'],
-      },
-    );
+    return createCorsErrorResponse('Only GET method is allowed', 405, requestId, {
+      code: 'METHOD_NOT_ALLOWED',
+      allowedMethods: ['GET'],
+    });
   }
 
   try {
@@ -449,23 +421,24 @@ serve(async (req) => {
         ErrorType.AUTHENTICATION_ERROR,
         'Missing or invalid authorization header',
         { code: 'AUTHENTICATION_ERROR' },
-        requestId,
+        requestId
       );
     }
 
     const token = authHeader.substring(7);
 
     // Verify JWT and get user
-    const { data: { user }, error: userError } = await listingService.getUser(
-      token,
-    );
+    const {
+      data: { user },
+      error: userError,
+    } = await listingService.getUser(token);
 
     if (userError || !user) {
       throw createAppError(
         ErrorType.AUTHENTICATION_ERROR,
         'Invalid or expired token',
         { code: 'AUTHENTICATION_ERROR' },
-        requestId,
+        requestId
       );
     }
 
@@ -481,15 +454,12 @@ serve(async (req) => {
           code: 'VALIDATION_ERROR',
           details: validation.errors,
         },
-        requestId,
+        requestId
       );
     }
 
     // List API keys
-    const result = await listingService.listApiKeys(
-      user.id,
-      validation.sanitized,
-    );
+    const result = await listingService.listApiKeys(user.id, validation.sanitized);
 
     // Add response metadata
     const response = {
@@ -501,16 +471,11 @@ serve(async (req) => {
       },
     };
 
-    return createCorsSuccessResponse(
-      response,
-      200,
-      requestId,
-      {
-        'X-Total-Count': result.pagination.total.toString(),
-        'X-Page': result.pagination.page.toString(),
-        'X-Per-Page': result.pagination.limit.toString(),
-      },
-    );
+    return createCorsSuccessResponse(response, 200, requestId, {
+      'X-Total-Count': result.pagination.total.toString(),
+      'X-Page': result.pagination.page.toString(),
+      'X-Per-Page': result.pagination.limit.toString(),
+    });
   } catch (error: any) {
     console.error('API key listing error:', error);
 

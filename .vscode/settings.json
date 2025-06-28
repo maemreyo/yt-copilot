@@ -11,6 +11,7 @@
     "deno.path": "/Users/matthewngo/.deno/bin/deno",
     "deno.enablePaths": [
         "./src/modules",
+        "./src/shared/edge-functions",
         "./supabase/functions",
         "./supabase/_internal/functions"
     ],
@@ -41,8 +42,12 @@
             "source.organizeImports": "explicit"
         }
     },
-    // Deno files (modules only)
+    // Deno files (modules and edge functions)
     "[typescript][src/modules/**]": {
+        "editor.defaultFormatter": "denoland.vscode-deno",
+        "editor.formatOnSave": true
+    },
+    "[typescript][src/shared/edge-functions/**]": {
         "editor.defaultFormatter": "denoland.vscode-deno",
         "editor.formatOnSave": true
     },

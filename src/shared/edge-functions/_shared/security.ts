@@ -1,5 +1,7 @@
 // Security utilities for Supabase Edge Functions
 
+import { denoEnv } from './deno-env.ts';
+
 /**
  * Standard security headers for all responses
  */
@@ -9,8 +11,8 @@ export const securityHeaders = {
   'X-XSS-Protection': '1; mode=block',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0',
+  Pragma: 'no-cache',
+  Expires: '0',
 };
 
 /**
@@ -46,10 +48,7 @@ export function generateRequestId(): string {
 /**
  * Validate request method
  */
-export function validateHttpMethod(
-  request: Request,
-  allowedMethods: string[]
-): boolean {
+export function validateHttpMethod(request: Request, allowedMethods: string[]): boolean {
   return allowedMethods.includes(request.method.toUpperCase());
 }
 
@@ -62,7 +61,7 @@ export function extractAuthToken(request: Request): {
   error?: string;
 } {
   const authHeader = request.headers.get('Authorization');
-  
+
   if (!authHeader) {
     return { token: null, type: null, error: 'Missing Authorization header' };
   }
@@ -77,10 +76,10 @@ export function extractAuthToken(request: Request): {
     return { token, type: 'ApiKey' };
   }
 
-  return { 
-    token: null, 
-    type: null, 
-    error: 'Invalid Authorization header format. Expected "Bearer <token>" or "ApiKey <key>"' 
+  return {
+    token: null,
+    type: null,
+    error: 'Invalid Authorization header format. Expected "Bearer <token>" or "ApiKey <key>"',
   };
 }
 
@@ -114,16 +113,11 @@ export function sanitizeRequestBody(body: unknown): unknown {
 /**
  * Validate request content type
  */
-export function validateContentType(
-  request: Request,
-  expectedTypes: string[]
-): boolean {
+export function validateContentType(request: Request, expectedTypes: string[]): boolean {
   const contentType = request.headers.get('Content-Type');
   if (!contentType) return false;
 
-  return expectedTypes.some(type => 
-    contentType.toLowerCase().includes(type.toLowerCase())
-  );
+  return expectedTypes.some(type => contentType.toLowerCase().includes(type.toLowerCase()));
 }
 
 /**
@@ -135,7 +129,7 @@ export function createSecureResponse(
   additionalHeaders: Record<string, string> = {}
 ): Response {
   const responseBody = typeof body === 'string' ? body : JSON.stringify(body);
-  
+
   return new Response(responseBody, {
     status,
     headers: {
@@ -178,10 +172,10 @@ export function detectSuspiciousActivity(request: Request): {
 } {
   const reasons: string[] = [];
   const url = new URL(request.url);
-  
+
   // Check for common attack patterns in URL
   const suspiciousPatterns = [
-    /\.\.\//,  // Directory traversal
+    /\.\.\//, // Directory traversal
     /<script/i, // XSS
     /union.*select/i, // SQL injection
     /javascript:/i, // JavaScript protocol
@@ -221,8 +215,8 @@ export function getSecurityConfig(): {
   csp: string;
   enableLogging: boolean;
 } {
-  const isProduction = Deno.env.get('NODE_ENV') === 'production';
-  
+  const isProduction = denoEnv.get('NODE_ENV') === 'production';
+
   if (isProduction) {
     return {
       headers: {

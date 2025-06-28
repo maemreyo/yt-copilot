@@ -1,20 +1,12 @@
 // - User profile management endpoints using Layer 1 & 2 utilities
 
-import { serve } from 'std/http/server.ts';
+import { denoEnv } from '../../../../shared/edge-functions/_shared/deno-env.ts';
+
+import { createCorsResponse, createCorsSuccessResponse } from '@/cors';
+import { AppError, createAppError, ErrorType, handleUnknownError } from '@/shared-errors';
+import { securityHeaders } from '@/shared-security';
 import { createClient } from '@supabase/supabase-js';
-import {
-  corsHeaders,
-  createCorsErrorResponse,
-  createCorsResponse,
-  createCorsSuccessResponse,
-} from '@/cors';
-import { createSecureResponse, securityHeaders } from '@/shared-security';
-import {
-  AppError,
-  createAppError,
-  ErrorType,
-  handleUnknownError,
-} from '@/shared-errors';
+import { serve } from 'std/http/server.ts';
 
 /**
  * User profile interface
@@ -72,14 +64,14 @@ class ProfileService {
 
   constructor() {
     this.supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || '',
       {
         auth: { persistSession: false },
         global: {
           headers: { 'x-application-name': 'profile-service' },
         },
-      },
+      }
     );
   }
 
@@ -89,8 +81,7 @@ class ProfileService {
   async getUserProfile(userId: string): Promise<UserProfile | null> {
     try {
       // Get user from auth.users
-      const { data: user, error: userError } = await this.supabase.auth.admin
-        .getUserById(userId);
+      const { data: user, error: userError } = await this.supabase.auth.admin.getUserById(userId);
 
       if (userError) {
         console.error('Failed to get user:', userError);
@@ -108,7 +99,8 @@ class ProfileService {
         .eq('id', userId)
         .single();
 
-      if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows
+      if (profileError && profileError.code !== 'PGRST116') {
+        // PGRST116 = no rows
         console.error('Failed to get profile:', profileError);
         throw new Error(`Failed to get profile: ${profileError.message}`);
       }
@@ -120,16 +112,14 @@ class ProfileService {
         name: profile?.name || user.user_metadata?.name || '',
         avatar_url: profile?.avatar_url || user.user_metadata?.avatar_url,
         role: profile?.role || 'user',
-        permissions: profile?.permissions
-          ? JSON.parse(profile.permissions)
-          : [],
+        permissions: profile?.permissions ? JSON.parse(profile.permissions) : [],
         metadata: profile?.metadata ? JSON.parse(profile.metadata) : {},
         subscription: profile?.stripe_subscription_status
           ? {
-            status: profile.stripe_subscription_status,
-            plan: profile.subscription_tier || 'basic',
-            expiresAt: profile.subscription_expires_at,
-          }
+              status: profile.stripe_subscription_status,
+              plan: profile.subscription_tier || 'basic',
+              expiresAt: profile.subscription_expires_at,
+            }
           : undefined,
         createdAt: user.created_at,
         updatedAt: profile?.updated_at || user.created_at,
@@ -145,10 +135,7 @@ class ProfileService {
   /**
    * Update user profile
    */
-  async updateUserProfile(
-    userId: string,
-    updates: ProfileUpdateRequest,
-  ): Promise<UserProfile> {
+  async updateUserProfile(userId: string, updates: ProfileUpdateRequest): Promise<UserProfile> {
     try {
       // Validate updates
       const validation = this.validateProfileUpdate(updates);
@@ -168,17 +155,13 @@ class ProfileService {
           userMetadataUpdates.avatar_url = sanitizedUpdates.avatar_url;
         }
 
-        const { error: authError } = await this.supabase.auth.admin
-          .updateUserById(
-            userId,
-            { user_metadata: userMetadataUpdates },
-          );
+        const { error: authError } = await this.supabase.auth.admin.updateUserById(userId, {
+          user_metadata: userMetadataUpdates,
+        });
 
         if (authError) {
           console.error('Failed to update user metadata:', authError);
-          throw new Error(
-            `Failed to update user metadata: ${authError.message}`,
-          );
+          throw new Error(`Failed to update user metadata: ${authError.message}`);
         }
       }
 
@@ -197,10 +180,7 @@ class ProfileService {
 
       const { error: profileError } = await this.supabase
         .from('profiles')
-        .upsert(
-          { id: userId, ...profileUpdates },
-          { onConflict: 'id' },
-        );
+        .upsert({ id: userId, ...profileUpdates }, { onConflict: 'id' });
 
       if (profileError) {
         console.error('Failed to update profile:', profileError);
@@ -228,7 +208,7 @@ class ProfileService {
    */
   async deleteUserAccount(
     userId: string,
-    request: AccountDeletionRequest,
+    request: AccountDeletionRequest
   ): Promise<{ success: boolean; message: string }> {
     try {
       // Get user profile for validation
@@ -245,7 +225,7 @@ class ProfileService {
       // Check if user has active subscription
       if (profile.subscription && profile.subscription.status === 'active') {
         throw new Error(
-          'Cannot delete account with active subscription. Please cancel subscription first.',
+          'Cannot delete account with active subscription. Please cancel subscription first.'
         );
       }
 
@@ -349,10 +329,7 @@ class ProfileService {
 
     // Validate language
     if (preferences.language !== undefined) {
-      if (
-        typeof preferences.language !== 'string' ||
-        preferences.language.length !== 2
-      ) {
+      if (typeof preferences.language !== 'string' || preferences.language.length !== 2) {
         errors.push('Language must be a 2-character language code');
       }
     }
@@ -376,9 +353,7 @@ class ProfileService {
         if (notif.push !== undefined && typeof notif.push !== 'boolean') {
           errors.push('Push notifications must be a boolean');
         }
-        if (
-          notif.marketing !== undefined && typeof notif.marketing !== 'boolean'
-        ) {
+        if (notif.marketing !== undefined && typeof notif.marketing !== 'boolean') {
           errors.push('Marketing notifications must be a boolean');
         }
       }
@@ -404,28 +379,19 @@ class ProfileService {
    */
   private async performAccountDeletion(
     userId: string,
-    request: AccountDeletionRequest,
+    request: AccountDeletionRequest
   ): Promise<void> {
     try {
       // Delete related data based on request
       if (request.deleteData) {
         // Delete user sessions
-        await this.supabase
-          .from('user_sessions')
-          .delete()
-          .eq('user_id', userId);
+        await this.supabase.from('user_sessions').delete().eq('user_id', userId);
 
         // Delete API keys
-        await this.supabase
-          .from('api_keys')
-          .delete()
-          .eq('user_id', userId);
+        await this.supabase.from('api_keys').delete().eq('user_id', userId);
 
         // Delete profile
-        await this.supabase
-          .from('profiles')
-          .delete()
-          .eq('id', userId);
+        await this.supabase.from('profiles').delete().eq('id', userId);
       } else {
         // Anonymize data instead of deletion
         await this.supabase
@@ -459,9 +425,7 @@ class ProfileService {
       }
 
       // Delete user from auth.users
-      const { error: deleteError } = await this.supabase.auth.admin.deleteUser(
-        userId,
-      );
+      const { error: deleteError } = await this.supabase.auth.admin.deleteUser(userId);
       if (deleteError) {
         console.error('Failed to delete user from auth:', deleteError);
         throw new Error(`Failed to delete user: ${deleteError.message}`);
@@ -475,10 +439,7 @@ class ProfileService {
   /**
    * Log profile update for audit trail
    */
-  private async logProfileUpdate(
-    userId: string,
-    updates: ProfileUpdateRequest,
-  ): Promise<void> {
+  private async logProfileUpdate(userId: string, updates: ProfileUpdateRequest): Promise<void> {
     try {
       const auditEntry = {
         user_id: userId,
@@ -492,9 +453,7 @@ class ProfileService {
         created_at: new Date().toISOString(),
       };
 
-      await this.supabase
-        .from('audit_logs')
-        .insert(auditEntry);
+      await this.supabase.from('audit_logs').insert(auditEntry);
     } catch (error: any) {
       console.error('Failed to log profile update:', error);
       // Don't throw - audit logging failure shouldn't break the operation
@@ -504,10 +463,7 @@ class ProfileService {
   /**
    * Log account deletion for audit trail
    */
-  private async logAccountDeletion(
-    userId: string,
-    request: AccountDeletionRequest,
-  ): Promise<void> {
+  private async logAccountDeletion(userId: string, request: AccountDeletionRequest): Promise<void> {
     try {
       const auditEntry = {
         user_id: userId,
@@ -522,9 +478,7 @@ class ProfileService {
         created_at: new Date().toISOString(),
       };
 
-      await this.supabase
-        .from('audit_logs')
-        .insert(auditEntry);
+      await this.supabase.from('audit_logs').insert(auditEntry);
     } catch (error: any) {
       console.error('Failed to log account deletion:', error);
       // Don't throw - audit logging failure shouldn't break the operation
@@ -538,7 +492,7 @@ class ProfileService {
  * Extract user ID from JWT token
  */
 async function extractUserFromRequest(
-  request: Request,
+  request: Request
 ): Promise<{ userId: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -550,11 +504,14 @@ async function extractUserFromRequest(
 
     // Create Supabase client to verify token
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -572,7 +529,7 @@ async function extractUserFromRequest(
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Generate a request ID for tracking
   const requestId = crypto.randomUUID();
 
@@ -593,7 +550,7 @@ serve(async (req) => {
         ErrorType.AUTHENTICATION_ERROR,
         'Valid authentication token required',
         { code: 'AUTHENTICATION_REQUIRED' },
-        requestId,
+        requestId
       );
     }
 
@@ -603,12 +560,7 @@ serve(async (req) => {
     } else if (req.method === 'PUT' && path.endsWith('/profile')) {
       return await handleUpdateProfile(req, service, userInfo.userId);
     } else if (req.method === 'DELETE' && path.endsWith('/profile')) {
-      return await handleDeleteAccount(
-        req,
-        service,
-        userInfo.userId,
-        userInfo.email,
-      );
+      return await handleDeleteAccount(req, service, userInfo.userId, userInfo.email);
     } else {
       throw createAppError(
         ErrorType.NOT_FOUND_ERROR,
@@ -621,7 +573,7 @@ serve(async (req) => {
             'DELETE /profile - Delete user account',
           ],
         },
-        requestId,
+        requestId
       );
     }
   } catch (error: any) {
@@ -641,10 +593,7 @@ serve(async (req) => {
 /**
  * Handle get profile request
  */
-async function handleGetProfile(
-  service: ProfileService,
-  userId: string,
-): Promise<Response> {
+async function handleGetProfile(service: ProfileService, userId: string): Promise<Response> {
   try {
     const profile = await service.getUserProfile(userId);
     if (!profile) {
@@ -652,7 +601,7 @@ async function handleGetProfile(
         ErrorType.NOT_FOUND_ERROR,
         'User profile not found',
         { code: 'PROFILE_NOT_FOUND' },
-        crypto.randomUUID(),
+        crypto.randomUUID()
       );
     }
 
@@ -661,7 +610,7 @@ async function handleGetProfile(
         profile,
       },
       200,
-      crypto.randomUUID(),
+      crypto.randomUUID()
     );
   } catch (error: any) {
     console.error('Error getting profile:', error);
@@ -683,7 +632,7 @@ async function handleGetProfile(
 async function handleUpdateProfile(
   req: Request,
   service: ProfileService,
-  userId: string,
+  userId: string
 ): Promise<Response> {
   try {
     const body = await req.json();
@@ -702,7 +651,7 @@ async function handleUpdateProfile(
           ...securityHeaders,
           'Access-Control-Allow-Origin': '*',
         },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Error updating profile:', error);
@@ -713,9 +662,7 @@ async function handleUpdateProfile(
       JSON.stringify({
         error: {
           code: isValidationError ? 'VALIDATION_ERROR' : 'PROFILE_UPDATE_ERROR',
-          message: isValidationError
-            ? error.message
-            : 'Failed to update user profile',
+          message: isValidationError ? error.message : 'Failed to update user profile',
           details: error.message,
         },
         timestamp: new Date().toISOString(),
@@ -723,7 +670,7 @@ async function handleUpdateProfile(
       {
         status: isValidationError ? 400 : 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 }
@@ -735,7 +682,7 @@ async function handleDeleteAccount(
   req: Request,
   service: ProfileService,
   userId: string,
-  userEmail: string,
+  userEmail: string
 ): Promise<Response> {
   try {
     const body = await req.json();
@@ -759,23 +706,19 @@ async function handleDeleteAccount(
           ...securityHeaders,
           'Access-Control-Allow-Origin': '*',
         },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Error deleting account:', error);
 
-    const isValidationError = error.message.includes('Confirmation email') ||
-      error.message.includes('active subscription');
+    const isValidationError =
+      error.message.includes('Confirmation email') || error.message.includes('active subscription');
 
     return new Response(
       JSON.stringify({
         error: {
-          code: isValidationError
-            ? 'ACCOUNT_DELETE_VALIDATION_ERROR'
-            : 'ACCOUNT_DELETE_ERROR',
-          message: isValidationError
-            ? error.message
-            : 'Failed to delete user account',
+          code: isValidationError ? 'ACCOUNT_DELETE_VALIDATION_ERROR' : 'ACCOUNT_DELETE_ERROR',
+          message: isValidationError ? error.message : 'Failed to delete user account',
           details: error.message,
         },
         timestamp: new Date().toISOString(),
@@ -783,7 +726,7 @@ async function handleDeleteAccount(
       {
         status: isValidationError ? 400 : 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 }

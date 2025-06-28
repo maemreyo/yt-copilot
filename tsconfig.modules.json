@@ -24,8 +24,10 @@
         "jsxImportSource": "react",
         // Deno-specific configurations
         "allowImportingTsExtensions": true,
-        "types": [
-            "deno"
+        "types": [],
+        "typeRoots": [
+            "./src/types",
+            "./node_modules/@types"
         ],
         // Path mappings for Deno modules (following import_map.json)
         "baseUrl": ".",
@@ -60,6 +62,9 @@
             ],
             "@/rate-limiting": [
                 "./src/shared/utils/rate-limiting.ts"
+            ],
+            "@/shared-deno-env": [
+                "./src/shared/edge-functions/_shared/deno-env.ts"
             ],
             "@/errors": [
                 "./src/shared/utils/errors.ts"

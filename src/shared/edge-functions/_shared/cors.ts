@@ -1,12 +1,15 @@
 // ENHANCED: Global CORS configuration for all Supabase Edge Functions
 
+import { denoEnv } from './deno-env.ts';
+
 /**
  * Basic CORS headers for all Edge Functions
  */
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-request-id',
   'Access-Control-Max-Age': '86400', // 24 hours
 };
 
@@ -16,14 +19,14 @@ export const corsHeaders = {
 export const secureCorsHeaders = {
   ...corsHeaders,
   'Access-Control-Expose-Headers': 'x-request-id, x-rate-limit-remaining, x-rate-limit-reset',
-  'Vary': 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+  Vary: 'Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
 };
 
 /**
  * Create CORS response for OPTIONS requests
  */
 export function createCorsResponse(
-  status: number = 200, 
+  status: number = 200,
   additionalHeaders: Record<string, string> = {}
 ): Response {
   return new Response(null, {
@@ -38,12 +41,9 @@ export function createCorsResponse(
 /**
  * Add CORS headers to existing response
  */
-export function addCorsHeaders(
-  response: Response, 
-  secure: boolean = true
-): Response {
+export function addCorsHeaders(response: Response, secure: boolean = true): Response {
   const headers = secure ? secureCorsHeaders : corsHeaders;
-  
+
   // Clone response with CORS headers
   return new Response(response.body, {
     status: response.status,
@@ -58,28 +58,25 @@ export function addCorsHeaders(
 /**
  * Validate CORS origin for production environments
  */
-export function validateOrigin(
-  origin: string | null, 
-  allowedOrigins: string[]
-): boolean {
+export function validateOrigin(origin: string | null, allowedOrigins: string[]): boolean {
   if (!origin) return false;
-  
+
   // In development, allow localhost and related
-  const isDevelopment = Deno.env.get('DENO_ENV') === 'development' || 
-                       Deno.env.get('NODE_ENV') === 'development';
-  
+  const isDevelopment =
+    denoEnv.get('DENO_ENV') === 'development' || denoEnv.get('NODE_ENV') === 'development';
+
   if (isDevelopment) {
     // Allow localhost with any port
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return true;
     }
-    
+
     // Allow Supabase local development
     if (origin.includes('supabase.co') || origin.includes('supabase.com')) {
       return true;
     }
   }
-  
+
   return allowedOrigins.includes(origin);
 }
 
@@ -87,19 +84,20 @@ export function validateOrigin(
  * Create origin-specific CORS headers (for production with allowed origins)
  */
 export function createOriginSpecificCorsHeaders(
-  origin: string | null, 
+  origin: string | null,
   allowedOrigins: string[]
 ): Record<string, string> {
   const isValidOrigin = validateOrigin(origin, allowedOrigins);
-  
+
   return {
     'Access-Control-Allow-Origin': isValidOrigin && origin ? origin : 'null',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS, PATCH',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id',
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type, x-request-id',
     'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Max-Age': '86400',
     'Access-Control-Expose-Headers': 'x-request-id, x-rate-limit-remaining',
-    'Vary': 'Origin',
+    Vary: 'Origin',
   };
 }
 
@@ -142,11 +140,14 @@ export function createCorsSuccessResponse(
   requestId?: string,
   additionalHeaders: Record<string, string> = {}
 ): Response {
-  const responseBody = {
-    ...data,
-    timestamp: new Date().toISOString(),
-    ...(requestId && { requestId }),
-  };
+  const responseBody = Object.assign(
+    {},
+    data as object,
+    {
+      timestamp: new Date().toISOString(),
+    },
+    requestId ? { requestId } : {}
+  );
 
   return new Response(JSON.stringify(responseBody), {
     status,
@@ -175,7 +176,7 @@ export function createCorsMiddleware(allowedOrigins?: string[]) {
         return createCorsResponse();
       }
     }
-    
+
     // For non-preflight requests, return null to continue processing
     return null;
   };
@@ -188,16 +189,16 @@ export function getEnvironmentCorsConfig(): {
   headers: Record<string, string>;
   allowedOrigins: string[];
 } {
-  const isProduction = Deno.env.get('NODE_ENV') === 'production';
-  const appUrl = Deno.env.get('APP_URL') || 'http://localhost:3000';
-  
+  const isProduction = denoEnv.get('NODE_ENV') === 'production';
+  const appUrl = denoEnv.get('APP_URL') || 'http://localhost:3000';
+
   if (isProduction) {
     // Production: restrictive CORS
     const allowedOrigins = [
       appUrl,
       // Add other production domains here
     ];
-    
+
     return {
       headers: createOriginSpecificCorsHeaders(appUrl, allowedOrigins),
       allowedOrigins,
