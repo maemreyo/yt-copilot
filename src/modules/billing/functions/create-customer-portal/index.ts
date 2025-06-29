@@ -247,7 +247,7 @@ class CustomerPortalService {
     const allowedDomains = [new URL(appUrl).hostname];
     const additionalDomains = getEnv('ALLOWED_RETURN_DOMAINS');
     if (additionalDomains) {
-      allowedDomains.push(...additionalDomains.split(',').map(d => d.trim()));
+      allowedDomains.push(...additionalDomains.split(',').map((d: any) => d.trim()));
     }
     return allowedDomains;
   }
