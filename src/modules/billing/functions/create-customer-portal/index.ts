@@ -1,17 +1,9 @@
-import { serve } from 'std/http/server.ts';
+import { createCorsErrorResponse, createCorsResponse, createCorsSuccessResponse } from '@/cors';
+import { AppError, createAppError, ErrorType, handleUnknownError } from '@/shared-errors';
 import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
 import Stripe from 'stripe';
-import {
-  createCorsErrorResponse,
-  createCorsResponse,
-  createCorsSuccessResponse,
-} from '@/cors';
-import {
-  AppError,
-  createAppError,
-  ErrorType,
-  handleUnknownError,
-} from '@/shared-errors';
+import { getEnv, isDevelopment } from '../../../../shared/utils/env-utils';
 
 /**
  * Request interface for creating a customer portal session.
@@ -65,9 +57,7 @@ class CustomerPortalValidator {
       if (typeof data.configuration !== 'string') {
         errors.push('configuration must be a string');
       } else if (!/^bpc_[a-zA-Z0-9]+$/.test(data.configuration)) {
-        errors.push(
-          'configuration must be a valid Stripe portal configuration ID',
-        );
+        errors.push('configuration must be a valid Stripe portal configuration ID');
       } else {
         sanitized.configuration = data.configuration;
       }
@@ -117,9 +107,7 @@ class CustomerPortalValidator {
         'zh-HK',
         'zh-TW',
       ];
-      if (
-        typeof data.locale !== 'string' || !validLocales.includes(data.locale)
-      ) {
+      if (typeof data.locale !== 'string' || !validLocales.includes(data.locale)) {
         errors.push(`locale must be one of: ${validLocales.join(', ')}`);
       } else {
         sanitized.locale = data.locale;
@@ -133,14 +121,11 @@ class CustomerPortalValidator {
     };
   }
 
-  static validateReturnUrlDomain(
-    returnUrl: string,
-    allowedDomains: string[],
-  ): boolean {
+  static validateReturnUrlDomain(returnUrl: string, allowedDomains: string[]): boolean {
     try {
       const url = new URL(returnUrl);
       const hostname = url.hostname.toLowerCase();
-      return allowedDomains.some((domain) => {
+      return allowedDomains.some(domain => {
         const lowerDomain = domain.toLowerCase();
         return hostname === lowerDomain || hostname.endsWith(`.${lowerDomain}`);
       });
@@ -154,14 +139,13 @@ class CustomerPortalValidator {
  * Manages rate limiting for customer portal creation.
  */
 class CustomerPortalRateLimiter {
-  private static userRequests = new Map<
-    string,
-    { count: number; resetTime: number }
-  >();
+  private static userRequests = new Map<string, { count: number; resetTime: number }>();
 
-  static canCreatePortalSession(
-    userId: string,
-  ): { allowed: boolean; resetTime?: number; remaining?: number } {
+  static canCreatePortalSession(userId: string): {
+    allowed: boolean;
+    resetTime?: number;
+    remaining?: number;
+  } {
     const now = Date.now();
     const windowMs = 60 * 1000; // 1 minute
     const maxRequests = 5;
@@ -189,19 +173,13 @@ class CustomerPortalService {
   private supabase: any;
 
   constructor() {
-    this.stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+    this.stripe = new Stripe(getEnv('STRIPE_SECRET_KEY'), {
       apiVersion: '2023-10-16',
     });
-    this.supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-    );
+    this.supabase = createClient(getEnv('SUPABASE_URL'), getEnv('SUPABASE_SERVICE_ROLE_KEY'));
   }
 
-  async ensureStripeCustomer(
-    userId: string,
-    userEmail: string,
-  ): Promise<string> {
+  async ensureStripeCustomer(userId: string, userEmail: string): Promise<string> {
     const { data: profile, error } = await this.supabase
       .from('profiles')
       .select('stripe_customer_id')
@@ -232,10 +210,7 @@ class CustomerPortalService {
       .eq('id', userId);
 
     if (updateError) {
-      console.error(
-        'Failed to update profile with Stripe customer ID:',
-        updateError,
-      );
+      console.error('Failed to update profile with Stripe customer ID:', updateError);
     }
 
     return customer.id;
@@ -243,9 +218,9 @@ class CustomerPortalService {
 
   async createPortalSession(
     customerId: string,
-    request: CreateCustomerPortalRequest,
+    request: CreateCustomerPortalRequest
   ): Promise<{ sessionId: string; url: string; expiresAt: string }> {
-    const appUrl = Deno.env.get('APP_URL') || 'http://localhost:3000';
+    const appUrl = getEnv('APP_URL', 'http://localhost:3000');
     const defaultReturnUrl = `${appUrl}/billing`;
 
     const sessionParams: Stripe.BillingPortal.SessionCreateParams = {
@@ -259,11 +234,8 @@ class CustomerPortalService {
     if (request.locale) sessionParams.locale = request.locale as any;
 
     try {
-      const session = await this.stripe.billingPortal.sessions.create(
-        sessionParams,
-      );
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
-        .toISOString();
+      const session = await this.stripe.billingPortal.sessions.create(sessionParams);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       return { sessionId: session.id, url: session.url, expiresAt };
     } catch (error: any) {
       throw new Error(`Stripe error: ${error.message}`);
@@ -271,11 +243,11 @@ class CustomerPortalService {
   }
 
   getAllowedDomains(): string[] {
-    const appUrl = Deno.env.get('APP_URL') || 'http://localhost:3000';
+    const appUrl = getEnv('APP_URL', 'http://localhost:3000');
     const allowedDomains = [new URL(appUrl).hostname];
-    const additionalDomains = Deno.env.get('ALLOWED_RETURN_DOMAINS');
+    const additionalDomains = getEnv('ALLOWED_RETURN_DOMAINS');
     if (additionalDomains) {
-      allowedDomains.push(...additionalDomains.split(',').map((d) => d.trim()));
+      allowedDomains.push(...additionalDomains.split(',').map(d => d.trim()));
     }
     return allowedDomains;
   }
@@ -284,7 +256,7 @@ class CustomerPortalService {
 /**
  * Main request handler.
  */
-serve(async (req) => {
+serve(async req => {
   const requestId = crypto.randomUUID();
 
   if (req.method === 'OPTIONS') {
@@ -292,23 +264,15 @@ serve(async (req) => {
   }
 
   if (req.method !== 'POST') {
-    return createCorsErrorResponse(
-      'Only POST method is allowed',
-      405,
-      requestId,
-      {
-        code: 'METHOD_NOT_ALLOWED',
-        allowedMethods: ['POST'],
-      },
-    );
+    return createCorsErrorResponse('Only POST method is allowed', 405, requestId, {
+      code: 'METHOD_NOT_ALLOWED',
+      allowedMethods: ['POST'],
+    });
   }
 
   try {
     const portalService = new CustomerPortalService();
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-    );
+    const supabase = createClient(getEnv('SUPABASE_URL'), getEnv('SUPABASE_ANON_KEY'));
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -316,36 +280,33 @@ serve(async (req) => {
         ErrorType.AUTHENTICATION_ERROR,
         'Missing or invalid authorization header',
         { code: 'AUTHENTICATION_ERROR' },
-        requestId,
+        requestId
       );
     }
 
     const token = authHeader.substring(7);
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      token,
-    );
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
       throw createAppError(
         ErrorType.AUTHENTICATION_ERROR,
         'Invalid or expired token',
         { code: 'INVALID_TOKEN' },
-        requestId,
+        requestId
       );
     }
 
-    const rateLimitResult = CustomerPortalRateLimiter.canCreatePortalSession(
-      user.id,
-    );
+    const rateLimitResult = CustomerPortalRateLimiter.canCreatePortalSession(user.id);
     if (!rateLimitResult.allowed) {
-      const retryAfter = Math.ceil(
-        (rateLimitResult.resetTime! - Date.now()) / 1000,
-      );
+      const retryAfter = Math.ceil((rateLimitResult.resetTime! - Date.now()) / 1000);
       throw createAppError(
         ErrorType.RATE_LIMIT_ERROR,
         'Too many customer portal requests',
         { code: 'RATE_LIMIT_EXCEEDED', retryAfter },
-        requestId,
+        requestId
       );
     }
 
@@ -358,7 +319,7 @@ serve(async (req) => {
         ErrorType.VALIDATION_ERROR,
         'Invalid JSON in request body',
         { code: 'INVALID_REQUEST_BODY' },
-        requestId,
+        requestId
       );
     }
 
@@ -368,7 +329,7 @@ serve(async (req) => {
         ErrorType.VALIDATION_ERROR,
         'Request validation failed',
         { code: 'VALIDATION_ERROR', details: validation.errors },
-        requestId,
+        requestId
       );
     }
 
@@ -377,26 +338,20 @@ serve(async (req) => {
       if (
         !CustomerPortalValidator.validateReturnUrlDomain(
           validation.sanitized.returnUrl,
-          allowedDomains,
+          allowedDomains
         )
       ) {
         throw createAppError(
           ErrorType.VALIDATION_ERROR,
           'Return URL domain not allowed',
           { code: 'VALIDATION_ERROR', details: { allowedDomains } },
-          requestId,
+          requestId
         );
       }
     }
 
-    const customerId = await portalService.ensureStripeCustomer(
-      user.id,
-      user.email!,
-    );
-    const portalSession = await portalService.createPortalSession(
-      customerId,
-      validation.sanitized,
-    );
+    const customerId = await portalService.ensureStripeCustomer(user.id, user.email!);
+    const portalSession = await portalService.createPortalSession(customerId, validation.sanitized);
 
     const response: CreateCustomerPortalResponse = {
       url: portalSession.url,
@@ -421,11 +376,9 @@ serve(async (req) => {
         'Payment service error',
         {
           code: 'EXTERNAL_SERVICE_ERROR',
-          details: Deno.env.get('NODE_ENV') === 'development'
-            ? error.message
-            : undefined,
+          details: isDevelopment() ? error.message : undefined,
         },
-        requestId,
+        requestId
       );
       return appError.toHttpResponse();
     }

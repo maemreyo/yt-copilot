@@ -4,6 +4,7 @@ import { createCorsErrorResponse, createCorsResponse, createCorsSuccessResponse 
 import database, { QueryHelper } from '@/database';
 import { Logger } from '@/logging';
 import { createRateLimiter } from '@/rate-limiting';
+import { denoEnv } from '@/shared-deno-env';
 import { AppError, createAppError, ErrorType, handleUnknownError } from '@/shared-errors';
 import { serve } from 'std/http/server.ts';
 import Stripe from 'stripe';
@@ -39,7 +40,7 @@ class SubscriptionService {
 
   constructor() {
     // Initialize services
-    this.stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+    this.stripe = new Stripe(denoEnv.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
 

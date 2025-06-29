@@ -1,6 +1,35 @@
 // Comprehensive security utilities with CORS, headers, sanitization, and CSRF protection
 
-import { env, environment } from '../config/environment';
+// Import environment configuration
+// Using try-catch to handle both ESM and CommonJS environments
+let env: any = {
+  APP_URL: 'http://localhost:3000',
+};
+let environment: any = {
+  isDevelopment: () => true,
+  isProduction: () => false,
+  isTest: () => false,
+};
+
+try {
+  const envModule = require('../config/environment');
+  env = envModule.env;
+  environment = envModule.environment;
+} catch (e) {
+  try {
+    // For ESM environments
+    import('../config/environment')
+      .then(module => {
+        env = module.env;
+        environment = module.environment;
+      })
+      .catch(() => {
+        console.warn('Could not import environment config, using defaults');
+      });
+  } catch (e) {
+    console.warn('Could not import environment config, using defaults');
+  }
+}
 import { AppError, ErrorCode } from './errors';
 
 /**
@@ -109,9 +138,21 @@ export class CorsHandler {
     }
 
     // Add additional allowed origins from environment
-    const additionalOrigins = Deno.env.get('CORS_ALLOWED_ORIGINS');
+    // Check for Deno environment or use process.env as fallback
+    let additionalOrigins: string | null = null;
+
+    if (
+      typeof globalThis !== 'undefined' &&
+      'Deno' in globalThis &&
+      typeof (globalThis as any).Deno?.env?.get === 'function'
+    ) {
+      additionalOrigins = (globalThis as any).Deno.env.get('CORS_ALLOWED_ORIGINS');
+    } else if (typeof process !== 'undefined' && process.env) {
+      additionalOrigins = process.env.CORS_ALLOWED_ORIGINS || null;
+    }
+
     if (additionalOrigins) {
-      origins.push(...additionalOrigins.split(',').map(origin => origin.trim()));
+      origins.push(...additionalOrigins.split(',').map((origin: string) => origin.trim()));
     }
 
     return origins;

@@ -1,7 +1,38 @@
 // Comprehensive cache utilities with in-memory/Redis support, TTL, invalidation, and middleware
 
-import { env, environment } from '../config/environment';
 import { logger } from './logging';
+
+// Import environment configuration
+// Using try-catch to handle both ESM and CommonJS environments
+let env: any = {
+  CACHE_ENABLED: true,
+  CACHE_TTL: 300,
+};
+let environment: any = {
+  isDevelopment: () => true,
+  isProduction: () => false,
+  isTest: () => false,
+};
+
+try {
+  const envModule = require('../config/environment');
+  env = envModule.env;
+  environment = envModule.environment;
+} catch (e) {
+  try {
+    // For ESM environments
+    import('../config/environment')
+      .then(module => {
+        env = module.env;
+        environment = module.environment;
+      })
+      .catch(() => {
+        console.warn('Could not import environment config, using defaults');
+      });
+  } catch (e) {
+    console.warn('Could not import environment config, using defaults');
+  }
+}
 
 /**
  * Cache entry interface
@@ -102,7 +133,7 @@ export class MemoryCacheStore implements CacheStore {
     hitRate: 0,
   };
   private config: Required<CacheConfig>;
-  private cleanupTimer?: NodeJS.Timeout;
+  private cleanupTimer?: number | ReturnType<typeof setInterval>;
 
   constructor(config: Partial<CacheConfig> = {}) {
     this.config = {
@@ -332,8 +363,8 @@ export class RedisCacheStore implements CacheStore {
     this.redis = redisClient;
     this.config = {
       defaultTtl: config.defaultTtl ?? 300000, // 5 minutes
-      maxSize: config.maxSize,
-      cleanupInterval: config.cleanupInterval,
+      maxSize: config.maxSize ?? 1000,
+      cleanupInterval: config.cleanupInterval ?? 60000,
       enableStats: config.enableStats ?? true,
       namespace: config.namespace ?? 'cache',
       serializer: config.serializer ?? new JsonSerializer(),
@@ -856,7 +887,7 @@ export const cacheUtils = {
  * Global cache instance for direct use
  */
 export const cache = new CacheManager(
-  environment.isProduction() ? GlobalCaches.redis : GlobalCaches.memory
+  new MemoryCacheStore() // Default to memory cache
 );
 
 /**

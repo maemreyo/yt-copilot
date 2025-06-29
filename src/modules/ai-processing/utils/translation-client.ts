@@ -1,5 +1,6 @@
 import { createAppError, ErrorType } from '@/errors';
 import { Logger } from '@/logging';
+import { denoEnv } from '@/shared-deno-env';
 import type { Definition } from '../types';
 
 const logger = new Logger({
@@ -15,7 +16,7 @@ export interface TranslationProvider {
   translate(
     text: string,
     sourceLang: string | undefined,
-    targetLang: string,
+    targetLang: string
   ): Promise<TranslationResult>;
 
   detectLanguage(text: string): Promise<string>;
@@ -38,13 +39,13 @@ export class GoogleTranslateProvider implements TranslationProvider {
   private baseUrl = 'https://translation.googleapis.com/language/translate/v2';
 
   constructor() {
-    this.apiKey = Deno.env.get('GOOGLE_TRANSLATE_API_KEY');
+    this.apiKey = denoEnv.get('GOOGLE_TRANSLATE_API_KEY');
   }
 
   async translate(
     text: string,
     sourceLang: string | undefined,
-    targetLang: string,
+    targetLang: string
   ): Promise<TranslationResult> {
     const timer = logger.startTimer();
 
@@ -70,10 +71,8 @@ export class GoogleTranslateProvider implements TranslationProvider {
         const error = await response.json();
         throw createAppError(
           ErrorType.EXTERNAL_SERVICE_ERROR,
-          `Google Translate API error: ${
-            error.error?.message || 'Unknown error'
-          }`,
-          { status: response.status, error },
+          `Google Translate API error: ${error.error?.message || 'Unknown error'}`,
+          { status: response.status, error }
         );
       }
 
@@ -105,14 +104,11 @@ export class GoogleTranslateProvider implements TranslationProvider {
 
     const response = await fetch(
       `https://translation.googleapis.com/language/translate/v2/detect?${params}`,
-      { method: 'POST' },
+      { method: 'POST' }
     );
 
     if (!response.ok) {
-      throw createAppError(
-        ErrorType.EXTERNAL_SERVICE_ERROR,
-        'Failed to detect language',
-      );
+      throw createAppError(ErrorType.EXTERNAL_SERVICE_ERROR, 'Failed to detect language');
     }
 
     const data = await response.json();
@@ -134,15 +130,14 @@ export class LibreTranslateProvider implements TranslationProvider {
   private apiKey?: string;
 
   constructor() {
-    this.baseUrl = Deno.env.get('LIBRETRANSLATE_URL') ||
-      'http://localhost:5000';
-    this.apiKey = Deno.env.get('LIBRETRANSLATE_API_KEY');
+    this.baseUrl = denoEnv.get('LIBRETRANSLATE_URL') || 'http://localhost:5000';
+    this.apiKey = denoEnv.get('LIBRETRANSLATE_API_KEY');
   }
 
   async translate(
     text: string,
     sourceLang: string | undefined,
-    targetLang: string,
+    targetLang: string
   ): Promise<TranslationResult> {
     const timer = logger.startTimer();
 
@@ -176,7 +171,7 @@ export class LibreTranslateProvider implements TranslationProvider {
         throw createAppError(
           ErrorType.EXTERNAL_SERVICE_ERROR,
           `LibreTranslate error: ${error.error || 'Unknown error'}`,
-          { status: response.status, error },
+          { status: response.status, error }
         );
       }
 
@@ -209,10 +204,7 @@ export class LibreTranslateProvider implements TranslationProvider {
     });
 
     if (!response.ok) {
-      throw createAppError(
-        ErrorType.EXTERNAL_SERVICE_ERROR,
-        'Failed to detect language',
-      );
+      throw createAppError(ErrorType.EXTERNAL_SERVICE_ERROR, 'Failed to detect language');
     }
 
     const data = await response.json();
@@ -221,20 +213,7 @@ export class LibreTranslateProvider implements TranslationProvider {
 
   getSupportedLanguages(): string[] {
     // LibreTranslate supports these by default
-    return [
-      'en',
-      'vi',
-      'es',
-      'fr',
-      'de',
-      'ja',
-      'ko',
-      'zh',
-      'ru',
-      'ar',
-      'hi',
-      'pt',
-    ];
+    return ['en', 'vi', 'es', 'fr', 'de', 'ja', 'ko', 'zh', 'ru', 'ar', 'hi', 'pt'];
   }
 }
 
@@ -247,16 +226,16 @@ export class TranslationClient {
 
   constructor() {
     // Choose provider based on environment configuration
-    if (Deno.env.get('GOOGLE_TRANSLATE_API_KEY')) {
+    if (denoEnv.get('GOOGLE_TRANSLATE_API_KEY')) {
       this.provider = new GoogleTranslateProvider();
       logger.info('Using Google Translate provider');
-    } else if (Deno.env.get('LIBRETRANSLATE_URL')) {
+    } else if (denoEnv.get('LIBRETRANSLATE_URL')) {
       this.provider = new LibreTranslateProvider();
       logger.info('Using LibreTranslate provider');
     } else {
       throw createAppError(
         ErrorType.CONFIGURATION_ERROR,
-        'No translation provider configured. Set either GOOGLE_TRANSLATE_API_KEY or LIBRETRANSLATE_URL',
+        'No translation provider configured. Set either GOOGLE_TRANSLATE_API_KEY or LIBRETRANSLATE_URL'
       );
     }
   }
@@ -264,7 +243,7 @@ export class TranslationClient {
   async translate(
     text: string,
     targetLang: string,
-    sourceLang?: string,
+    sourceLang?: string
   ): Promise<TranslationResult> {
     // Validate languages
     const supportedLangs = this.provider.getSupportedLanguages();
@@ -273,7 +252,7 @@ export class TranslationClient {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         `Unsupported target language: ${targetLang}`,
-        { supportedLanguages: supportedLangs },
+        { supportedLanguages: supportedLangs }
       );
     }
 
@@ -281,7 +260,7 @@ export class TranslationClient {
       throw createAppError(
         ErrorType.VALIDATION_ERROR,
         `Unsupported source language: ${sourceLang}`,
-        { supportedLanguages: supportedLangs },
+        { supportedLanguages: supportedLangs }
       );
     }
 
@@ -306,7 +285,7 @@ export class WordsAPIClient {
   private baseUrl = 'https://wordsapiv1.p.rapidapi.com/words';
 
   constructor() {
-    this.apiKey = Deno.env.get('WORDSAPI_KEY');
+    this.apiKey = denoEnv.get('WORDSAPI_KEY');
   }
 
   async getDefinitions(word: string): Promise<Definition[] | undefined> {
@@ -315,15 +294,12 @@ export class WordsAPIClient {
     }
 
     try {
-      const response = await fetch(
-        `${this.baseUrl}/${encodeURIComponent(word)}`,
-        {
-          headers: {
-            'X-RapidAPI-Key': this.apiKey,
-            'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com',
-          },
+      const response = await fetch(`${this.baseUrl}/${encodeURIComponent(word)}`, {
+        headers: {
+          'X-RapidAPI-Key': this.apiKey,
+          'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com',
         },
-      );
+      });
 
       if (!response.ok) {
         logger.warn('WordsAPI request failed', {
@@ -357,15 +333,12 @@ export class WordsAPIClient {
     }
 
     try {
-      const response = await fetch(
-        `${this.baseUrl}/${encodeURIComponent(word)}/pronunciation`,
-        {
-          headers: {
-            'X-RapidAPI-Key': this.apiKey,
-            'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com',
-          },
+      const response = await fetch(`${this.baseUrl}/${encodeURIComponent(word)}/pronunciation`, {
+        headers: {
+          'X-RapidAPI-Key': this.apiKey,
+          'X-RapidAPI-Host': 'wordsapiv1.p.rapidapi.com',
         },
-      );
+      });
 
       if (!response.ok) {
         return undefined;

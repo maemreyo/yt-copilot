@@ -1,11 +1,8 @@
-import { serve } from 'std/http/server.ts';
+import { denoEnv } from '@/shared-deno-env';
 import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
+import type { ErrorResponse, NoteListRequest, SuccessResponse } from '../../_shared/types.ts';
 import { NoteListSchema } from '../../_shared/validators.ts';
-import type {
-  ErrorResponse,
-  NoteListRequest,
-  SuccessResponse,
-} from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -22,9 +19,7 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(
-  request: Request,
-): Promise<{ id: string; email: string } | null> {
+async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -33,11 +28,14 @@ async function extractUser(
 
     const token = authHeader.substring(7);
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -70,7 +68,10 @@ function parseQueryParams(url: string): NoteListRequest {
   }
 
   if (params.get('tags')) {
-    request.filter!.tags = params.get('tags')!.split(',').map((t) => t.trim());
+    request.filter!.tags = params
+      .get('tags')!
+      .split(',')
+      .map(t => t.trim());
   }
 
   if (params.get('search')) {
@@ -96,11 +97,7 @@ function parseQueryParams(url: string): NoteListRequest {
 }
 
 // Build query based on filters
-function buildQuery(
-  supabase: any,
-  userId: string,
-  params: NoteListRequest,
-) {
+function buildQuery(supabase: any, userId: string, params: NoteListRequest) {
   let query = supabase
     .from('video_notes')
     .select(
@@ -114,7 +111,7 @@ function buildQuery(
         duration
       )
     `,
-      { count: 'exact' },
+      { count: 'exact' }
     )
     .eq('user_id', userId)
     .is('deleted_at', null);
@@ -149,10 +146,7 @@ function buildQuery(
   });
 
   // Apply pagination
-  query = query.range(
-    params.offset || 0,
-    (params.offset || 0) + (params.limit || 20) - 1,
-  );
+  query = query.range(params.offset || 0, (params.offset || 0) + (params.limit || 20) - 1);
 
   return query;
 }
@@ -173,13 +167,10 @@ serve(async (request: Request) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 405,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 405,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 
   try {
@@ -194,13 +185,10 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 401,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Parse and validate query parameters
@@ -217,22 +205,19 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     const validatedParams = validation.data;
 
     // Initialize Supabase client
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      { auth: { persistSession: false } },
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      { auth: { persistSession: false } }
     );
 
     // Build and execute query
@@ -251,13 +236,10 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 500,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Get unique tags for the user
@@ -269,7 +251,7 @@ serve(async (request: Request) => {
 
     const uniqueTags = new Set<string>();
     if (allTags) {
-      allTags.forEach((note) => {
+      allTags.forEach(note => {
         if (note.tags && Array.isArray(note.tags)) {
           note.tags.forEach((tag: string) => uniqueTags.add(tag));
         }
@@ -282,19 +264,15 @@ serve(async (request: Request) => {
       data: {
         notes: notes || [],
         total: count || 0,
-        has_more:
-          (count || 0) > (validatedParams.offset || 0) + (notes?.length || 0),
+        has_more: (count || 0) > (validatedParams.offset || 0) + (notes?.length || 0),
         available_tags: Array.from(uniqueTags).sort(),
       },
     };
 
-    return new Response(
-      JSON.stringify(successResponse),
-      {
-        status: 200,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(successResponse), {
+      status: 200,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   } catch (error: any) {
     console.error('Unexpected error:', error);
 
@@ -306,12 +284,9 @@ serve(async (request: Request) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 500,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 });

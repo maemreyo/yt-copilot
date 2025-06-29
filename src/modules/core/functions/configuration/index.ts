@@ -1,5 +1,6 @@
 // Runtime configuration display endpoint (development only)
 
+import { denoEnv } from '@/shared-deno-env';
 import { serve } from 'std/http/server.ts';
 
 /**
@@ -167,7 +168,7 @@ class ConfigurationService {
       'SUPABASE_SERVICE_ROLE_KEY',
       'SUPABASE_PROJECT_ID',
     ].forEach(key => {
-      const processed = this.processEnvVar(key, Deno.env.get(key));
+      const processed = this.processEnvVar(key, denoEnv.get(key));
       if (processed) {
         variables[key] = processed;
       }
@@ -187,14 +188,14 @@ class ConfigurationService {
     const variables: Record<string, any> = {};
 
     ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_ID'].forEach(key => {
-      const processed = this.processEnvVar(key, Deno.env.get(key));
+      const processed = this.processEnvVar(key, denoEnv.get(key));
       if (processed) {
         variables[key] = processed;
       }
     });
 
     // Add computed values
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
+    const stripeKey = denoEnv.get('STRIPE_SECRET_KEY') || '';
     variables['STRIPE_MODE'] = {
       value: stripeKey.startsWith('sk_live_') ? 'live' : 'test',
       type: 'string' as const,
@@ -217,7 +218,7 @@ class ConfigurationService {
     const variables: Record<string, any> = {};
 
     ['APP_URL', 'APP_NAME', 'APP_VERSION', 'NODE_ENV'].forEach(key => {
-      const processed = this.processEnvVar(key, Deno.env.get(key));
+      const processed = this.processEnvVar(key, denoEnv.get(key));
       if (processed) {
         variables[key] = processed;
       }
@@ -242,7 +243,7 @@ class ConfigurationService {
       'RATE_LIMIT_REQUESTS_PER_MINUTE',
       'RATE_LIMIT_WINDOW_MS',
     ].forEach(key => {
-      const processed = this.processEnvVar(key, Deno.env.get(key));
+      const processed = this.processEnvVar(key, denoEnv.get(key));
       if (processed) {
         variables[key] = processed;
       }
@@ -262,7 +263,7 @@ class ConfigurationService {
     const variables: Record<string, any> = {};
 
     ['LOG_LEVEL', 'METRICS_ENABLED', 'SENTRY_DSN', 'ANALYTICS_ENABLED'].forEach(key => {
-      const processed = this.processEnvVar(key, Deno.env.get(key));
+      const processed = this.processEnvVar(key, denoEnv.get(key));
       if (processed) {
         variables[key] = processed;
       }
@@ -282,7 +283,7 @@ class ConfigurationService {
     const variables: Record<string, any> = {};
 
     ['DATABASE_MAX_CONNECTIONS', 'DATABASE_TIMEOUT', 'CACHE_ENABLED', 'CACHE_TTL'].forEach(key => {
-      const processed = this.processEnvVar(key, Deno.env.get(key));
+      const processed = this.processEnvVar(key, denoEnv.get(key));
       if (processed) {
         variables[key] = processed;
       }
@@ -299,21 +300,21 @@ class ConfigurationService {
    * Get feature flags
    */
   private getFeatureFlags(): FeatureFlags {
-    const env = Deno.env.get('NODE_ENV') || 'development';
+    const env = denoEnv.get('NODE_ENV') || 'development';
 
     return {
       development: {
         debugMode: env === 'development',
-        hotReload: Deno.env.get('HOT_RELOAD') === 'true',
-        mockServices: Deno.env.get('MOCK_SERVICES') === 'true',
+        hotReload: denoEnv.get('HOT_RELOAD') === 'true',
+        mockServices: denoEnv.get('MOCK_SERVICES') === 'true',
         seedData: env !== 'production',
       },
       features: {
-        metricsEnabled: Deno.env.get('METRICS_ENABLED') === 'true',
-        analyticsEnabled: Deno.env.get('ANALYTICS_ENABLED') === 'true',
-        cacheEnabled: Deno.env.get('CACHE_ENABLED') !== 'false',
+        metricsEnabled: denoEnv.get('METRICS_ENABLED') === 'true',
+        analyticsEnabled: denoEnv.get('ANALYTICS_ENABLED') === 'true',
+        cacheEnabled: denoEnv.get('CACHE_ENABLED') !== 'false',
         rateLimitingEnabled: env === 'production',
-        errorReporting: Deno.env.get('ERROR_REPORTING') !== 'false',
+        errorReporting: denoEnv.get('ERROR_REPORTING') !== 'false',
       },
       experiments: {
         newAuthFlow: false, // Example experimental feature
@@ -331,12 +332,12 @@ class ConfigurationService {
       uptime: Date.now() - this.startTime,
       nodeVersion: Deno.version.deno || 'unknown',
       platform: Deno.build.os || 'unknown',
-      region: Deno.env.get('DENO_REGION') || Deno.env.get('VERCEL_REGION'),
+      region: denoEnv.get('DENO_REGION') || denoEnv.get('VERCEL_REGION'),
       buildInfo: {
-        number: Deno.env.get('BUILD_NUMBER'),
-        date: Deno.env.get('BUILD_DATE'),
-        commit: Deno.env.get('COMMIT_HASH')?.substring(0, 8),
-        branch: Deno.env.get('COMMIT_BRANCH'),
+        number: denoEnv.get('BUILD_NUMBER'),
+        date: denoEnv.get('BUILD_DATE'),
+        commit: denoEnv.get('COMMIT_HASH')?.substring(0, 8),
+        branch: denoEnv.get('COMMIT_BRANCH'),
       },
     };
   }
@@ -346,12 +347,12 @@ class ConfigurationService {
    */
   private getWarnings(): string[] {
     const warnings: string[] = [];
-    const env = Deno.env.get('NODE_ENV') || 'development';
+    const env = denoEnv.get('NODE_ENV') || 'development';
 
     // Check for development secrets in production
     if (env === 'production') {
-      const jwtSecret = Deno.env.get('JWT_SECRET') || '';
-      const encryptionKey = Deno.env.get('ENCRYPTION_KEY') || '';
+      const jwtSecret = denoEnv.get('JWT_SECRET') || '';
+      const encryptionKey = denoEnv.get('ENCRYPTION_KEY') || '';
 
       if (jwtSecret.includes('dev-') || jwtSecret.includes('development')) {
         warnings.push('JWT_SECRET appears to be a development key in production');
@@ -361,18 +362,18 @@ class ConfigurationService {
         warnings.push('ENCRYPTION_KEY appears to be a development key in production');
       }
 
-      const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
+      const stripeKey = denoEnv.get('STRIPE_SECRET_KEY') || '';
       if (stripeKey.startsWith('sk_test_')) {
         warnings.push('Using Stripe test keys in production environment');
       }
     }
 
     // Check for missing optional configs
-    if (!Deno.env.get('SENTRY_DSN') && env === 'production') {
+    if (!denoEnv.get('SENTRY_DSN') && env === 'production') {
       warnings.push('SENTRY_DSN not configured for production error tracking');
     }
 
-    if (!Deno.env.get('STRIPE_PRICE_ID')) {
+    if (!denoEnv.get('STRIPE_PRICE_ID')) {
       warnings.push('STRIPE_PRICE_ID not configured for subscription billing');
     }
 
@@ -383,12 +384,12 @@ class ConfigurationService {
    * Generate complete configuration response
    */
   generateConfig(): ConfigurationResponse {
-    const env = Deno.env.get('NODE_ENV') || 'development';
+    const env = denoEnv.get('NODE_ENV') || 'development';
 
     return {
       timestamp: new Date().toISOString(),
       environment: env,
-      version: Deno.env.get('APP_VERSION') || '0.1.0',
+      version: denoEnv.get('APP_VERSION') || '0.1.0',
       accessLevel: env === 'development' ? 'development' : 'production',
       sections: [
         this.getAppConfig(),
@@ -457,7 +458,7 @@ serve(async req => {
   }
 
   try {
-    const environment = Deno.env.get('NODE_ENV') || 'development';
+    const environment = denoEnv.get('NODE_ENV') || 'development';
 
     // Restrict access to development environment only
     if (environment !== 'development') {
@@ -509,7 +510,7 @@ serve(async req => {
         error: {
           code: 'CONFIG_GENERATION_ERROR',
           message: 'Failed to generate configuration',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+          details: denoEnv.get('NODE_ENV') === 'development' ? error.message : undefined,
         },
         timestamp: new Date().toISOString(),
       }),

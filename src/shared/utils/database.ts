@@ -12,9 +12,35 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { env } from '../config/environment';
 import { DatabaseError, ErrorCode, ErrorContext } from './errors';
 import { logger } from './logging';
+
+// Import environment configuration
+// Using try-catch to handle both ESM and CommonJS environments
+let env: any = {
+  SUPABASE_URL: 'https://example.supabase.co',
+  SUPABASE_ANON_KEY: 'public-anon-key',
+  DATABASE_MAX_CONNECTIONS: 20,
+  DATABASE_TIMEOUT: 5000,
+};
+
+try {
+  const envModule = require('../config/environment');
+  env = envModule.env;
+} catch (e) {
+  try {
+    // For ESM environments
+    import('../config/environment')
+      .then(module => {
+        env = module.env;
+      })
+      .catch(() => {
+        console.warn('Could not import environment config, using defaults');
+      });
+  } catch (e) {
+    console.warn('Could not import environment config, using defaults');
+  }
+}
 
 /**
  * Database operation result interface
@@ -234,7 +260,7 @@ export class QueryHelper {
         options: this.sanitizeOptions(options),
       });
 
-      let query = this.client.from(table);
+      let query: any = this.client.from(table);
 
       // Apply select columns
       if (options.select) {
@@ -328,7 +354,7 @@ export class QueryHelper {
         recordCount: Array.isArray(data) ? data.length : 1,
       });
 
-      let query = this.client.from(table);
+      let query: any = this.client.from(table);
 
       if (options.upsert) {
         query = query.upsert(data);
@@ -396,7 +422,7 @@ export class QueryHelper {
         filters: this.sanitizeOptions({ filters }).filters,
       });
 
-      let query = this.client.from(table).update(data);
+      let query: any = this.client.from(table).update(data);
 
       // Apply filters
       for (const [key, value] of Object.entries(filters)) {
@@ -462,7 +488,7 @@ export class QueryHelper {
         filters: this.sanitizeOptions({ filters }).filters,
       });
 
-      let query = this.client.from(table).delete();
+      let query: any = this.client.from(table).delete();
 
       // Apply filters
       for (const [key, value] of Object.entries(filters)) {

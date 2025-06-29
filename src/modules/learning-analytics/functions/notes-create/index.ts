@@ -1,16 +1,13 @@
-import { serve } from 'std/http/server.ts';
+import { denoEnv } from '@/shared-deno-env';
 import { createClient } from '@supabase/supabase-js';
-import {
-  CreateNoteSchema,
-  sanitizeTags,
-  validateRequest,
-} from '../../_shared/validators.ts';
+import { serve } from 'std/http/server.ts';
 import type {
   CreateNoteRequest,
   ErrorResponse,
   SuccessResponse,
   VideoNote,
 } from '../../_shared/types.ts';
+import { CreateNoteSchema, sanitizeTags, validateRequest } from '../../_shared/validators.ts';
 
 // Response headers
 const corsHeaders = {
@@ -27,9 +24,7 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(
-  request: Request,
-): Promise<{ id: string; email: string } | null> {
+async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -38,11 +33,14 @@ async function extractUser(
 
     const token = authHeader.substring(7);
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -58,11 +56,7 @@ async function extractUser(
 }
 
 // Verify video exists and user has access
-async function verifyVideoAccess(
-  supabase: any,
-  userId: string,
-  videoId: string,
-): Promise<boolean> {
+async function verifyVideoAccess(supabase: any, userId: string, videoId: string): Promise<boolean> {
   // Check if video exists
   const { data: video, error: videoError } = await supabase
     .from('youtube_videos')
@@ -86,7 +80,7 @@ async function verifyVideoAccess(
 }
 
 // Main handler
-serve(async (req) => {
+serve(async req => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -104,13 +98,10 @@ serve(async (req) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 405,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 405,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 
   try {
@@ -125,13 +116,10 @@ serve(async (req) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 401,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Parse and validate request
@@ -148,21 +136,18 @@ serve(async (req) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     const data = validation.data as CreateNoteRequest;
 
     // Initialize Supabase client
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
 
     // Verify video access
@@ -178,13 +163,10 @@ serve(async (req) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 403,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 403,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Sanitize tags if provided
@@ -217,13 +199,10 @@ serve(async (req) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 500,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Update learning session if active
@@ -251,13 +230,10 @@ serve(async (req) => {
       data: note,
     };
 
-    return new Response(
-      JSON.stringify(successResponse),
-      {
-        status: 201,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(successResponse), {
+      status: 201,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   } catch (error: any) {
     console.error('Unexpected error:', error);
 
@@ -269,12 +245,9 @@ serve(async (req) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 500,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 });

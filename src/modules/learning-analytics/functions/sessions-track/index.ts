@@ -1,16 +1,8 @@
-import { serve } from 'std/http/server.ts';
+import { denoEnv } from '@/shared-deno-env';
 import { createClient } from '@supabase/supabase-js';
-import {
-  CreateSessionSchema,
-  UpdateSessionSchema,
-} from '../../_shared/validators.ts';
-import type {
-  CreateSessionRequest,
-  ErrorResponse,
-  LearningSession,
-  SuccessResponse,
-  UpdateSessionRequest,
-} from '../../_shared/types.ts';
+import { serve } from 'std/http/server.ts';
+import type { ErrorResponse, SuccessResponse } from '../../_shared/types.ts';
+import { CreateSessionSchema, UpdateSessionSchema } from '../../_shared/validators.ts';
 
 // Response headers
 const corsHeaders = {
@@ -27,9 +19,7 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(
-  request: Request,
-): Promise<{ id: string; email: string } | null> {
+async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -38,11 +28,14 @@ async function extractUser(
 
     const token = authHeader.substring(7);
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -73,13 +66,10 @@ serve(async (request: Request) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 405,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 405,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 
   try {
@@ -94,13 +84,10 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 401,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Parse request body
@@ -108,9 +95,9 @@ serve(async (request: Request) => {
 
     // Initialize Supabase client
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      { auth: { persistSession: false } },
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      { auth: { persistSession: false } }
     );
 
     // Check if this is a session end request (has session_id)
@@ -128,13 +115,10 @@ serve(async (request: Request) => {
           },
         };
 
-        return new Response(
-          JSON.stringify(errorResponse),
-          {
-            status: 400,
-            headers: { ...corsHeaders, ...securityHeaders },
-          },
-        );
+        return new Response(JSON.stringify(errorResponse), {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        });
       }
 
       const updateData = validation.data;
@@ -157,20 +141,15 @@ serve(async (request: Request) => {
           },
         };
 
-        return new Response(
-          JSON.stringify(errorResponse),
-          {
-            status: 404,
-            headers: { ...corsHeaders, ...securityHeaders },
-          },
-        );
+        return new Response(JSON.stringify(errorResponse), {
+          status: 404,
+          headers: { ...corsHeaders, ...securityHeaders },
+        });
       }
 
       // Calculate duration if ending session
       const startTime = new Date(existingSession.started_at).getTime();
-      const endTime = updateData.ended_at
-        ? new Date(updateData.ended_at).getTime()
-        : Date.now();
+      const endTime = updateData.ended_at ? new Date(updateData.ended_at).getTime() : Date.now();
       const duration_seconds = Math.floor((endTime - startTime) / 1000);
 
       // Update session
@@ -199,13 +178,10 @@ serve(async (request: Request) => {
           },
         };
 
-        return new Response(
-          JSON.stringify(errorResponse),
-          {
-            status: 500,
-            headers: { ...corsHeaders, ...securityHeaders },
-          },
-        );
+        return new Response(JSON.stringify(errorResponse), {
+          status: 500,
+          headers: { ...corsHeaders, ...securityHeaders },
+        });
       }
 
       // Return success response
@@ -214,13 +190,10 @@ serve(async (request: Request) => {
         data: updatedSession,
       };
 
-      return new Response(
-        JSON.stringify(successResponse),
-        {
-          status: 200,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(successResponse), {
+        status: 200,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     } else {
       // This is a session start request
       const validation = CreateSessionSchema.safeParse(body);
@@ -235,13 +208,10 @@ serve(async (request: Request) => {
           },
         };
 
-        return new Response(
-          JSON.stringify(errorResponse),
-          {
-            status: 400,
-            headers: { ...corsHeaders, ...securityHeaders },
-          },
-        );
+        return new Response(JSON.stringify(errorResponse), {
+          status: 400,
+          headers: { ...corsHeaders, ...securityHeaders },
+        });
       }
 
       const sessionData = validation.data;
@@ -282,13 +252,10 @@ serve(async (request: Request) => {
             },
           };
 
-          return new Response(
-            JSON.stringify(errorResponse),
-            {
-              status: 400,
-              headers: { ...corsHeaders, ...securityHeaders },
-            },
-          );
+          return new Response(JSON.stringify(errorResponse), {
+            status: 400,
+            headers: { ...corsHeaders, ...securityHeaders },
+          });
         }
       }
 
@@ -320,13 +287,10 @@ serve(async (request: Request) => {
           },
         };
 
-        return new Response(
-          JSON.stringify(errorResponse),
-          {
-            status: 500,
-            headers: { ...corsHeaders, ...securityHeaders },
-          },
-        );
+        return new Response(JSON.stringify(errorResponse), {
+          status: 500,
+          headers: { ...corsHeaders, ...securityHeaders },
+        });
       }
 
       // Return success response
@@ -335,13 +299,10 @@ serve(async (request: Request) => {
         data: newSession,
       };
 
-      return new Response(
-        JSON.stringify(successResponse),
-        {
-          status: 201,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(successResponse), {
+        status: 201,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
   } catch (error: any) {
     console.error('Unexpected error:', error);
@@ -354,12 +315,9 @@ serve(async (request: Request) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 500,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 });

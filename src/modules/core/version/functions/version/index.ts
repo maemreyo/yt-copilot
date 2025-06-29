@@ -1,5 +1,6 @@
 // Version information endpoint with build details, environment info, and deployment metadata
 
+import { denoEnv } from '@/shared-deno-env';
 import { serve } from 'std/http/server.ts';
 
 /**
@@ -54,7 +55,7 @@ class VersionInfoBuilder {
    * Get application version from environment or package
    */
   private getAppVersion(): string {
-    return Deno.env.get('APP_VERSION') || Deno.env.get('npm_package_version') || '0.1.0';
+    return denoEnv.get('APP_VERSION') || denoEnv.get('npm_package_version') || '0.1.0';
   }
 
   /**
@@ -63,12 +64,12 @@ class VersionInfoBuilder {
   private getBuildInfo() {
     return {
       buildNumber:
-        Deno.env.get('BUILD_NUMBER') ||
-        Deno.env.get('GITHUB_RUN_NUMBER') ||
-        Deno.env.get('VERCEL_GIT_COMMIT_SHA')?.substring(0, 8),
+        denoEnv.get('BUILD_NUMBER') ||
+        denoEnv.get('GITHUB_RUN_NUMBER') ||
+        denoEnv.get('VERCEL_GIT_COMMIT_SHA')?.substring(0, 8),
       buildDate:
-        Deno.env.get('BUILD_DATE') ||
-        Deno.env.get('VERCEL_GIT_COMMIT_DATE') ||
+        denoEnv.get('BUILD_DATE') ||
+        denoEnv.get('VERCEL_GIT_COMMIT_DATE') ||
         new Date().toISOString(),
     };
   }
@@ -79,16 +80,16 @@ class VersionInfoBuilder {
   private getCommitInfo() {
     return {
       commitHash:
-        Deno.env.get('COMMIT_HASH') ||
-        Deno.env.get('VERCEL_GIT_COMMIT_SHA') ||
-        Deno.env.get('GITHUB_SHA'),
+        denoEnv.get('COMMIT_HASH') ||
+        denoEnv.get('VERCEL_GIT_COMMIT_SHA') ||
+        denoEnv.get('GITHUB_SHA'),
       commitBranch:
-        Deno.env.get('COMMIT_BRANCH') ||
-        Deno.env.get('VERCEL_GIT_COMMIT_REF') ||
-        Deno.env.get('GITHUB_REF_NAME') ||
+        denoEnv.get('COMMIT_BRANCH') ||
+        denoEnv.get('VERCEL_GIT_COMMIT_REF') ||
+        denoEnv.get('GITHUB_REF_NAME') ||
         'main',
       commitMessage:
-        Deno.env.get('COMMIT_MESSAGE') || Deno.env.get('VERCEL_GIT_COMMIT_MESSAGE') || undefined,
+        denoEnv.get('COMMIT_MESSAGE') || denoEnv.get('VERCEL_GIT_COMMIT_MESSAGE') || undefined,
     };
   }
 
@@ -107,7 +108,7 @@ class VersionInfoBuilder {
    * Get API information
    */
   private getApiInfo() {
-    const baseUrl = Deno.env.get('APP_URL') || 'http://localhost:3000';
+    const baseUrl = denoEnv.get('APP_URL') || 'http://localhost:3000';
 
     return {
       version: 'v1',
@@ -122,18 +123,16 @@ class VersionInfoBuilder {
   private getServicesInfo() {
     return {
       supabase: {
-        url: Deno.env.get('SUPABASE_URL') || 'http://localhost:54321',
-        region: Deno.env.get('SUPABASE_REGION') || undefined,
+        url: denoEnv.get('SUPABASE_URL') || 'http://localhost:54321',
+        region: denoEnv.get('SUPABASE_REGION') || undefined,
       },
       deployment: {
         platform: this.getDeploymentPlatform(),
-        region: Deno.env.get('DENO_REGION') || Deno.env.get('VERCEL_REGION') || undefined,
+        region: denoEnv.get('DENO_REGION') || denoEnv.get('VERCEL_REGION') || undefined,
         deployedAt:
-          Deno.env.get('VERCEL_GIT_COMMIT_DATE') || Deno.env.get('DEPLOYMENT_DATE') || undefined,
+          denoEnv.get('VERCEL_GIT_COMMIT_DATE') || denoEnv.get('DEPLOYMENT_DATE') || undefined,
         deployedBy:
-          Deno.env.get('VERCEL_GIT_COMMIT_AUTHOR_NAME') ||
-          Deno.env.get('GITHUB_ACTOR') ||
-          undefined,
+          denoEnv.get('VERCEL_GIT_COMMIT_AUTHOR_NAME') || denoEnv.get('GITHUB_ACTOR') || undefined,
       },
     };
   }
@@ -142,12 +141,12 @@ class VersionInfoBuilder {
    * Detect deployment platform
    */
   private getDeploymentPlatform(): string {
-    if (Deno.env.get('VERCEL')) return 'Vercel';
-    if (Deno.env.get('NETLIFY')) return 'Netlify';
-    if (Deno.env.get('RAILWAY_ENVIRONMENT')) return 'Railway';
-    if (Deno.env.get('RENDER')) return 'Render';
-    if (Deno.env.get('GITHUB_ACTIONS')) return 'GitHub Actions';
-    if (Deno.env.get('CF_PAGES')) return 'Cloudflare Pages';
+    if (denoEnv.get('VERCEL')) return 'Vercel';
+    if (denoEnv.get('NETLIFY')) return 'Netlify';
+    if (denoEnv.get('RAILWAY_ENVIRONMENT')) return 'Railway';
+    if (denoEnv.get('RENDER')) return 'Render';
+    if (denoEnv.get('GITHUB_ACTIONS')) return 'GitHub Actions';
+    if (denoEnv.get('CF_PAGES')) return 'Cloudflare Pages';
     return 'Unknown';
   }
 
@@ -157,11 +156,11 @@ class VersionInfoBuilder {
   private getFeatures() {
     return {
       authentication: true,
-      billing: Boolean(Deno.env.get('STRIPE_SECRET_KEY')),
-      email: Boolean(Deno.env.get('RESEND_API_KEY')),
-      analytics: Boolean(Deno.env.get('ANALYTICS_ENABLED')),
-      monitoring: Boolean(Deno.env.get('SENTRY_DSN')),
-      cache: Boolean(Deno.env.get('CACHE_ENABLED')),
+      billing: Boolean(denoEnv.get('STRIPE_SECRET_KEY')),
+      email: Boolean(denoEnv.get('RESEND_API_KEY')),
+      analytics: Boolean(denoEnv.get('ANALYTICS_ENABLED')),
+      monitoring: Boolean(denoEnv.get('SENTRY_DSN')),
+      cache: Boolean(denoEnv.get('CACHE_ENABLED')),
       rateLimit: true,
       apiKeys: true,
       webhooks: true,
@@ -190,7 +189,7 @@ class VersionInfoBuilder {
    * Get additional metadata
    */
   private getMetadata() {
-    const nodeEnv = Deno.env.get('NODE_ENV') || 'development';
+    const nodeEnv = denoEnv.get('NODE_ENV') || 'development';
 
     return {
       startupTime: new Date().toISOString(),
@@ -225,7 +224,7 @@ class VersionInfoBuilder {
       commitHash: commit.commitHash,
       commitBranch: commit.commitBranch,
       commitMessage: commit.commitMessage,
-      environment: Deno.env.get('NODE_ENV') || 'development',
+      environment: denoEnv.get('NODE_ENV') || 'development',
       runtime,
       api,
       services,
@@ -333,12 +332,12 @@ serve(async req => {
 
     // Return minimal version info even if full build fails
     const fallbackVersion = {
-      version: Deno.env.get('APP_VERSION') || '0.1.0',
-      environment: Deno.env.get('NODE_ENV') || 'development',
+      version: denoEnv.get('APP_VERSION') || '0.1.0',
+      environment: denoEnv.get('NODE_ENV') || 'development',
       error: {
         code: 'VERSION_BUILD_ERROR',
         message: 'Failed to build complete version information',
-        details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+        details: denoEnv.get('NODE_ENV') === 'development' ? error.message : undefined,
       },
       timestamp: new Date().toISOString(),
     };

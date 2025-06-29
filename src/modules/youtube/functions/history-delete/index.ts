@@ -1,8 +1,9 @@
 // Delete video from user's watch history
 
-import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '@/cors';
+import { denoEnv } from '@/shared-deno-env';
+import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
 
 /**
  * Response interface
@@ -34,9 +35,7 @@ const securityHeaders = {
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(
-  request: Request,
-): Promise<string | null> {
+async function extractUserFromRequest(request: Request): Promise<string | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -46,11 +45,14 @@ async function extractUserFromRequest(
     const token = authHeader.substring(7);
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -74,7 +76,7 @@ function extractVideoIdFromPath(url: string): string | null {
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -101,9 +103,9 @@ serve(async (req) => {
         headers: {
           ...securityHeaders,
           ...corsHeaders,
-          'Allow': 'DELETE, OPTIONS',
+          Allow: 'DELETE, OPTIONS',
         },
-      },
+      }
     );
   }
 
@@ -122,7 +124,7 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
@@ -140,13 +142,13 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
     // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = denoEnv.get('SUPABASE_URL');
+    const supabaseServiceKey = denoEnv.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
@@ -174,7 +176,7 @@ serve(async (req) => {
         {
           status: 404,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
@@ -200,7 +202,7 @@ serve(async (req) => {
           {
             status: 404,
             headers: { ...securityHeaders, ...corsHeaders },
-          },
+          }
         );
       }
 
@@ -220,7 +222,7 @@ serve(async (req) => {
       {
         status: 200,
         headers: { ...securityHeaders, ...corsHeaders },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Request failed:', error);
@@ -236,7 +238,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...securityHeaders, ...corsHeaders },
-      },
+      }
     );
   }
 });

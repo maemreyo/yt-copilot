@@ -1,8 +1,9 @@
 // List user's video watch history
 
-import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '@/cors';
+import { denoEnv } from '@/shared-deno-env';
+import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
 
 /**
  * Query parameters interface
@@ -65,9 +66,7 @@ const securityHeaders = {
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(
-  request: Request,
-): Promise<string | null> {
+async function extractUserFromRequest(request: Request): Promise<string | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -77,11 +76,14 @@ async function extractUserFromRequest(
     const token = authHeader.substring(7);
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -119,9 +121,7 @@ function parseQueryParams(url: URL): ListHistoryParams {
 
   // Parse filter
   const filter = url.searchParams.get('filter');
-  if (
-    filter && ['all', 'bookmarked', 'completed', 'in-progress'].includes(filter)
-  ) {
+  if (filter && ['all', 'bookmarked', 'completed', 'in-progress'].includes(filter)) {
     params.filter = filter as any;
   } else {
     params.filter = 'all';
@@ -141,7 +141,7 @@ function parseQueryParams(url: URL): ListHistoryParams {
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -168,9 +168,9 @@ serve(async (req) => {
         headers: {
           ...securityHeaders,
           ...corsHeaders,
-          'Allow': 'GET, OPTIONS',
+          Allow: 'GET, OPTIONS',
         },
-      },
+      }
     );
   }
 
@@ -189,7 +189,7 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
@@ -198,8 +198,8 @@ serve(async (req) => {
     const params = parseQueryParams(url);
 
     // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = denoEnv.get('SUPABASE_URL');
+    const supabaseServiceKey = denoEnv.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
@@ -230,7 +230,7 @@ serve(async (req) => {
           duration_seconds
         )
       `,
-        { count: 'exact' },
+        { count: 'exact' }
       )
       .eq('user_id', userId);
 
@@ -264,10 +264,7 @@ serve(async (req) => {
     }
 
     // Apply pagination
-    query = query.range(
-      params.offset!,
-      params.offset! + params.limit! - 1,
-    );
+    query = query.range(params.offset!, params.offset! + params.limit! - 1);
 
     // Execute query
     const { data: history, error, count } = await query;
@@ -278,28 +275,26 @@ serve(async (req) => {
     }
 
     // Transform data
-    const transformedHistory: VideoHistoryEntry[] = (history || []).map(
-      (item) => ({
-        historyId: item.id,
-        videoId: item.youtube_videos.video_id,
-        videoTitle: item.youtube_videos.title,
-        channelName: item.youtube_videos.channel_name,
-        thumbnailUrl: item.youtube_videos.thumbnail_url,
-        durationSeconds: item.youtube_videos.duration_seconds,
-        progressSeconds: item.progress_seconds,
-        completed: item.completed,
-        isBookmarked: item.is_bookmarked,
-        lastWatchedAt: item.last_watched_at,
-        watchCount: item.watch_count,
-        playbackRate: item.playback_rate,
-        notes: item.notes,
-        tags: item.tags,
-      }),
-    );
+    const transformedHistory: VideoHistoryEntry[] = (history || []).map(item => ({
+      historyId: item.id,
+      videoId: item.youtube_videos.video_id,
+      videoTitle: item.youtube_videos.title,
+      channelName: item.youtube_videos.channel_name,
+      thumbnailUrl: item.youtube_videos.thumbnail_url,
+      durationSeconds: item.youtube_videos.duration_seconds,
+      progressSeconds: item.progress_seconds,
+      completed: item.completed,
+      isBookmarked: item.is_bookmarked,
+      lastWatchedAt: item.last_watched_at,
+      watchCount: item.watch_count,
+      playbackRate: item.playback_rate,
+      notes: item.notes,
+      tags: item.tags,
+    }));
 
     // Calculate if there are more results
     const total = count || 0;
-    const hasMore = (params.offset! + params.limit!) < total;
+    const hasMore = params.offset! + params.limit! < total;
 
     // Return response
     return new Response(
@@ -314,7 +309,7 @@ serve(async (req) => {
       {
         status: 200,
         headers: { ...securityHeaders, ...corsHeaders },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Request failed:', error);
@@ -330,7 +325,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...securityHeaders, ...corsHeaders },
-      },
+      }
     );
   }
 });

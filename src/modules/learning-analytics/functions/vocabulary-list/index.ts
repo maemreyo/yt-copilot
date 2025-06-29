@@ -1,6 +1,5 @@
-import { serve } from 'std/http/server.ts';
+import { denoEnv } from '@/shared-deno-env';
 import { createClient } from '@supabase/supabase-js';
-import { validateRequest, VocabularyListSchema } from '_shared/validators.ts';
 import { isDueForReview } from '_shared/spaced-repetition.ts';
 import type {
   ErrorResponse,
@@ -8,6 +7,8 @@ import type {
   VocabularyListRequest,
   VocabularyListResponse,
 } from '_shared/types.ts';
+import { validateRequest, VocabularyListSchema } from '_shared/validators.ts';
+import { serve } from 'std/http/server.ts';
 
 // Response headers
 const corsHeaders = {
@@ -24,9 +25,7 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(
-  request: Request,
-): Promise<{ id: string; email: string } | null> {
+async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -35,11 +34,14 @@ async function extractUser(
 
     const token = authHeader.substring(7);
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -55,11 +57,7 @@ async function extractUser(
 }
 
 // Build query based on filters
-function buildQuery(
-  supabase: any,
-  userId: string,
-  params: VocabularyListRequest,
-) {
+function buildQuery(supabase: any, userId: string, params: VocabularyListRequest) {
   let query = supabase
     .from('vocabulary_entries')
     .select('*', { count: 'exact' })
@@ -79,7 +77,7 @@ function buildQuery(
       // Search in word, definition, and context
       const searchTerm = `%${params.filter.search}%`;
       query = query.or(
-        `word.ilike.${searchTerm},definition.ilike.${searchTerm},context.ilike.${searchTerm}`,
+        `word.ilike.${searchTerm},definition.ilike.${searchTerm},context.ilike.${searchTerm}`
       );
     }
 
@@ -92,16 +90,13 @@ function buildQuery(
   query = query.order(sortBy, { ascending: order === 'asc' });
 
   // Apply pagination
-  query = query.range(
-    params.offset,
-    params.offset + params.limit - 1,
-  );
+  query = query.range(params.offset, params.offset + params.limit - 1);
 
   return query;
 }
 
 // Main handler
-serve(async (req) => {
+serve(async req => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -119,13 +114,10 @@ serve(async (req) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 405,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 405,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 
   try {
@@ -140,13 +132,10 @@ serve(async (req) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 401,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Parse query parameters
@@ -194,21 +183,18 @@ serve(async (req) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     const params = validation.data as VocabularyListRequest;
 
     // Initialize Supabase client
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
 
     // Build and execute query
@@ -227,20 +213,17 @@ serve(async (req) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 500,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Filter for due items if requested
     let filteredEntries = entries || [];
     if (params.filter?.due_for_review) {
-      filteredEntries = filteredEntries.filter((entry) =>
-        entry.next_review_at && isDueForReview(entry.next_review_at)
+      filteredEntries = filteredEntries.filter(
+        entry => entry.next_review_at && isDueForReview(entry.next_review_at)
       );
     }
 
@@ -248,7 +231,7 @@ serve(async (req) => {
     const response: VocabularyListResponse = {
       entries: filteredEntries,
       total: count || 0,
-      has_more: (params.offset + params.limit) < (count || 0),
+      has_more: params.offset + params.limit < (count || 0),
     };
 
     const successResponse: SuccessResponse<VocabularyListResponse> = {
@@ -256,17 +239,14 @@ serve(async (req) => {
       data: response,
     };
 
-    return new Response(
-      JSON.stringify(successResponse),
-      {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          ...securityHeaders,
-          'X-Total-Count': count?.toString() || '0',
-        },
+    return new Response(JSON.stringify(successResponse), {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        ...securityHeaders,
+        'X-Total-Count': count?.toString() || '0',
       },
-    );
+    });
   } catch (error: any) {
     console.error('Unexpected error:', error);
 
@@ -278,12 +258,9 @@ serve(async (req) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 500,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 });

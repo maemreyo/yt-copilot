@@ -1,21 +1,11 @@
 // YouTube video analysis endpoint with metadata extraction and caching
 
-import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
-import {
-  corsHeaders,
-  createCorsErrorResponse,
-  createCorsResponse,
-  createCorsSuccessResponse,
-} from '@/cors';
-import { createSecureResponse, securityHeaders } from '@/shared-security';
+import { createCorsErrorResponse, createCorsResponse, createCorsSuccessResponse } from '@/cors';
+import { denoEnv } from '@/shared-deno-env';
+import { AppError, createAppError, ErrorType, handleUnknownError } from '@/shared-errors';
 import { validateRequestBody, ValidationSchema } from '@/shared-validation';
-import {
-  AppError,
-  createAppError,
-  ErrorType,
-  handleUnknownError,
-} from '@/shared-errors';
+import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
 
 /**
  * Request interface for video analysis
@@ -119,9 +109,7 @@ function parseDuration(duration: string): number {
 /**
  * Validate YouTube URL
  */
-function validateYoutubeUrl(
-  value: unknown,
-): { isValid: boolean; errors: string[] } {
+function validateYoutubeUrl(value: unknown): { isValid: boolean; errors: string[] } {
   if (typeof value !== 'string') {
     return { isValid: false, errors: ['Must be a string'] };
   }
@@ -141,7 +129,7 @@ const analyzeVideoSchema: ValidationSchema<AnalyzeVideoRequest> = {
     required: true,
     type: 'string',
     validate: validateYoutubeUrl,
-    sanitize: (value) => typeof value === 'string' ? value.trim() : value,
+    sanitize: value => (typeof value === 'string' ? value.trim() : value),
   },
   options: {
     required: false,
@@ -153,10 +141,7 @@ const analyzeVideoSchema: ValidationSchema<AnalyzeVideoRequest> = {
  * Request validation using shared validation utility
  */
 function validateRequest(data: any): { isValid: boolean; errors: string[] } {
-  const result = validateRequestBody<AnalyzeVideoRequest>(
-    data,
-    analyzeVideoSchema,
-  );
+  const result = validateRequestBody<AnalyzeVideoRequest>(data, analyzeVideoSchema);
   return {
     isValid: result.isValid,
     errors: result.errors,
@@ -179,10 +164,7 @@ async function checkRateLimit(identifier: string): Promise<boolean> {
 /**
  * Get video from cache
  */
-async function getCachedVideo(
-  supabase: any,
-  videoId: string,
-): Promise<VideoMetadata | null> {
+async function getCachedVideo(supabase: any, videoId: string): Promise<VideoMetadata | null> {
   try {
     const { data, error } = await supabase
       .from('youtube_videos')
@@ -195,8 +177,7 @@ async function getCachedVideo(
     // Check if cache is still valid (24 hours)
     const lastRefreshed = new Date(data.last_refreshed_at || data.created_at);
     const now = new Date();
-    const hoursSinceRefresh = (now.getTime() - lastRefreshed.getTime()) /
-      (1000 * 60 * 60);
+    const hoursSinceRefresh = (now.getTime() - lastRefreshed.getTime()) / (1000 * 60 * 60);
 
     if (hoursSinceRefresh > 24) {
       return null; // Cache expired
@@ -224,14 +205,10 @@ async function getCachedVideo(
 /**
  * Save video to cache
  */
-async function cacheVideo(
-  supabase: any,
-  metadata: VideoMetadata,
-): Promise<void> {
+async function cacheVideo(supabase: any, metadata: VideoMetadata): Promise<void> {
   try {
-    const { error } = await supabase
-      .from('youtube_videos')
-      .upsert({
+    const { error } = await supabase.from('youtube_videos').upsert(
+      {
         video_id: metadata.videoId,
         title: metadata.title,
         description: metadata.description,
@@ -246,9 +223,11 @@ async function cacheVideo(
           tags: metadata.tags,
         },
         last_refreshed_at: new Date().toISOString(),
-      }, {
+      },
+      {
         onConflict: 'video_id',
-      });
+      }
+    );
 
     if (error) {
       console.error('Failed to cache video:', error);
@@ -262,7 +241,7 @@ async function cacheVideo(
  * Fetch video metadata from YouTube API
  */
 async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
-  const apiKey = Deno.env.get('YOUTUBE_API_KEY');
+  const apiKey = denoEnv.get('YOUTUBE_API_KEY');
   if (!apiKey) {
     throw new Error('YouTube API key not configured');
   }
@@ -273,14 +252,11 @@ async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
     key: apiKey,
   });
 
-  const response = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?${params}`,
-    {
-      headers: {
-        'Accept': 'application/json',
-      },
+  const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params}`, {
+    headers: {
+      Accept: 'application/json',
     },
-  );
+  });
 
   if (!response.ok) {
     const error = await response.text();
@@ -311,14 +287,9 @@ async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
     channelName: snippet.channelTitle,
     publishedAt: snippet.publishedAt,
     durationSeconds: parseDuration(contentDetails.duration),
-    thumbnailUrl: snippet.thumbnails?.high?.url ||
-      snippet.thumbnails?.default?.url,
-    viewCount: statistics?.viewCount
-      ? parseInt(statistics.viewCount, 10)
-      : undefined,
-    likeCount: statistics?.likeCount
-      ? parseInt(statistics.likeCount, 10)
-      : undefined,
+    thumbnailUrl: snippet.thumbnails?.high?.url || snippet.thumbnails?.default?.url,
+    viewCount: statistics?.viewCount ? parseInt(statistics.viewCount, 10) : undefined,
+    likeCount: statistics?.likeCount ? parseInt(statistics.likeCount, 10) : undefined,
     tags: snippet.tags,
   };
 }
@@ -326,7 +297,7 @@ async function fetchVideoMetadata(videoId: string): Promise<VideoMetadata> {
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Generate a request ID for tracking
   const requestId = crypto.randomUUID();
 
@@ -337,12 +308,9 @@ serve(async (req) => {
 
   // Only allow POST requests
   if (req.method !== 'POST') {
-    return createCorsErrorResponse(
-      'Only POST method is allowed',
-      405,
-      requestId,
-      { allowedMethods: ['POST'] },
-    );
+    return createCorsErrorResponse('Only POST method is allowed', 405, requestId, {
+      allowedMethods: ['POST'],
+    });
   }
 
   try {
@@ -355,7 +323,7 @@ serve(async (req) => {
         ErrorType.VALIDATION_ERROR,
         'Invalid JSON in request body',
         undefined,
-        requestId,
+        requestId
       );
     }
 
@@ -366,7 +334,7 @@ serve(async (req) => {
         ErrorType.VALIDATION_ERROR,
         'Invalid request parameters',
         { errors: validation.errors },
-        requestId,
+        requestId
       );
     }
 
@@ -381,20 +349,20 @@ serve(async (req) => {
         ErrorType.RATE_LIMIT_ERROR,
         'Too many requests. Please try again later.',
         { retryAfter: 60 },
-        requestId,
+        requestId
       );
     }
 
     // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = denoEnv.get('SUPABASE_URL');
+    const supabaseServiceKey = denoEnv.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw createAppError(
         ErrorType.INTERNAL_ERROR,
         'Supabase configuration missing',
         undefined,
-        requestId,
+        requestId
       );
     }
 
@@ -442,7 +410,7 @@ serve(async (req) => {
         },
       },
       200,
-      requestId,
+      requestId
     );
   } catch (error: any) {
     // Log the error
@@ -460,7 +428,7 @@ serve(async (req) => {
           ErrorType.NOT_FOUND_ERROR,
           'The requested video was not found',
           { videoId: extractVideoId(requestData?.videoUrl || '') },
-          requestId,
+          requestId
         );
         return appError.toHttpResponse();
       }
@@ -470,7 +438,7 @@ serve(async (req) => {
           ErrorType.EXTERNAL_SERVICE_ERROR,
           'YouTube API quota exceeded. Please try again later.',
           undefined,
-          requestId,
+          requestId
         );
         return appError.toHttpResponse();
       }
@@ -480,7 +448,7 @@ serve(async (req) => {
           ErrorType.INTERNAL_ERROR,
           'Service configuration error',
           undefined,
-          requestId,
+          requestId
         );
         return appError.toHttpResponse();
       }

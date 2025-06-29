@@ -1,5 +1,6 @@
 // Enhanced health check with comprehensive service monitoring and error handling
 
+import { denoEnv } from '@/shared-deno-env';
 import { createClient } from '@supabase/supabase-js';
 import { serve } from 'std/http/server.ts';
 import Stripe from 'stripe';
@@ -78,16 +79,16 @@ class HealthChecker {
     // Initialize services
     try {
       this.supabase = createClient(
-        Deno.env.get('SUPABASE_URL') || '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+        denoEnv.get('SUPABASE_URL') || '',
+        denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || ''
       );
     } catch (error: any) {
       console.error('Failed to initialize Supabase client:', error);
     }
 
     try {
-      if (Deno.env.get('STRIPE_SECRET_KEY')) {
-        this.stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
+      if (denoEnv.get('STRIPE_SECRET_KEY')) {
+        this.stripe = new Stripe(denoEnv.get('STRIPE_SECRET_KEY')!, {
           apiVersion: '2023-10-16',
         });
       }
@@ -309,7 +310,7 @@ class HealthChecker {
     const startTime = Date.now();
 
     try {
-      const resendApiKey = Deno.env.get('RESEND_API_KEY');
+      const resendApiKey = denoEnv.get('RESEND_API_KEY');
 
       if (!resendApiKey) {
         return {
@@ -411,10 +412,10 @@ class HealthChecker {
    */
   getMetadata() {
     return {
-      region: Deno.env.get('DENO_REGION') || undefined,
-      buildVersion: Deno.env.get('APP_VERSION') || '0.1.0',
-      commitHash: Deno.env.get('VERCEL_GIT_COMMIT_SHA') || undefined,
-      deploymentTime: Deno.env.get('VERCEL_GIT_COMMIT_DATE') || undefined,
+      region: denoEnv.get('DENO_REGION') || undefined,
+      buildVersion: denoEnv.get('APP_VERSION') || '0.1.0',
+      commitHash: denoEnv.get('VERCEL_GIT_COMMIT_SHA') || undefined,
+      deploymentTime: denoEnv.get('VERCEL_GIT_COMMIT_DATE') || undefined,
     };
   }
 
@@ -467,8 +468,8 @@ class HealthChecker {
     return {
       status: overallStatus,
       timestamp: new Date().toISOString(),
-      version: Deno.env.get('APP_VERSION') || '0.1.0',
-      environment: Deno.env.get('NODE_ENV') || 'development',
+      version: denoEnv.get('APP_VERSION') || '0.1.0',
+      environment: denoEnv.get('NODE_ENV') || 'development',
       uptime: Date.now() - this.startTime,
       services,
       performance,
@@ -559,7 +560,7 @@ serve(async req => {
           error: {
             code: 'HEALTH_CHECK_FAILURE',
             message: error.message,
-            details: Deno.env.get('NODE_ENV') === 'development' ? error.stack : undefined,
+            details: denoEnv.get('NODE_ENV') === 'development' ? error.stack : undefined,
           },
         },
         null,

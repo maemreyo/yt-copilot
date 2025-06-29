@@ -1,8 +1,9 @@
 // Add video to user's watch history
 
-import { serve } from 'std/http/server.ts';
-import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '@/cors';
+import { denoEnv } from '@/shared-deno-env';
+import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
 
 /**
  * Request interface
@@ -45,9 +46,7 @@ const securityHeaders = {
 /**
  * Extract user from JWT token
  */
-async function extractUserFromRequest(
-  request: Request,
-): Promise<string | null> {
+async function extractUserFromRequest(request: Request): Promise<string | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -57,11 +56,14 @@ async function extractUserFromRequest(
     const token = authHeader.substring(7);
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -115,7 +117,7 @@ function validateRequest(data: any): { isValid: boolean; errors: string[] } {
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -142,9 +144,9 @@ serve(async (req) => {
         headers: {
           ...securityHeaders,
           ...corsHeaders,
-          'Allow': 'POST, OPTIONS',
+          Allow: 'POST, OPTIONS',
         },
-      },
+      }
     );
   }
 
@@ -163,7 +165,7 @@ serve(async (req) => {
         {
           status: 401,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
@@ -183,7 +185,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
@@ -202,13 +204,13 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
     // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = denoEnv.get('SUPABASE_URL');
+    const supabaseServiceKey = denoEnv.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !supabaseServiceKey) {
       throw new Error('Supabase configuration missing');
@@ -237,31 +239,33 @@ serve(async (req) => {
         {
           status: 404,
           headers: { ...securityHeaders, ...corsHeaders },
-        },
+        }
       );
     }
 
     // Check if video is completed
     let completed = false;
     if (requestData.progressSeconds && video.duration_seconds) {
-      completed =
-        requestData.progressSeconds >= (video.duration_seconds * 0.95);
+      completed = requestData.progressSeconds >= video.duration_seconds * 0.95;
     }
 
     // Upsert history record
     const { data: history, error: historyError } = await supabase
       .from('user_video_history')
-      .upsert({
-        user_id: userId,
-        video_id: video.id,
-        progress_seconds: requestData.progressSeconds || 0,
-        playback_rate: requestData.playbackRate || 1.0,
-        completed,
-        last_watched_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,video_id',
-        ignoreDuplicates: false,
-      })
+      .upsert(
+        {
+          user_id: userId,
+          video_id: video.id,
+          progress_seconds: requestData.progressSeconds || 0,
+          playback_rate: requestData.playbackRate || 1.0,
+          completed,
+          last_watched_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'user_id,video_id',
+          ignoreDuplicates: false,
+        }
+      )
       .select('id')
       .single();
 
@@ -269,7 +273,8 @@ serve(async (req) => {
       console.error('Failed to add to history:', historyError);
 
       // Check for specific errors
-      if (historyError.code === '23505') { // Unique violation
+      if (historyError.code === '23505') {
+        // Unique violation
         // Update existing record
         const { data: updateData, error: updateError } = await supabase
           .from('user_video_history')
@@ -301,7 +306,7 @@ serve(async (req) => {
           {
             status: 200,
             headers: { ...securityHeaders, ...corsHeaders },
-          },
+          }
         );
       }
 
@@ -321,7 +326,7 @@ serve(async (req) => {
       {
         status: 201,
         headers: { ...securityHeaders, ...corsHeaders },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Request failed:', error);
@@ -338,7 +343,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...securityHeaders, ...corsHeaders },
-      },
+      }
     );
   }
 });

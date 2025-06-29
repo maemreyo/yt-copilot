@@ -8,6 +8,7 @@ import { createAppError, ErrorType, handleUnknownError } from '@/shared-errors';
 
 import { AuditLogger } from '@/audit-logging';
 import database, { QueryHelper } from '@/database';
+import { denoEnv } from '@/shared-deno-env';
 
 /**
  * Stripe Webhook Handler Service
@@ -22,7 +23,7 @@ class StripeWebhookService {
 
   constructor() {
     // Initialize services
-    this.stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+    this.stripe = new Stripe(denoEnv.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
 
@@ -92,7 +93,7 @@ class StripeWebhookService {
         event = this.stripe.webhooks.constructEvent(
           rawBody,
           signature,
-          Deno.env.get('STRIPE_WEBHOOK_SECRET') || ''
+          denoEnv.get('STRIPE_WEBHOOK_SECRET') || ''
         );
       } catch (err: unknown) {
         const appError = handleUnknownError(err, requestId);

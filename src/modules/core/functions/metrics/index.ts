@@ -1,5 +1,6 @@
 // Application metrics and monitoring endpoint using Layer 1 & 2 utilities
 
+import { denoEnv } from '@/shared-deno-env';
 import { createClient } from '@supabase/supabase-js';
 import { serve } from 'std/http/server.ts';
 
@@ -142,8 +143,8 @@ class MetricsService {
   constructor() {
     this.startTime = Date.now();
     this.supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || '',
       {
         auth: { persistSession: false },
         global: {
@@ -709,7 +710,7 @@ serve(async req => {
         error: {
           code: 'METRICS_COLLECTION_ERROR',
           message: 'Failed to collect metrics',
-          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
+          details: denoEnv.get('NODE_ENV') === 'development' ? error.message : undefined,
         },
         timestamp: new Date().toISOString(),
       }),

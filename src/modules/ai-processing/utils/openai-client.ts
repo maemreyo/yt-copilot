@@ -1,13 +1,7 @@
 import { createAppError, ErrorType } from '@/errors';
 import { Logger } from '@/logging';
-import type {
-  BiasIndicator,
-  ContentAnalysis,
-  Fact,
-  Opinion,
-  SentimentScore,
-  VideoSummaryContent,
-} from '../types';
+import { denoEnv } from '@/shared-deno-env';
+import type { ContentAnalysis, VideoSummaryContent } from '../types';
 
 const logger = new Logger({
   service: 'openai-client',
@@ -15,12 +9,10 @@ const logger = new Logger({
 });
 
 // Configuration
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini';
-const OPENAI_MAX_TOKENS = parseInt(Deno.env.get('OPENAI_MAX_TOKENS') || '2000');
-const OPENAI_TEMPERATURE = parseFloat(
-  Deno.env.get('OPENAI_TEMPERATURE') || '0.7',
-);
+const OPENAI_API_KEY = denoEnv.get('OPENAI_API_KEY');
+const OPENAI_MODEL = denoEnv.get('OPENAI_MODEL') || 'gpt-4o-mini';
+const OPENAI_MAX_TOKENS = parseInt(denoEnv.get('OPENAI_MAX_TOKENS') || '2000');
+const OPENAI_TEMPERATURE = parseFloat(denoEnv.get('OPENAI_TEMPERATURE') || '0.7');
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant';
@@ -61,7 +53,7 @@ export class OpenAIClient {
       temperature?: number;
       maxTokens?: number;
       responseFormat?: { type: 'json_object' };
-    } = {},
+    } = {}
   ): Promise<{ response: string; tokensUsed: number }> {
     const timer = logger.startTimer();
 
@@ -80,7 +72,7 @@ export class OpenAIClient {
       const response = await fetch(this.baseUrl, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
@@ -91,7 +83,7 @@ export class OpenAIClient {
         throw createAppError(
           ErrorType.EXTERNAL_SERVICE_ERROR,
           `OpenAI API error: ${error.error?.message || 'Unknown error'}`,
-          { status: response.status, error },
+          { status: response.status, error }
         );
       }
 
@@ -122,19 +114,12 @@ export class OpenAIClient {
     title: string,
     transcript: string,
     summaryType: 'brief' | 'detailed' | 'bullet_points',
-    language: string = 'en',
+    language: string = 'en'
   ): Promise<{ summary: VideoSummaryContent; tokensUsed: number }> {
     logger.info('Generating video summary', { title, summaryType, language });
 
-    const systemPrompt = this.getSummarizationSystemPrompt(
-      summaryType,
-      language,
-    );
-    const userPrompt = this.getSummarizationUserPrompt(
-      title,
-      transcript,
-      summaryType,
-    );
+    const systemPrompt = this.getSummarizationSystemPrompt(summaryType, language);
+    const userPrompt = this.getSummarizationUserPrompt(title, transcript, summaryType);
 
     const messages: OpenAIMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -155,29 +140,22 @@ export class OpenAIClient {
         summary: parsed.summary || '',
         key_points: parsed.key_points || [],
         topics: parsed.topics || [],
-        duration_estimate: parsed.duration_estimate ||
-          Math.ceil(parsed.summary.split(' ').length / 200),
+        duration_estimate:
+          parsed.duration_estimate || Math.ceil(parsed.summary.split(' ').length / 200),
         generated_at: new Date().toISOString(),
       };
 
       return { summary, tokensUsed };
     } catch (error: any) {
       logger.error('Failed to parse summary response', { error, response });
-      throw createAppError(
-        ErrorType.INTERNAL_ERROR,
-        'Failed to parse AI summary response',
-      );
+      throw createAppError(ErrorType.INTERNAL_ERROR, 'Failed to parse AI summary response');
     }
   }
 
-  private getSummarizationSystemPrompt(
-    summaryType: string,
-    language: string,
-  ): string {
+  private getSummarizationSystemPrompt(summaryType: string, language: string): string {
     const languageName = language === 'vi' ? 'Vietnamese' : 'English';
 
-    const basePrompt =
-      `You are an expert video content summarizer. Create summaries in ${languageName}.
+    const basePrompt = `You are an expert video content summarizer. Create summaries in ${languageName}.
 Always respond with valid JSON matching this structure:
 {
   "summary": "main summary text",
@@ -188,26 +166,23 @@ Always respond with valid JSON matching this structure:
 
     const typeSpecific = {
       brief: 'Create a concise 2-3 sentence summary capturing the main idea.',
-      detailed:
-        'Create a comprehensive summary with context and important details.',
-      bullet_points:
-        'Focus on creating detailed bullet points for key_points field.',
+      detailed: 'Create a comprehensive summary with context and important details.',
+      bullet_points: 'Focus on creating detailed bullet points for key_points field.',
     };
 
-    return `${basePrompt}\n${
-      typeSpecific[summaryType as keyof typeof typeSpecific]
-    }`;
+    return `${basePrompt}\n${typeSpecific[summaryType as keyof typeof typeSpecific]}`;
   }
 
   private getSummarizationUserPrompt(
     title: string,
     transcript: string,
-    summaryType: string,
+    summaryType: string
   ): string {
     const maxTranscriptLength = summaryType === 'brief' ? 5000 : 10000;
-    const truncatedTranscript = transcript.length > maxTranscriptLength
-      ? transcript.substring(0, maxTranscriptLength) + '...[truncated]'
-      : transcript;
+    const truncatedTranscript =
+      transcript.length > maxTranscriptLength
+        ? transcript.substring(0, maxTranscriptLength) + '...[truncated]'
+        : transcript;
 
     return `Video Title: "${title}"
 
@@ -224,7 +199,7 @@ Create a ${summaryType} summary of this video content.`;
   async analyzeContent(
     transcript: string,
     analysisType: 'fact_opinion' | 'sentiment' | 'bias',
-    segments?: number[],
+    segments?: number[]
   ): Promise<{ analysis: ContentAnalysis; tokensUsed: number }> {
     logger.info('Analyzing content', {
       analysisType,
@@ -232,11 +207,7 @@ Create a ${summaryType} summary of this video content.`;
     });
 
     const systemPrompt = this.getAnalysisSystemPrompt(analysisType);
-    const userPrompt = this.getAnalysisUserPrompt(
-      transcript,
-      analysisType,
-      segments,
-    );
+    const userPrompt = this.getAnalysisUserPrompt(transcript, analysisType, segments);
 
     const messages: OpenAIMessage[] = [
       { role: 'system', content: systemPrompt },
@@ -256,8 +227,7 @@ Create a ${summaryType} summary of this video content.`;
       const analysis: ContentAnalysis = {
         facts: parsed.facts || [],
         opinions: parsed.opinions || [],
-        sentiment: parsed.sentiment ||
-          { overall: 'neutral', positive: 0, negative: 0, neutral: 1 },
+        sentiment: parsed.sentiment || { overall: 'neutral', positive: 0, negative: 0, neutral: 1 },
         bias_indicators: parsed.bias_indicators,
         confidence_score: parsed.confidence_score || 0.7,
       };
@@ -265,16 +235,12 @@ Create a ${summaryType} summary of this video content.`;
       return { analysis, tokensUsed };
     } catch (error: any) {
       logger.error('Failed to parse analysis response', { error, response });
-      throw createAppError(
-        ErrorType.INTERNAL_ERROR,
-        'Failed to parse AI analysis response',
-      );
+      throw createAppError(ErrorType.INTERNAL_ERROR, 'Failed to parse AI analysis response');
     }
   }
 
   private getAnalysisSystemPrompt(analysisType: string): string {
-    const basePrompt =
-      `You are an expert content analyst specializing in critical thinking and media literacy.
+    const basePrompt = `You are an expert content analyst specializing in critical thinking and media literacy.
 Always respond with valid JSON.`;
 
     const typeSpecific = {
@@ -307,15 +273,13 @@ Response structure:
 }`,
     };
 
-    return `${basePrompt}\n${
-      typeSpecific[analysisType as keyof typeof typeSpecific]
-    }`;
+    return `${basePrompt}\n${typeSpecific[analysisType as keyof typeof typeSpecific]}`;
   }
 
   private getAnalysisUserPrompt(
     transcript: string,
     analysisType: string,
-    segments?: number[],
+    segments?: number[]
   ): string {
     const maxLength = 8000;
     let content = transcript;
@@ -324,9 +288,7 @@ Response structure:
     if (segments && segments.length > 0) {
       // This assumes transcript has segment markers or is an array
       // Adjust based on actual transcript format
-      content = `[Analyzing specific segments: ${
-        segments.join(', ')
-      }]\n${transcript}`;
+      content = `[Analyzing specific segments: ${segments.join(', ')}]\n${transcript}`;
     }
 
     if (content.length > maxLength) {
@@ -342,20 +304,18 @@ Response structure:
 
   async generateCounterPerspectives(
     topic: string,
-    currentPerspective: string,
+    currentPerspective: string
   ): Promise<{ suggestions: string[]; tokensUsed: number }> {
     const messages: OpenAIMessage[] = [
       {
         role: 'system',
-        content:
-          `You are a critical thinking assistant helping users explore different perspectives.
+        content: `You are a critical thinking assistant helping users explore different perspectives.
 Suggest 3-5 search queries or topics that would help someone find alternative viewpoints or counter-arguments.
 Respond with a JSON array of strings.`,
       },
       {
         role: 'user',
-        content:
-          `Topic: "${topic}"\nCurrent perspective: "${currentPerspective}"\n\nSuggest searches for alternative viewpoints.`,
+        content: `Topic: "${topic}"\nCurrent perspective: "${currentPerspective}"\n\nSuggest searches for alternative viewpoints.`,
       },
     ];
 
@@ -367,9 +327,7 @@ Respond with a JSON array of strings.`,
 
     try {
       const parsed = JSON.parse(response);
-      const suggestions = Array.isArray(parsed)
-        ? parsed
-        : (parsed.suggestions || []);
+      const suggestions = Array.isArray(parsed) ? parsed : parsed.suggestions || [];
       return { suggestions, tokensUsed };
     } catch (error: any) {
       logger.error('Failed to parse suggestions', { error, response });
@@ -381,7 +339,7 @@ Respond with a JSON array of strings.`,
     videoTitle: string,
     transcript: string,
     mainTopics?: string[],
-    originalPerspective?: string,
+    originalPerspective?: string
   ): Promise<{
     counterPerspectives: any[];
     searchKeywords: string[];
@@ -395,13 +353,13 @@ Respond with a JSON array of strings.`,
 
     // Prepare transcript for analysis
     const maxTranscriptLength = 5000;
-    const truncatedTranscript = transcript.length > maxTranscriptLength
-      ? transcript.substring(0, maxTranscriptLength) + '...[truncated]'
-      : transcript;
+    const truncatedTranscript =
+      transcript.length > maxTranscriptLength
+        ? transcript.substring(0, maxTranscriptLength) + '...[truncated]'
+        : transcript;
 
     // Create system prompt
-    const systemPrompt =
-      `You are an expert in critical thinking and media literacy.
+    const systemPrompt = `You are an expert in critical thinking and media literacy.
 Your task is to identify the main perspective in the content and suggest credible counter-perspectives.
 Always respond with valid JSON matching this structure:
 {
@@ -433,8 +391,7 @@ Always respond with valid JSON matching this structure:
     }
 
     userPrompt += `Transcript:\n${truncatedTranscript}\n\n`;
-    userPrompt +=
-      `Identify the main perspective in this content and suggest 3-5 credible counter-perspectives.
+    userPrompt += `Identify the main perspective in this content and suggest 3-5 credible counter-perspectives.
 Focus on academic, journalistic, or expert sources that would offer balanced alternative viewpoints.
 If no clear perspective is detected, suggest diverse viewpoints on the main topics.`;
 
@@ -465,7 +422,7 @@ If no clear perspective is detected, suggest diverse viewpoints on the main topi
       });
       throw createAppError(
         ErrorType.INTERNAL_ERROR,
-        'Failed to parse AI counter-perspectives response',
+        'Failed to parse AI counter-perspectives response'
       );
     }
   }
@@ -481,7 +438,7 @@ If no clear perspective is detected, suggest diverse viewpoints on the main topi
     const outputTokens = tokensUsed * 0.3;
 
     const inputCost = (inputTokens / 1_000_000) * 0.15;
-    const outputCost = (outputTokens / 1_000_000) * 0.60;
+    const outputCost = (outputTokens / 1_000_000) * 0.6;
 
     return Math.round((inputCost + outputCost) * 10000) / 10000; // Round to 4 decimal places
   }

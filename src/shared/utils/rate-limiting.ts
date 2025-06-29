@@ -1,8 +1,41 @@
 // Complete rate limiting implementation with sliding window, Redis support, and comprehensive middleware
 
-import { environment } from '../config/environment';
-import { observabilityConfig } from '../config/observability';
 import { AppError, ErrorCode } from './errors';
+
+// Import environment and observability configuration
+// Using try-catch to handle both ESM and CommonJS environments
+let environment: any = {
+  isProduction: () => false,
+};
+
+let observabilityConfig: any = {
+  rateLimiting: {
+    requestsPerMinute: 60,
+    windowMs: 60000,
+  },
+};
+
+try {
+  const envModule = require('../config/environment');
+  environment = envModule.environment;
+
+  const obsModule = require('../config/observability');
+  observabilityConfig = obsModule.observabilityConfig;
+} catch (e) {
+  try {
+    // For ESM environments
+    Promise.all([import('../config/environment'), import('../config/observability')])
+      .then(([envModule, obsModule]) => {
+        environment = envModule.environment;
+        observabilityConfig = obsModule.observabilityConfig;
+      })
+      .catch(() => {
+        console.warn('Could not import config modules, using defaults');
+      });
+  } catch (e) {
+    console.warn('Could not import config modules, using defaults');
+  }
+}
 
 /**
  * Rate limit configuration interface
@@ -60,7 +93,7 @@ interface RateLimitRecord {
  */
 export class MemoryRateLimitStore implements RateLimitStore {
   private store = new Map<string, RateLimitRecord>();
-  private cleanupInterval: NodeJS.Timeout;
+  private cleanupInterval: number | ReturnType<typeof setInterval>;
 
   constructor(cleanupIntervalMs: number = 60000) {
     // Cleanup expired records every minute

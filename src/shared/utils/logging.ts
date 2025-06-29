@@ -1,6 +1,33 @@
 // Comprehensive structured logging system with context, formatting, and external integrations
 
-import { env, environment } from '../config/environment';
+// Import environment configuration
+// Using try-catch to handle both ESM and CommonJS environments
+let env: any = {};
+let environment: any = {
+  isDevelopment: () => false,
+  isProduction: () => false,
+  isTest: () => false,
+};
+
+try {
+  const envModule = require('../config/environment');
+  env = envModule.env;
+  environment = envModule.environment;
+} catch (e) {
+  try {
+    // For ESM environments
+    import('../config/environment')
+      .then(module => {
+        env = module.env;
+        environment = module.environment;
+      })
+      .catch(() => {
+        console.warn('Could not import environment config, using defaults');
+      });
+  } catch (e) {
+    console.warn('Could not import environment config, using defaults');
+  }
+}
 
 /**
  * Log levels enum
@@ -266,8 +293,12 @@ export class FileOutput implements LogOutput {
 
       // In Edge Functions/Deno environment, we might not have file system access
       // This would be implemented differently in a Node.js environment
-      if (typeof Deno !== 'undefined' && Deno.writeTextFile) {
-        await Deno.writeTextFile(this.filepath, formatted, { append: true });
+      if (
+        typeof globalThis !== 'undefined' &&
+        'Deno' in globalThis &&
+        typeof (globalThis as any).Deno?.writeTextFile === 'function'
+      ) {
+        await (globalThis as any).Deno.writeTextFile(this.filepath, formatted, { append: true });
       } else {
         // Fallback to console in environments without file system
         console.log(formatted.trim());
@@ -406,8 +437,8 @@ export class PerformanceTracker {
     this.startTime = performance.now();
 
     // Get initial memory usage if available
-    if (typeof performance !== 'undefined' && performance.memory) {
-      this.startMemory = performance.memory.usedJSHeapSize;
+    if (typeof performance !== 'undefined' && typeof (performance as any).memory !== 'undefined') {
+      this.startMemory = (performance as any).memory?.usedJSHeapSize;
     }
   }
 
@@ -415,8 +446,8 @@ export class PerformanceTracker {
     const duration = Math.round(performance.now() - this.startTime);
 
     let memory: number | undefined;
-    if (this.startMemory !== undefined && performance.memory) {
-      memory = performance.memory.usedJSHeapSize - this.startMemory;
+    if (this.startMemory !== undefined && typeof (performance as any).memory !== 'undefined') {
+      memory = (performance as any).memory?.usedJSHeapSize - this.startMemory;
     }
 
     return { duration, memory };

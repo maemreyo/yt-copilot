@@ -5,6 +5,7 @@ import { AppError, handleUnknownError } from '@/shared-errors';
 import { createClient } from '@supabase/supabase-js';
 import { serve } from 'std/http/server.ts';
 import Stripe from 'stripe';
+import { getEnv } from '../../../../shared/utils/env-utils';
 
 /**
  * Checkout session request interface
@@ -41,21 +42,17 @@ class CheckoutService {
   private supabase: any;
 
   constructor() {
-    this.stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+    this.stripe = new Stripe(getEnv('STRIPE_SECRET_KEY'), {
       apiVersion: '2023-10-16',
       httpClient: Stripe.createFetchHttpClient(),
     });
 
-    this.supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      {
-        auth: { persistSession: false },
-        global: {
-          headers: { 'x-application-name': 'checkout-service' },
-        },
-      }
-    );
+    this.supabase = createClient(getEnv('SUPABASE_URL'), getEnv('SUPABASE_SERVICE_ROLE_KEY'), {
+      auth: { persistSession: false },
+      global: {
+        headers: { 'x-application-name': 'checkout-service' },
+      },
+    });
   }
 
   /**
@@ -214,8 +211,8 @@ class CheckoutService {
         mode: 'subscription',
         success_url:
           request.successUrl ||
-          `${Deno.env.get('APP_URL')}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: request.cancelUrl || `${Deno.env.get('APP_URL')}/billing/cancel`,
+          `${getEnv('APP_URL')}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: request.cancelUrl || `${getEnv('APP_URL')}/billing/cancel`,
         subscription_data: {
           metadata: {
             supabase_user_id: userId,
@@ -404,10 +401,7 @@ async function extractUserFromRequest(
 
     const token = authHeader.substring(7);
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || ''
-    );
+    const supabase = createClient(getEnv('SUPABASE_URL'), getEnv('SUPABASE_ANON_KEY'));
 
     const {
       data: { user },

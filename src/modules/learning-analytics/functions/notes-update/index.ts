@@ -1,12 +1,8 @@
-import { serve } from 'std/http/server.ts';
+import { denoEnv } from '@/shared-deno-env';
 import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
+import type { ErrorResponse, SuccessResponse } from '../../_shared/types.ts';
 import { UpdateNoteSchema } from '../../_shared/validators.ts';
-import type {
-  ErrorResponse,
-  SuccessResponse,
-  UpdateNoteRequest,
-  VideoNote,
-} from '../../_shared/types.ts';
 
 // Response headers
 const corsHeaders = {
@@ -23,9 +19,7 @@ const securityHeaders = {
 };
 
 // Extract user from JWT
-async function extractUser(
-  request: Request,
-): Promise<{ id: string; email: string } | null> {
+async function extractUser(request: Request): Promise<{ id: string; email: string } | null> {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -34,11 +28,14 @@ async function extractUser(
 
     const token = authHeader.substring(7);
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_ANON_KEY') || '',
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_ANON_KEY') || ''
     );
 
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
     if (error || !user) {
       return null;
     }
@@ -75,13 +72,10 @@ serve(async (request: Request) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 405,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 405,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 
   try {
@@ -96,13 +90,10 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Authenticate user
@@ -116,13 +107,10 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 401,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 401,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Parse and validate request body
@@ -139,22 +127,19 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 400,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     const updateData = validation.data;
 
     // Initialize Supabase client
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
-      { auth: { persistSession: false } },
+      denoEnv.get('SUPABASE_URL') || '',
+      denoEnv.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+      { auth: { persistSession: false } }
     );
 
     // Get existing note
@@ -175,13 +160,10 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 404,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 404,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Prepare update object
@@ -212,7 +194,8 @@ serve(async (request: Request) => {
       .update(updates)
       .eq('id', noteId)
       .eq('user_id', user.id)
-      .select(`
+      .select(
+        `
         *,
         youtube_videos!video_id(
           id,
@@ -221,7 +204,8 @@ serve(async (request: Request) => {
           thumbnail_url,
           duration
         )
-      `)
+      `
+      )
       .single();
 
     if (updateError) {
@@ -236,13 +220,10 @@ serve(async (request: Request) => {
         },
       };
 
-      return new Response(
-        JSON.stringify(errorResponse),
-        {
-          status: 500,
-          headers: { ...corsHeaders, ...securityHeaders },
-        },
-      );
+      return new Response(JSON.stringify(errorResponse), {
+        status: 500,
+        headers: { ...corsHeaders, ...securityHeaders },
+      });
     }
 
     // Return success response
@@ -251,13 +232,10 @@ serve(async (request: Request) => {
       data: updated,
     };
 
-    return new Response(
-      JSON.stringify(successResponse),
-      {
-        status: 200,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(successResponse), {
+      status: 200,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   } catch (error: any) {
     console.error('Unexpected error:', error);
 
@@ -269,12 +247,9 @@ serve(async (request: Request) => {
       },
     };
 
-    return new Response(
-      JSON.stringify(errorResponse),
-      {
-        status: 500,
-        headers: { ...corsHeaders, ...securityHeaders },
-      },
-    );
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, ...securityHeaders },
+    });
   }
 });

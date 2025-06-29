@@ -1,5 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
 import { Logger } from '@/logging';
+import { denoEnv } from '@/shared-deno-env';
+import { createClient } from '@supabase/supabase-js';
 import type {
   AITranslationRecord,
   ContentAnalysisRecord,
@@ -11,10 +12,10 @@ const logger = new Logger({ service: 'ai-cache-manager' });
 
 // Cache TTL configuration (in seconds)
 const CACHE_TTL = {
-  translation: parseInt(Deno.env.get('TRANSLATION_CACHE_TTL') || '2592000'), // 30 days
-  summary: parseInt(Deno.env.get('SUMMARY_CACHE_TTL') || '604800'), // 7 days
-  analysis: parseInt(Deno.env.get('ANALYSIS_CACHE_TTL') || '604800'), // 7 days
-  counterpoints: parseInt(Deno.env.get('COUNTERPOINTS_CACHE_TTL') || '604800'), // 7 days
+  translation: parseInt(denoEnv.get('TRANSLATION_CACHE_TTL') || '2592000'), // 30 days
+  summary: parseInt(denoEnv.get('SUMMARY_CACHE_TTL') || '604800'), // 7 days
+  analysis: parseInt(denoEnv.get('ANALYSIS_CACHE_TTL') || '604800'), // 7 days
+  counterpoints: parseInt(denoEnv.get('COUNTERPOINTS_CACHE_TTL') || '604800'), // 7 days
 };
 
 export class AICacheManager {
@@ -28,7 +29,7 @@ export class AICacheManager {
     originalText: string,
     sourceLang: string,
     targetLang: string,
-    provider: string,
+    provider: string
   ): Promise<AITranslationRecord | null> {
     try {
       const { data, error } = await this.supabase
@@ -81,7 +82,7 @@ export class AICacheManager {
     sourceLang: string,
     targetLang: string,
     provider: string,
-    context?: string,
+    context?: string
   ): Promise<void> {
     try {
       // First, try to update existing cache entry
@@ -100,17 +101,15 @@ export class AICacheManager {
 
       if (updateError) {
         // If update failed, insert new record
-        const { error: insertError } = await this.supabase
-          .from('ai_translations')
-          .insert({
-            user_id: userId,
-            original_text: originalText,
-            translated_text: translatedText,
-            source_lang: sourceLang,
-            target_lang: targetLang,
-            provider,
-            context,
-          });
+        const { error: insertError } = await this.supabase.from('ai_translations').insert({
+          user_id: userId,
+          original_text: originalText,
+          translated_text: translatedText,
+          source_lang: sourceLang,
+          target_lang: targetLang,
+          provider,
+          context,
+        });
 
         if (insertError) {
           logger.error('Failed to cache translation', { error: insertError });
@@ -129,10 +128,7 @@ export class AICacheManager {
   }
 
   private async deleteCachedTranslation(id: string): Promise<void> {
-    await this.supabase
-      .from('ai_translations')
-      .delete()
-      .eq('id', id);
+    await this.supabase.from('ai_translations').delete().eq('id', id);
   }
 
   // ============================================
@@ -142,7 +138,7 @@ export class AICacheManager {
   async getCachedSummary(
     videoId: string,
     summaryType: string,
-    language: string,
+    language: string
   ): Promise<VideoSummaryRecord | null> {
     try {
       const { data, error } = await this.supabase
@@ -193,7 +189,7 @@ export class AICacheManager {
     language: string,
     content: any,
     model: string,
-    tokensUsed?: number,
+    tokensUsed?: number
   ): Promise<void> {
     try {
       // First, try to update existing cache entry
@@ -212,17 +208,15 @@ export class AICacheManager {
 
       if (updateError) {
         // If update failed, insert new record
-        const { error: insertError } = await this.supabase
-          .from('video_summaries')
-          .insert({
-            video_id: videoId,
-            user_id: userId,
-            summary_type: summaryType,
-            language,
-            content,
-            model,
-            tokens_used: tokensUsed,
-          });
+        const { error: insertError } = await this.supabase.from('video_summaries').insert({
+          video_id: videoId,
+          user_id: userId,
+          summary_type: summaryType,
+          language,
+          content,
+          model,
+          tokens_used: tokensUsed,
+        });
 
         if (insertError) {
           logger.error('Failed to cache summary', { error: insertError });
@@ -242,10 +236,7 @@ export class AICacheManager {
   }
 
   private async deleteCachedSummary(id: string): Promise<void> {
-    await this.supabase
-      .from('video_summaries')
-      .delete()
-      .eq('id', id);
+    await this.supabase.from('video_summaries').delete().eq('id', id);
   }
 
   // ============================================
@@ -254,7 +245,7 @@ export class AICacheManager {
 
   async getCachedAnalysis(
     videoId: string,
-    analysisType: string,
+    analysisType: string
   ): Promise<ContentAnalysisRecord | null> {
     try {
       const { data, error } = await this.supabase
@@ -304,7 +295,7 @@ export class AICacheManager {
     confidenceScore: number,
     model: string,
     segments?: number[],
-    tokensUsed?: number,
+    tokensUsed?: number
   ): Promise<void> {
     try {
       // First, try to update existing cache entry
@@ -323,18 +314,16 @@ export class AICacheManager {
 
       if (updateError) {
         // If update failed, insert new record
-        const { error: insertError } = await this.supabase
-          .from('content_analysis')
-          .insert({
-            video_id: videoId,
-            user_id: userId,
-            analysis_type: analysisType,
-            analysis_data: analysisData,
-            confidence_score: confidenceScore,
-            model,
-            segments,
-            tokens_used: tokensUsed,
-          });
+        const { error: insertError } = await this.supabase.from('content_analysis').insert({
+          video_id: videoId,
+          user_id: userId,
+          analysis_type: analysisType,
+          analysis_data: analysisData,
+          confidence_score: confidenceScore,
+          model,
+          segments,
+          tokens_used: tokensUsed,
+        });
 
         if (insertError) {
           logger.error('Failed to cache analysis', { error: insertError });
@@ -353,19 +342,14 @@ export class AICacheManager {
   }
 
   private async deleteCachedAnalysis(id: string): Promise<void> {
-    await this.supabase
-      .from('content_analysis')
-      .delete()
-      .eq('id', id);
+    await this.supabase.from('content_analysis').delete().eq('id', id);
   }
 
   // ============================================
   // Counter-Perspectives Cache
   // ============================================
 
-  async getCachedCounterPerspectives(
-    videoId: string,
-  ): Promise<CounterPerspectiveRecord | null> {
+  async getCachedCounterPerspectives(videoId: string): Promise<CounterPerspectiveRecord | null> {
     try {
       const { data, error } = await this.supabase
         .from('counter_perspectives')
@@ -412,7 +396,7 @@ export class AICacheManager {
     counterPerspectives: any[],
     searchKeywords: string[],
     model: string,
-    tokensUsed?: number,
+    tokensUsed?: number
   ): Promise<void> {
     try {
       // First, try to update existing cache entry
@@ -431,18 +415,16 @@ export class AICacheManager {
 
       if (updateError) {
         // If update failed, insert new record
-        const { error: insertError } = await this.supabase
-          .from('counter_perspectives')
-          .insert({
-            video_id: videoId,
-            user_id: userId,
-            main_topics: mainTopics,
-            original_perspective: originalPerspective,
-            counter_perspectives: counterPerspectives,
-            search_keywords: searchKeywords,
-            model,
-            tokens_used: tokensUsed,
-          });
+        const { error: insertError } = await this.supabase.from('counter_perspectives').insert({
+          video_id: videoId,
+          user_id: userId,
+          main_topics: mainTopics,
+          original_perspective: originalPerspective,
+          counter_perspectives: counterPerspectives,
+          search_keywords: searchKeywords,
+          model,
+          tokens_used: tokensUsed,
+        });
 
         if (insertError) {
           logger.error('Failed to cache counter-perspectives', {
@@ -463,10 +445,7 @@ export class AICacheManager {
   }
 
   private async deleteCachedCounterPerspectives(id: string): Promise<void> {
-    await this.supabase
-      .from('counter_perspectives')
-      .delete()
-      .eq('id', id);
+    await this.supabase.from('counter_perspectives').delete().eq('id', id);
   }
 
   // ============================================
@@ -481,32 +460,19 @@ export class AICacheManager {
     totalSaved: number; // Estimated cost savings
   }> {
     try {
-      const [
-        translationsResult,
-        summariesResult,
-        analysesResult,
-        counterpointsResult,
-      ] = await Promise.all([
-        this.supabase
-          .from('ai_translations')
-          .select('id', { count: 'exact' })
-          .eq('user_id', userId),
+      const [translationsResult, summariesResult, analysesResult, counterpointsResult] =
+        await Promise.all([
+          this.supabase
+            .from('ai_translations')
+            .select('id', { count: 'exact' })
+            .eq('user_id', userId),
 
-        this.supabase
-          .from('video_summaries')
-          .select('tokens_used')
-          .eq('user_id', userId),
+          this.supabase.from('video_summaries').select('tokens_used').eq('user_id', userId),
 
-        this.supabase
-          .from('content_analysis')
-          .select('tokens_used')
-          .eq('user_id', userId),
+          this.supabase.from('content_analysis').select('tokens_used').eq('user_id', userId),
 
-        this.supabase
-          .from('counter_perspectives')
-          .select('tokens_used')
-          .eq('user_id', userId),
-      ]);
+          this.supabase.from('counter_perspectives').select('tokens_used').eq('user_id', userId),
+        ]);
 
       const translations = translationsResult.count || 0;
       const summaries = summariesResult.data?.length || 0;
@@ -518,11 +484,12 @@ export class AICacheManager {
       const avgTokenCost = 0.00000015; // $0.15 per 1M tokens
 
       const translationSavings = translations * 100 * avgTranslationCost; // Assume 100 chars avg
-      const tokenSavings = [
-        ...(summariesResult.data || []),
-        ...(analysesResult.data || []),
-        ...(counterpointsResult.data || []),
-      ].reduce((sum, item) => sum + (item.tokens_used || 0), 0) * avgTokenCost;
+      const tokenSavings =
+        [
+          ...(summariesResult.data || []),
+          ...(analysesResult.data || []),
+          ...(counterpointsResult.data || []),
+        ].reduce((sum, item) => sum + (item.tokens_used || 0), 0) * avgTokenCost;
 
       return {
         translations,
