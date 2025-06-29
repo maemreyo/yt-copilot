@@ -561,8 +561,9 @@ export class CacheManager {
         return value;
       }
     } catch (error: any) {
-      logger.warn('Primary cache get failed, trying fallback', error as Error, {
+      logger.warn('Primary cache get failed, trying fallback', {
         key,
+        error,
       });
     }
 
@@ -574,15 +575,16 @@ export class CacheManager {
         // Populate primary cache with fallback value
         if (value !== null) {
           this.primary.set(key, value).catch(err => {
-            logger.warn('Failed to populate primary cache from fallback', err, {
+            logger.warn('Failed to populate primary cache from fallback', {
               key,
+              err,
             });
           });
         }
 
         return value;
       } catch (error: any) {
-        logger.warn('Fallback cache get failed', error as Error, { key });
+        logger.warn('Fallback cache get failed', { key, error });
       }
     }
 
@@ -694,7 +696,7 @@ export class CacheMiddleware {
         logger.debug('Cache miss', { cacheKey });
         return null; // Continue to actual handler
       } catch (error: any) {
-        logger.warn('Cache middleware error', error as Error, { cacheKey });
+        logger.warn('Cache middleware error', { cacheKey, error });
         return null; // Continue to actual handler
       }
     };
@@ -749,7 +751,7 @@ export class CacheMiddleware {
         headers: newHeaders,
       });
     } catch (error: any) {
-      logger.warn('Failed to cache response', error as Error, { cacheKey });
+      logger.warn('Failed to cache response', { cacheKey, error });
       return response;
     }
   }

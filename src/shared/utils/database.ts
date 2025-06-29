@@ -300,7 +300,7 @@ export class QueryHelper {
 
       if (error) {
         const dbError = this.createDatabaseError(error, operationId, 'SELECT');
-        logger.error('Database select operation failed', {
+        logger.error('Database select operation failed', error, {
           operationId,
           table,
           error: error.message,
@@ -325,7 +325,7 @@ export class QueryHelper {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'SELECT');
 
-      logger.error('Database select operation error', {
+      logger.error('Database select operation error', error, {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -372,7 +372,7 @@ export class QueryHelper {
 
       if (error) {
         const dbError = this.createDatabaseError(error, operationId, 'INSERT');
-        logger.error('Database insert operation failed', {
+        logger.error('Database insert operation failed', error, {
           operationId,
           table,
           error: error.message,
@@ -392,7 +392,7 @@ export class QueryHelper {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'INSERT');
 
-      logger.error('Database insert operation error', {
+      logger.error('Database insert operation error', error, {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -439,7 +439,7 @@ export class QueryHelper {
 
       if (error) {
         const dbError = this.createDatabaseError(error, operationId, 'UPDATE');
-        logger.error('Database update operation failed', {
+        logger.error('Database update operation failed', error, {
           operationId,
           table,
           error: error.message,
@@ -459,7 +459,7 @@ export class QueryHelper {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'UPDATE');
 
-      logger.error('Database update operation error', {
+      logger.error('Database update operation error', error, {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -505,7 +505,7 @@ export class QueryHelper {
 
       if (error) {
         const dbError = this.createDatabaseError(error, operationId, 'DELETE');
-        logger.error('Database delete operation failed', {
+        logger.error('Database delete operation failed', error, {
           operationId,
           table,
           error: error.message,
@@ -525,7 +525,7 @@ export class QueryHelper {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'DELETE');
 
-      logger.error('Database delete operation error', {
+      logger.error('Database delete operation error', error, {
         operationId,
         table,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -559,7 +559,7 @@ export class QueryHelper {
 
       if (error) {
         const dbError = this.createDatabaseError(error, operationId, 'RPC');
-        logger.error('Database RPC operation failed', {
+        logger.error('Database RPC operation failed', error, {
           operationId,
           functionName,
           error: error.message,
@@ -579,7 +579,7 @@ export class QueryHelper {
       const duration = Date.now() - startTime;
       const dbError = this.createDatabaseError(error, operationId, 'RPC');
 
-      logger.error('Database RPC operation error', {
+      logger.error('Database RPC operation error', error, {
         operationId,
         functionName,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -604,7 +604,7 @@ export class QueryHelper {
     const code = this.mapErrorCode(error);
     const message = error?.message || 'Database operation failed';
 
-    return new DatabaseError(message, {
+    return new DatabaseError(message, error, {
       code,
       context: {
         ...this.context,
@@ -711,7 +711,7 @@ export class TransactionManager {
       return result;
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      logger.error('Transaction failed', {
+      logger.error('Transaction failed', error, {
         operationId,
         error: error instanceof Error ? error.message : 'Unknown error',
         duration,
