@@ -15,6 +15,7 @@ export enum ErrorType {
   EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR',
   DATABASE_ERROR = 'DATABASE_ERROR',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
+  PAYMENT_ERROR = 'PAYMENT_ERROR',
 }
 
 /**
@@ -29,6 +30,7 @@ const ERROR_STATUS_MAP: Record<ErrorType, number> = {
   [ErrorType.EXTERNAL_SERVICE_ERROR]: 502,
   [ErrorType.DATABASE_ERROR]: 500,
   [ErrorType.INTERNAL_ERROR]: 500,
+  [ErrorType.PAYMENT_ERROR]: 402,
 };
 
 /**

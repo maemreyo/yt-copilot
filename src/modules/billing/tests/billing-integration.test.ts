@@ -458,7 +458,7 @@ describe('Billing Module Integration Tests', () => {
     it('should complete full billing lifecycle', async () => {
       // 1. Create checkout session
       const checkoutResponse = await request(`${BASE_URL}/functions/v1`)
-        .post('/billing_checkout-session')
+        .post('/billing_create-checkout-session')
         .set('Authorization', `Bearer ${testUserToken}`)
         .send({
           priceId: 'price_test_pro_monthly',
@@ -534,7 +534,7 @@ describe('Billing Module Integration Tests', () => {
           .send({ returnUrl: 'http://localhost:3000/billing' }),
 
         request(`${BASE_URL}/functions/v1`)
-          .post('/billing_enhanced-checkout-session')
+          .post('/billing_create-checkout-session')
           .set('Authorization', `Bearer ${testUserToken}`)
           .send({
             priceId: 'price_test_basic_monthly',
@@ -561,7 +561,7 @@ describe('Billing Module Integration Tests', () => {
       const startTime = Date.now();
 
       const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 
@@ -582,7 +582,7 @@ describe('Billing Module Integration Tests', () => {
 
     it('should include proper request tracking', async () => {
       const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/billing_enhanced-get-subscription')
+        .get('/billing_get-subscription')
         .set('Authorization', `Bearer ${testUserToken}`)
         .expect(200);
 

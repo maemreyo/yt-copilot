@@ -10,6 +10,7 @@ export interface RateLimitConfig {
   requestsPerMinute: number;
   windowMs: number;
   keyGenerator?: (identifier: string) => string;
+  identifierExtractor?: (request: Request) => string;
   skipSuccessful?: boolean;
   skipFailed?: boolean;
   onLimitReached?: (identifier: string, limit: RateLimitInfo) => void;
@@ -284,7 +285,7 @@ export class RateLimiter {
    */
   createMiddleware() {
     return async (request: Request, identifier?: string): Promise<void> => {
-      const id = identifier || this.extractIdentifier(request);
+      const id = identifier || (this.config.identifierExtractor ? this.config.identifierExtractor(request) : this.extractIdentifier(request));
       const result = await this.checkLimit(id);
 
       if (!result.allowed) {
