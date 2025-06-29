@@ -186,16 +186,43 @@ export class AppError extends Error {
    * Convert error to API response format
    */
   toResponse() {
-    return {
-      error: {
-        code: this.code,
-        message: this.message,
-        ...(this.details && { details: this.details }),
-        ...(environment.isDevelopment() && { stack: this.stack }),
-      },
-      timestamp: this.timestamp,
-      ...(this.context?.requestId && { requestId: this.context.requestId }),
+    // Create the base error object
+    const errorObj: {
+      code: ErrorCode;
+      message: string;
+      details?: unknown;
+      stack?: string;
+    } = {
+      code: this.code,
+      message: this.message,
     };
+
+    // Conditionally add details if they exist
+    if (this.details) {
+      errorObj.details = this.details;
+    }
+
+    // Conditionally add stack trace in development
+    if (environment.isDevelopment()) {
+      errorObj.stack = this.stack;
+    }
+
+    // Create the response object
+    const response: {
+      error: typeof errorObj;
+      timestamp: string;
+      requestId?: string;
+    } = {
+      error: errorObj,
+      timestamp: this.timestamp,
+    };
+
+    // Conditionally add requestId if it exists
+    if (this.context?.requestId) {
+      response.requestId = this.context.requestId;
+    }
+
+    return response;
   }
 
   /**
@@ -362,7 +389,19 @@ export class PaymentError extends AppError {
  */
 export class ErrorLogger {
   private static formatLogEntry(error: AppError, additionalContext?: Record<string, unknown>) {
-    return {
+    // Create the log entry object
+    const logEntry: {
+      timestamp: string;
+      level: string;
+      code: ErrorCode;
+      message: string;
+      statusCode: number;
+      severity: ErrorSeverity;
+      retryable: boolean;
+      context: Record<string, unknown>;
+      details?: unknown;
+      stack?: string;
+    } = {
       timestamp: error.timestamp,
       level: error.shouldLog() ? 'error' : 'warn',
       code: error.code,
@@ -370,10 +409,20 @@ export class ErrorLogger {
       statusCode: error.statusCode,
       severity: error.severity,
       retryable: error.retryable,
-      context: { ...error.context, ...additionalContext },
-      ...(error.details && { details: error.details }),
-      ...(error.stack && environment.isDevelopment() && { stack: error.stack }),
+      context: { ...(error.context || {}), ...(additionalContext || {}) },
     };
+
+    // Add details if they exist
+    if (error.details) {
+      logEntry.details = error.details;
+    }
+
+    // Add stack trace in development if it exists
+    if (error.stack && environment.isDevelopment()) {
+      logEntry.stack = error.stack;
+    }
+
+    return logEntry;
   }
 
   static log(error: AppError, additionalContext?: Record<string, unknown>) {
@@ -420,15 +469,24 @@ export class ErrorResponseFormatter {
       message: string;
       details?: unknown;
       stack?: string;
+      originalError?: unknown;
     };
     timestamp: string;
     requestId?: string;
   } {
     if (error instanceof AppError) {
-      return {
-        ...error.toResponse(),
-        ...(requestId && { requestId }),
-      };
+      // Use the AppError's toResponse method which we already fixed
+      const response = error.toResponse();
+
+      // Add requestId if provided
+      if (requestId) {
+        return {
+          ...response,
+          requestId,
+        };
+      }
+
+      return response;
     }
 
     // Handle unknown errors
@@ -437,18 +495,39 @@ export class ErrorResponseFormatter {
       ? 'An unexpected error occurred'
       : (error as Error)?.message || 'Unknown error';
 
-    return {
-      error: {
-        code: ErrorCode.INTERNAL_ERROR,
-        message: sanitizedMessage,
-        ...(environment.isDevelopment() && {
-          stack: (error as Error)?.stack,
-          originalError: error,
-        }),
-      },
-      timestamp,
-      ...(requestId && { requestId }),
+    // Create the error object
+    const errorObj: {
+      code: ErrorCode;
+      message: string;
+      stack?: string;
+      originalError?: unknown;
+    } = {
+      code: ErrorCode.INTERNAL_ERROR,
+      message: sanitizedMessage,
     };
+
+    // Add stack and original error in development
+    if (environment.isDevelopment()) {
+      errorObj.stack = (error as Error)?.stack;
+      errorObj.originalError = error;
+    }
+
+    // Create the response object
+    const response: {
+      error: typeof errorObj;
+      timestamp: string;
+      requestId?: string;
+    } = {
+      error: errorObj,
+      timestamp,
+    };
+
+    // Add requestId if provided
+    if (requestId) {
+      response.requestId = requestId;
+    }
+
+    return response;
   }
 
   /**
@@ -492,8 +571,14 @@ export function createErrorHandler() {
     let appError: AppError;
 
     if (error instanceof AppError) {
-      appError = error;
-      appError.context = { ...appError.context, ...context };
+      // Create a new AppError with merged context since we can't modify the readonly property
+      appError = new AppError(error.code, error.message, {
+        details: error.details,
+        context: { ...(error.context || {}), ...context },
+        severity: error.severity,
+        retryable: error.retryable,
+        cause: error.cause as Error,
+      });
     } else {
       // Convert unknown error to AppError
       appError = new AppError(
