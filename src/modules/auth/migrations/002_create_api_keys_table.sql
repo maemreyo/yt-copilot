@@ -5,9 +5,21 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
   key_hash TEXT NOT NULL,
   key_prefix TEXT NOT NULL,
   name TEXT,
+  description TEXT,
+  permissions JSONB DEFAULT '[]',
+  metadata JSONB DEFAULT '{}',
   expires_at TIMESTAMPTZ,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  revoked_at TIMESTAMPTZ,
+  revoked_reason TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  -- Constraints
+  CONSTRAINT api_keys_revoked_check CHECK (
+    (is_active = true AND revoked_at IS NULL) OR 
+    (is_active = false AND revoked_at IS NOT NULL)
+  )
 );
 
 -- Create index for faster lookups

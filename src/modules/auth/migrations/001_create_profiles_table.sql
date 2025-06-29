@@ -1,11 +1,22 @@
 -- Create profiles table
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT,
+  name TEXT,
+  avatar_url TEXT,
+  role TEXT NOT NULL DEFAULT 'user',
+  permissions JSONB DEFAULT '[]',
+  metadata JSONB DEFAULT '{}',
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
   stripe_subscription_status TEXT,
+  subscription_tier TEXT DEFAULT 'basic',
+  subscription_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  
+  -- Constraints
+  CONSTRAINT profiles_role_check CHECK (role IN ('admin', 'user', 'readonly'))
 );
 
 -- Enable Row Level Security

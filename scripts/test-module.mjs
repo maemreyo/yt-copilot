@@ -60,6 +60,7 @@ function showUsage() {
   console.log('  node scripts/test-module.mjs <module-name> [options]');
 
   log('\n📦 Available Modules:', 'bright');
+  console.log('  auth       - Authentication and authorization');
   console.log('  billing    - Billing and payment functionality');
   console.log('  core       - Core application functionality');
   console.log('  shared     - Shared utilities and components');
@@ -80,6 +81,7 @@ function showUsage() {
 
 function getModulePath(moduleName) {
   const paths = {
+    auth: 'src/modules/auth/tests/',
     billing: 'src/modules/billing/tests/',
     core: 'src/modules/core/',
     shared: 'src/shared/',
@@ -91,6 +93,7 @@ function getModulePath(moduleName) {
 function getAvailableModules() {
   const modules = [];
   const moduleDirectories = [
+    { name: 'auth', path: 'src/modules/auth/tests' },
     { name: 'billing', path: 'src/modules/billing/tests' },
     { name: 'core', path: 'src/modules/core' },
     { name: 'shared', path: 'src/shared' },
