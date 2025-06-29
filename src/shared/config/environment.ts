@@ -1,4 +1,4 @@
-// - Enhanced with comprehensive validation, fallbacks, and environment-specific configs
+// Enhanced with comprehensive validation, fallbacks, and environment-specific configs
 
 import { z } from 'zod';
 
@@ -13,40 +13,23 @@ const createEnvironmentSchema = (env: string) => {
 
   return z.object({
     // Environment Detection
-    NODE_ENV: z.enum(['development', 'test', 'production']).default(
-      'development',
-    ),
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
     // Supabase Configuration
     SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
     SUPABASE_ANON_KEY: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
-    SUPABASE_SERVICE_ROLE_KEY: z.string().min(
-      1,
-      'SUPABASE_SERVICE_ROLE_KEY is required',
-    ),
+    SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
     SUPABASE_PROJECT_ID: z.string().optional(),
 
     // Stripe Configuration
     STRIPE_SECRET_KEY: isProduction
-      ? z.string().startsWith(
-        'sk_live_',
-        'Production must use live Stripe keys',
-      )
-      : z.string().startsWith(
-        'sk_test_',
-        'Development/Test should use test Stripe keys',
-      ),
-    STRIPE_WEBHOOK_SECRET: z.string().min(
-      1,
-      'STRIPE_WEBHOOK_SECRET is required',
-    ),
+      ? z.string().startsWith('sk_live_', 'Production must use live Stripe keys')
+      : z.string().startsWith('sk_test_', 'Development/Test should use test Stripe keys'),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1, 'STRIPE_WEBHOOK_SECRET is required'),
     STRIPE_PRICE_ID: z.string().optional(),
 
     // Resend Configuration
-    RESEND_API_KEY: z.string().startsWith(
-      're_',
-      'RESEND_API_KEY must start with re_',
-    ),
+    RESEND_API_KEY: z.string().startsWith('re_', 'RESEND_API_KEY must start with re_'),
     RESEND_FROM_EMAIL: z.string().email().optional(),
 
     // YouTube API Configuration
@@ -65,22 +48,14 @@ const createEnvironmentSchema = (env: string) => {
 
     // Security Configuration
     JWT_SECRET: isProduction
-      ? z.string().min(
-        32,
-        'JWT_SECRET must be at least 32 characters in production',
-      )
+      ? z.string().min(32, 'JWT_SECRET must be at least 32 characters in production')
       : z.string().default('dev-jwt-secret-key-not-for-production'),
     ENCRYPTION_KEY: isProduction
-      ? z.string().min(
-        32,
-        'ENCRYPTION_KEY must be at least 32 characters in production',
-      )
+      ? z.string().min(32, 'ENCRYPTION_KEY must be at least 32 characters in production')
       : z.string().default('dev-encryption-key-not-for-production'),
 
     // Rate Limiting Configuration
-    RATE_LIMIT_REQUESTS_PER_MINUTE: z.coerce.number().min(1).max(10000).default(
-      60,
-    ),
+    RATE_LIMIT_REQUESTS_PER_MINUTE: z.coerce.number().min(1).max(10000).default(60),
     RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000), // 1 minute
     RATE_LIMIT_SKIP_SUCCESSFUL_REQUESTS: z.coerce.boolean().default(false),
 
@@ -89,9 +64,9 @@ const createEnvironmentSchema = (env: string) => {
     YOUTUBE_RATE_LIMIT_PER_HOUR: z.coerce.number().default(600), // YouTube API calls per hour
 
     // Monitoring & Observability
-    LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default(
-      isDevelopment ? 'debug' : isProduction ? 'error' : 'info',
-    ),
+    LOG_LEVEL: z
+      .enum(['debug', 'info', 'warn', 'error'])
+      .default(isDevelopment ? 'debug' : isProduction ? 'error' : 'info'),
     METRICS_ENABLED: z.coerce.boolean().default(isProduction),
     SENTRY_DSN: z.string().url().optional(),
 
@@ -120,9 +95,7 @@ const createEnvironmentSchema = (env: string) => {
     TEST_USER_EMAIL: isTest
       ? z.string().email().default('test@example.com')
       : z.string().optional(),
-    TEST_USER_PASSWORD: isTest
-      ? z.string().default('test-password')
-      : z.string().optional(),
+    TEST_USER_PASSWORD: isTest ? z.string().default('test-password') : z.string().optional(),
   });
 };
 
@@ -140,7 +113,7 @@ function validateEnvironment() {
   } catch (error: any) {
     console.error('❌ Environment validation failed:');
     if (error instanceof z.ZodError) {
-      error.errors.forEach((err) => {
+      error.errors.forEach(err => {
         console.error(`  ${err.path.join('.')}: ${err.message}`);
       });
     }
@@ -247,11 +220,11 @@ export function validateRuntimeConfig() {
     },
   ];
 
-  const failures = checks.filter((check) => !check.check());
+  const failures = checks.filter(check => !check.check());
 
   if (failures.length > 0) {
     console.error('❌ Runtime configuration validation failed:');
-    failures.forEach((failure) => {
+    failures.forEach(failure => {
       console.error(`  ${failure.name}: ${failure.message}`);
     });
     throw new Error('Configuration validation failed');
@@ -278,21 +251,11 @@ export function printConfigSummary() {
   console.log(`  Log Level: ${env.LOG_LEVEL}`);
   console.log(`  Metrics: ${env.METRICS_ENABLED ? 'Enabled' : 'Disabled'}`);
   console.log(`  Rate Limit: ${env.RATE_LIMIT_REQUESTS_PER_MINUTE}/min`);
+  console.log(`  Stripe: ${environment.getStripeConfig().isLiveMode ? 'Live' : 'Test'} mode`);
+  console.log(`  YouTube: API configured, ${env.YOUTUBE_API_QUOTA_PER_DAY} quota/day`);
+  console.log(`  Cache: ${env.CACHE_ENABLED ? 'Enabled' : 'Disabled'} (TTL: ${env.CACHE_TTL}s)`);
   console.log(
-    `  Stripe: ${
-      environment.getStripeConfig().isLiveMode ? 'Live' : 'Test'
-    } mode`,
-  );
-  console.log(
-    `  YouTube: API configured, ${env.YOUTUBE_API_QUOTA_PER_DAY} quota/day`,
-  );
-  console.log(
-    `  Cache: ${
-      env.CACHE_ENABLED ? 'Enabled' : 'Disabled'
-    } (TTL: ${env.CACHE_TTL}s)`,
-  );
-  console.log(
-    `  Features: YouTube=${env.FEATURE_YOUTUBE_ENABLED}, Translation=${env.FEATURE_TRANSLATION_ENABLED}`,
+    `  Features: YouTube=${env.FEATURE_YOUTUBE_ENABLED}, Translation=${env.FEATURE_TRANSLATION_ENABLED}`
   );
   console.log('\n');
 }

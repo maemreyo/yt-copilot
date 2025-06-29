@@ -1,7 +1,7 @@
-// - Central error reporting and logging endpoint using Layer 1 & 2 utilities
+// Central error reporting and logging endpoint using Layer 1 & 2 utilities
 
-import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
 
 /**
  * Error report schema for validation
@@ -26,14 +26,7 @@ interface ErrorReportRequest {
 
   // Error metadata
   severity?: 'low' | 'medium' | 'high' | 'critical';
-  category?:
-    | 'frontend'
-    | 'backend'
-    | 'api'
-    | 'database'
-    | 'network'
-    | 'security'
-    | 'performance';
+  category?: 'frontend' | 'backend' | 'api' | 'database' | 'network' | 'security' | 'performance';
   tags?: string[];
 
   // Additional data
@@ -94,16 +87,14 @@ class ErrorReportingService {
         global: {
           headers: { 'x-application-name': 'error-reporting-service' },
         },
-      },
+      }
     );
   }
 
   /**
    * Validate error report request
    */
-  private validateErrorReport(
-    data: any,
-  ): { isValid: boolean; errors: string[] } {
+  private validateErrorReport(data: any): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     // Required fields
@@ -146,9 +137,7 @@ class ErrorReportingService {
 
     const validEnvironments = ['development', 'test', 'production'];
     if (data.environment && !validEnvironments.includes(data.environment)) {
-      errors.push(
-        `environment must be one of: ${validEnvironments.join(', ')}`,
-      );
+      errors.push(`environment must be one of: ${validEnvironments.join(', ')}`);
     }
 
     // Array validations
@@ -173,10 +162,7 @@ class ErrorReportingService {
       errorReport.function || '',
       errorReport.errorCode || '',
       // Normalize error message (remove dynamic parts like IDs, timestamps)
-      errorReport.message.replace(/\d+/g, 'X').replace(
-        /[a-f0-9-]{36}/g,
-        'UUID',
-      ),
+      errorReport.message.replace(/\d+/g, 'X').replace(/[a-f0-9-]{36}/g, 'UUID'),
     ];
 
     const fingerprint = components.join('|').toLowerCase();
@@ -188,7 +174,7 @@ class ErrorReportingService {
    */
   private async storeErrorReport(
     errorReport: ErrorReportRequest,
-    fingerprint: string,
+    fingerprint: string
   ): Promise<void> {
     try {
       const reportData = {
@@ -212,9 +198,7 @@ class ErrorReportingService {
         created_at: new Date().toISOString(),
       };
 
-      const { error } = await this.supabase
-        .from('error_reports')
-        .insert(reportData);
+      const { error } = await this.supabase.from('error_reports').insert(reportData);
 
       if (error) {
         console.error('Failed to store error report:', error);
@@ -231,7 +215,7 @@ class ErrorReportingService {
    */
   private async updateErrorAggregation(
     fingerprint: string,
-    errorReport: ErrorReportRequest,
+    errorReport: ErrorReportRequest
   ): Promise<void> {
     try {
       // Try to get existing aggregation
@@ -269,9 +253,7 @@ class ErrorReportingService {
           created_at: new Date().toISOString(),
         };
 
-        const { error } = await this.supabase
-          .from('error_aggregations')
-          .insert(aggregationData);
+        const { error } = await this.supabase.from('error_aggregations').insert(aggregationData);
 
         if (error) {
           console.error('Failed to create error aggregation:', error);
@@ -298,18 +280,20 @@ class ErrorReportingService {
       timestamp: new Date().toISOString(),
     };
 
-    console.log(JSON.stringify({
-      level: 'error',
-      message: `Error reported: ${errorReport.message}`,
-      metadata: logData,
-    }));
+    console.log(
+      JSON.stringify({
+        level: 'error',
+        message: `Error reported: ${errorReport.message}`,
+        metadata: logData,
+      })
+    );
   }
 
   /**
    * Process error report
    */
   async processErrorReport(
-    errorReport: ErrorReportRequest,
+    errorReport: ErrorReportRequest
   ): Promise<{ fingerprint: string; success: boolean }> {
     const fingerprint = this.generateFingerprint(errorReport);
 
@@ -318,7 +302,7 @@ class ErrorReportingService {
       await this.storeErrorReport(errorReport, fingerprint);
 
       // Update aggregation (non-blocking)
-      this.updateErrorAggregation(fingerprint, errorReport).catch((err) => {
+      this.updateErrorAggregation(fingerprint, errorReport).catch(err => {
         console.error('Background aggregation update failed:', err);
       });
 
@@ -341,7 +325,7 @@ class ErrorReportingService {
    */
   async getErrorStats(
     timeRange: { start: string; end: string },
-    module?: string,
+    module?: string
   ): Promise<ErrorStats> {
     try {
       let query = this.supabase
@@ -367,10 +351,8 @@ class ErrorReportingService {
 
       data.forEach((error: any) => {
         errorsByModule[error.module] = (errorsByModule[error.module] || 0) + 1;
-        errorsBySeverity[error.severity] =
-          (errorsBySeverity[error.severity] || 0) + 1;
-        errorsByCategory[error.category] =
-          (errorsByCategory[error.category] || 0) + 1;
+        errorsBySeverity[error.severity] = (errorsBySeverity[error.severity] || 0) + 1;
+        errorsByCategory[error.category] = (errorsByCategory[error.category] || 0) + 1;
       });
 
       return {
@@ -389,10 +371,7 @@ class ErrorReportingService {
   /**
    * Get aggregated errors
    */
-  async getAggregatedErrors(
-    limit = 50,
-    module?: string,
-  ): Promise<ErrorAggregation[]> {
+  async getAggregatedErrors(limit = 50, module?: string): Promise<ErrorAggregation[]> {
     try {
       let query = this.supabase
         .from('error_aggregations')
@@ -437,14 +416,14 @@ const securityHeaders = {
   'X-XSS-Protection': '1; mode=block',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0',
+  Pragma: 'no-cache',
+  Expires: '0',
 };
 
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   const startTime = Date.now();
 
   // Handle CORS preflight
@@ -455,8 +434,7 @@ serve(async (req) => {
         ...securityHeaders,
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers':
-          'Content-Type, Authorization, X-API-Key',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Key',
       },
     });
   }
@@ -490,7 +468,7 @@ serve(async (req) => {
         {
           status: 404,
           headers: securityHeaders,
-        },
+        }
       );
     }
   } catch (error: any) {
@@ -501,16 +479,14 @@ serve(async (req) => {
         error: {
           code: 'INTERNAL_ERROR',
           message: 'An unexpected error occurred',
-          details: Deno.env.get('NODE_ENV') === 'development'
-            ? error.message
-            : undefined,
+          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
         },
         timestamp: new Date().toISOString(),
       }),
       {
         status: 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 });
@@ -518,10 +494,7 @@ serve(async (req) => {
 /**
  * Handle error report submission
  */
-async function handleErrorReport(
-  req: Request,
-  service: ErrorReportingService,
-): Promise<Response> {
+async function handleErrorReport(req: Request, service: ErrorReportingService): Promise<Response> {
   try {
     const body = await req.json();
 
@@ -540,7 +513,7 @@ async function handleErrorReport(
         {
           status: 400,
           headers: securityHeaders,
-        },
+        }
       );
     }
 
@@ -560,7 +533,7 @@ async function handleErrorReport(
           ...securityHeaders,
           'Access-Control-Allow-Origin': '*',
         },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Error processing error report:', error);
@@ -577,7 +550,7 @@ async function handleErrorReport(
       {
         status: 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 }
@@ -585,14 +558,11 @@ async function handleErrorReport(
 /**
  * Handle get error statistics
  */
-async function handleGetStats(
-  req: Request,
-  service: ErrorReportingService,
-): Promise<Response> {
+async function handleGetStats(req: Request, service: ErrorReportingService): Promise<Response> {
   try {
     const url = new URL(req.url);
-    const start = url.searchParams.get('start') ||
-      new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const start =
+      url.searchParams.get('start') || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const end = url.searchParams.get('end') || new Date().toISOString();
     const module = url.searchParams.get('module') || undefined;
 
@@ -609,7 +579,7 @@ async function handleGetStats(
           ...securityHeaders,
           'Access-Control-Allow-Origin': '*',
         },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Error getting stats:', error);
@@ -626,7 +596,7 @@ async function handleGetStats(
       {
         status: 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 }
@@ -636,7 +606,7 @@ async function handleGetStats(
  */
 async function handleGetAggregated(
   req: Request,
-  service: ErrorReportingService,
+  service: ErrorReportingService
 ): Promise<Response> {
   try {
     const url = new URL(req.url);
@@ -657,7 +627,7 @@ async function handleGetAggregated(
           ...securityHeaders,
           'Access-Control-Allow-Origin': '*',
         },
-      },
+      }
     );
   } catch (error: any) {
     console.error('Error getting aggregated errors:', error);
@@ -674,7 +644,7 @@ async function handleGetAggregated(
       {
         status: 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 }

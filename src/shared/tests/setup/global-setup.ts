@@ -1,4 +1,4 @@
-// - Global test environment setup and teardown
+// Global test environment setup and teardown
 
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
@@ -59,9 +59,7 @@ async function checkSupabaseCLI(): Promise<void> {
   try {
     execSync('supabase --version', { stdio: 'pipe' });
   } catch (error: any) {
-    throw new Error(
-      'Supabase CLI not found. Please install it with: npm install -g supabase',
-    );
+    throw new Error('Supabase CLI not found. Please install it with: npm install -g supabase');
   }
 }
 
@@ -134,10 +132,8 @@ async function waitForSupabase(): Promise<void> {
       throw new Error('Timeout waiting for Supabase to be ready');
     }
 
-    console.log(
-      `⏳ Attempt ${attempt}/${maxAttempts}, retrying in ${delayMs}ms...`,
-    );
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    console.log(`⏳ Attempt ${attempt}/${maxAttempts}, retrying in ${delayMs}ms...`);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
   }
 }
 
@@ -201,30 +197,20 @@ function findProjectRoot(): string {
     currentDir = path.dirname(currentDir);
   }
 
-  throw new Error(
-    'Could not find project root (supabase/config.toml not found)',
-  );
+  throw new Error('Could not find project root (supabase/config.toml not found)');
 }
 
 /**
  * Validate test environment variables
  */
 function validateTestEnvironment(): void {
-  const requiredEnvVars = [
-    'SUPABASE_URL',
-    'SUPABASE_ANON_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY',
-  ];
+  const requiredEnvVars = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
 
-  const missingVars = requiredEnvVars.filter((varName) =>
-    !process.env[varName]
-  );
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
   if (missingVars.length > 0) {
     throw new Error(
-      `Missing required environment variables for testing: ${
-        missingVars.join(', ')
-      }`,
+      `Missing required environment variables for testing: ${missingVars.join(', ')}`
     );
   }
 }

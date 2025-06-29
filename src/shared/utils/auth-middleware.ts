@@ -13,25 +13,19 @@
  * - Rate limiting from @/rate-limiting
  */
 
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
-import { database, DatabaseResult } from './database';
+import { User } from '@supabase/supabase-js';
+import { ApiKeyInfo, AuthResult, createSupabaseClient, UserContext } from './auth';
 import { cache } from './cache';
-import { logger } from './logging';
-import { rateLimit } from './rate-limiting';
+import { database } from './database';
 import {
+  AppError,
   AuthenticationError,
   AuthorizationError,
   ErrorCode,
   ErrorContext,
-  ValidationError,
 } from './errors';
-import {
-  ApiKeyInfo,
-  AuthResult,
-  createServiceClient,
-  createSupabaseClient,
-  UserContext,
-} from './auth';
+import { logger } from './logging';
+import { rateLimiter } from './rate-limiting';
 
 /**
  * Authentication strategy enum
@@ -50,10 +44,7 @@ export enum AuthStrategy {
 export interface PermissionRequirement {
   action: string;
   resource: string;
-  condition?: (
-    user: UserContext,
-    request: Request,
-  ) => boolean | Promise<boolean>;
+  condition?: (user: UserContext, request: Request) => boolean | Promise<boolean>;
   allowOwnership?: boolean; // Allow if user owns the resource
 }
 
@@ -130,13 +121,11 @@ export class SessionManager {
     userRole: string,
     permissions: string[],
     metadata: Record<string, any> = {},
-    request?: Request,
+    request?: Request
   ): Promise<SessionData> {
     const sessionId = this.generateSessionId();
     const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + SessionManager.SESSION_TTL * 1000,
-    );
+    const expiresAt = new Date(now.getTime() + SessionManager.SESSION_TTL * 1000);
 
     // Extract request metadata
     const ipAddress = this.extractIpAddress(request);
@@ -160,7 +149,7 @@ export class SessionManager {
     await this.cacheManager.set(
       this.getSessionKey(sessionId),
       sessionData,
-      SessionManager.SESSION_TTL,
+      SessionManager.SESSION_TTL
     );
 
     // Store in database for persistence
@@ -194,9 +183,7 @@ export class SessionManager {
    */
   async getSession(sessionId: string): Promise<SessionData | null> {
     // Try cache first
-    const cached = await this.cacheManager.get<SessionData>(
-      this.getSessionKey(sessionId),
-    );
+    const cached = await this.cacheManager.get<SessionData>(this.getSessionKey(sessionId));
     if (cached) {
       // Check if expired
       if (new Date() > new Date(cached.expiresAt)) {
@@ -243,7 +230,7 @@ export class SessionManager {
     await this.cacheManager.set(
       this.getSessionKey(sessionId),
       sessionData,
-      SessionManager.SESSION_TTL,
+      SessionManager.SESSION_TTL
     );
 
     return sessionData;
@@ -260,22 +247,24 @@ export class SessionManager {
     session.lastAccessedAt = now;
 
     // Update cache
-    await this.cacheManager.set(
-      this.getSessionKey(sessionId),
-      session,
-      SessionManager.SESSION_TTL,
-    );
+    await this.cacheManager.set(this.getSessionKey(sessionId), session, SessionManager.SESSION_TTL);
 
     // Update database (async, don't wait)
     const helper = database.createQueryHelper(this.client);
-    helper.update('user_sessions', { last_accessed_at: now.toISOString() }, {
-      id: sessionId,
-    }).catch((error) => {
-      logger.warn('Failed to update session access time', {
-        sessionId,
-        error: error.message,
+    helper
+      .update(
+        'user_sessions',
+        { last_accessed_at: now.toISOString() },
+        {
+          id: sessionId,
+        }
+      )
+      .catch(error => {
+        logger.warn('Failed to update session access time', {
+          sessionId,
+          error: error.message,
+        });
       });
-    });
   }
 
   /**
@@ -338,10 +327,7 @@ export class SessionManager {
     }
 
     // Remove from database
-    const deleteResult = await helper.rpc<number>(
-      'cleanup_expired_sessions',
-      {},
-    );
+    const deleteResult = await helper.rpc<number>('cleanup_expired_sessions', {});
     const deletedCount = deleteResult.data || 0;
 
     logger.info('Expired sessions cleaned up', { deletedCount });
@@ -361,12 +347,7 @@ export class SessionManager {
     if (!request) return undefined;
 
     // Try various headers for IP address
-    const headers = [
-      'x-forwarded-for',
-      'x-real-ip',
-      'x-client-ip',
-      'cf-connecting-ip',
-    ];
+    const headers = ['x-forwarded-for', 'x-real-ip', 'x-client-ip', 'cf-connecting-ip'];
 
     for (const header of headers) {
       const value = request.headers.get(header);
@@ -396,10 +377,7 @@ export class PermissionChecker {
       'billing:create-session',
       'billing:portal',
     ],
-    readonly: [
-      'profile:read',
-      'billing:read',
-    ],
+    readonly: ['profile:read', 'billing:read'],
   };
 
   /**
@@ -409,7 +387,7 @@ export class PermissionChecker {
     user: UserContext,
     action: string,
     resource: string,
-    requirement?: PermissionRequirement,
+    requirement?: PermissionRequirement
   ): boolean {
     // Admin always has permission
     if (user.role === 'admin') {
@@ -418,9 +396,7 @@ export class PermissionChecker {
 
     // Check explicit permissions
     const permission = `${resource}:${action}`;
-    if (
-      user.permissions?.includes(permission) || user.permissions?.includes('*')
-    ) {
+    if (user.permissions?.includes(permission) || user.permissions?.includes('*')) {
       return true;
     }
 
@@ -431,10 +407,7 @@ export class PermissionChecker {
     }
 
     // Check ownership if allowed
-    if (
-      requirement?.allowOwnership &&
-      this.checkOwnership(user, requirement, action, resource)
-    ) {
+    if (requirement?.allowOwnership && this.checkOwnership(user, requirement, action, resource)) {
       return true;
     }
 
@@ -448,21 +421,18 @@ export class PermissionChecker {
     user: UserContext,
     action: string,
     resource: string,
-    requirement?: PermissionRequirement,
+    requirement?: PermissionRequirement
   ): void {
     if (!this.hasPermission(user, action, resource, requirement)) {
-      throw new AuthorizationError(
-        `Insufficient permissions for ${action} on ${resource}`,
-        {
-          code: ErrorCode.FORBIDDEN,
-          context: {
-            userId: user.id,
-            userRole: user.role,
-            requiredPermission: `${resource}:${action}`,
-            userPermissions: user.permissions,
-          },
+      throw new AuthorizationError(`Insufficient permissions for ${action} on ${resource}`, {
+        code: ErrorCode.FORBIDDEN,
+        context: {
+          userId: user.id,
+          userRole: user.role,
+          requiredPermission: `${resource}:${action}`,
+          userPermissions: user.permissions,
         },
-      );
+      });
     }
   }
 
@@ -497,7 +467,7 @@ export class PermissionChecker {
     user: UserContext,
     requirement: PermissionRequirement,
     action: string,
-    resource: string,
+    resource: string
   ): boolean {
     // This is a simplified ownership check
     // In practice, you'd query the database to check ownership
@@ -515,10 +485,7 @@ export class AuthMiddlewareFactory {
    * Create authentication middleware with configuration
    */
   createMiddleware(config: AuthMiddlewareConfig) {
-    return async (
-      request: Request,
-      context: ErrorContext = {},
-    ): Promise<AuthMiddlewareResult> => {
+    return async (request: Request, context: ErrorContext = {}): Promise<AuthMiddlewareResult> => {
       const startTime = Date.now();
       let user: UserContext | null = null;
       let session: SessionData | null = null;
@@ -550,11 +517,7 @@ export class AuthMiddlewareFactory {
 
         // Get or create session if user is authenticated
         if (user && config.session?.required) {
-          session = await this.getOrCreateSession(
-            user,
-            request,
-            config.session.extend,
-          );
+          session = await this.getOrCreateSession(user, request, config.session.extend);
         }
 
         // Check permissions
@@ -564,7 +527,7 @@ export class AuthMiddlewareFactory {
               const allowed = await permission.condition(user, request);
               if (!allowed) {
                 throw new AuthorizationError(
-                  `Custom permission check failed for ${permission.action} on ${permission.resource}`,
+                  `Custom permission check failed for ${permission.action} on ${permission.resource}`
                 );
               }
             } else {
@@ -572,7 +535,7 @@ export class AuthMiddlewareFactory {
                 user,
                 permission.action,
                 permission.resource,
-                permission,
+                permission
               );
             }
           }
@@ -581,12 +544,10 @@ export class AuthMiddlewareFactory {
         // Create result with helper functions
         const result: AuthMiddlewareResult = {
           user: user || this.createAnonymousUser(),
-          session,
+          session: session || undefined, // Convert null to undefined
           permissions: user?.permissions || [],
           hasPermission: (action: string, resource: string) =>
-            user
-              ? PermissionChecker.hasPermission(user, action, resource)
-              : false,
+            user ? PermissionChecker.hasPermission(user, action, resource) : false,
           requirePermission: (action: string, resource: string) => {
             if (!user) {
               throw new AuthenticationError('Authentication required');
@@ -615,10 +576,7 @@ export class AuthMiddlewareFactory {
   /**
    * Authenticate using JWT token
    */
-  private async authenticateJWT(
-    request: Request,
-    required: boolean,
-  ): Promise<UserContext | null> {
+  private async authenticateJWT(request: Request, required: boolean): Promise<UserContext | null> {
     const authHeader = request.headers.get('Authorization');
 
     if (!authHeader?.startsWith('Bearer ')) {
@@ -632,7 +590,10 @@ export class AuthMiddlewareFactory {
 
     try {
       const supabase = createSupabaseClient(token);
-      const { data: { user }, error } = await supabase.auth.getUser(token);
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(token);
 
       if (error || !user) {
         throw new AuthenticationError('Invalid or expired token');
@@ -652,7 +613,7 @@ export class AuthMiddlewareFactory {
    */
   private async authenticateApiKey(
     request: Request,
-    required: boolean,
+    required: boolean
   ): Promise<UserContext | null> {
     const apiKey = request.headers.get('X-API-Key');
 
@@ -681,7 +642,7 @@ export class AuthMiddlewareFactory {
    */
   private async authenticateFlexible(
     request: Request,
-    required: boolean,
+    required: boolean
   ): Promise<UserContext | null> {
     // Try JWT first
     try {
@@ -711,21 +672,28 @@ export class AuthMiddlewareFactory {
       ? config.keyGenerator(request)
       : this.extractIpAddress(request) || 'anonymous';
 
-    const isAllowed = await rateLimit.checkLimit(
+    const isAllowed = await rateLimiter.checkLimit(
       identifier,
       config.requestsPerMinute,
-      config.windowMs || 60000,
+      config.windowMs || 60000
     );
 
     if (!isAllowed) {
-      throw new Error('Rate limit exceeded');
+      throw new AppError(ErrorCode.RATE_LIMIT_EXCEEDED, 'Rate limit exceeded', {
+        details: {
+          limit: config.requestsPerMinute,
+          windowMs: config.windowMs || 60000,
+          identifier,
+        },
+        retryable: true,
+      });
     }
   }
 
   private async getOrCreateSession(
     user: UserContext,
     request: Request,
-    extend: boolean,
+    extend: boolean
   ): Promise<SessionData | null> {
     // Extract session ID from request (e.g., from cookies or headers)
     const sessionId = request.headers.get('X-Session-ID');
@@ -745,14 +713,11 @@ export class AuthMiddlewareFactory {
       user.role || 'user',
       user.permissions || [],
       {},
-      request,
+      request
     );
   }
 
-  private async buildUserContext(
-    user: User,
-    token?: string,
-  ): Promise<UserContext> {
+  private async buildUserContext(user: User, token?: string): Promise<UserContext> {
     // Get user profile with additional data
     const helper = database.createQueryHelper(database.getServiceClient());
     const profileResult = await helper.select<any>('profiles', {
@@ -770,17 +735,15 @@ export class AuthMiddlewareFactory {
       metadata: profile?.metadata ? JSON.parse(profile.metadata) : {},
       subscription: profile?.stripe_subscription_status
         ? {
-          status: profile.stripe_subscription_status,
-          plan: profile.subscription_tier || 'basic',
-          expiresAt: profile.subscription_expires_at,
-        }
+            status: profile.stripe_subscription_status,
+            plan: profile.subscription_tier || 'basic',
+            expiresAt: profile.subscription_expires_at,
+          }
         : undefined,
     };
   }
 
-  private async buildUserContextFromApiKey(
-    keyInfo: ApiKeyInfo,
-  ): Promise<UserContext> {
+  private async buildUserContextFromApiKey(keyInfo: ApiKeyInfo): Promise<UserContext> {
     // Build user context from API key info
     return {
       id: keyInfo.userId,
@@ -825,7 +788,7 @@ export class AuthMiddlewareFactory {
     user: UserContext | null,
     success: boolean,
     duration: number,
-    error?: any,
+    error?: any
   ): void {
     logger.info('Auth middleware access', {
       userId: user?.id,

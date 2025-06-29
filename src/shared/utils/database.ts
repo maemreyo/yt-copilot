@@ -11,20 +11,10 @@
  * - Environment config from @/environment
  */
 
-import {
-  createClient,
-  PostgrestError,
-  SupabaseClient,
-} from '@supabase/supabase-js';
-import { env, environment } from '../config/environment';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { env } from '../config/environment';
+import { DatabaseError, ErrorCode, ErrorContext } from './errors';
 import { logger } from './logging';
-import {
-  ApiError,
-  DatabaseError,
-  ErrorCode,
-  ErrorContext,
-  ValidationError,
-} from './errors';
 
 /**
  * Database operation result interface
@@ -163,7 +153,7 @@ class ConnectionPool {
       },
       global: {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'X-Client-Type': 'database-utility-auth',
           'X-Operation-Timeout': this.config.timeout.toString(),
         },
@@ -187,15 +177,12 @@ class ConnectionPool {
       const client = this.getAnonClient();
 
       // Simple query to test connection
-      const { error } = await client
-        .from('profiles')
-        .select('id')
-        .limit(1)
-        .single();
+      const { error } = await client.from('profiles').select('id').limit(1).single();
 
       const latency = Date.now() - startTime;
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned, which is ok
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows returned, which is ok
         throw new Error(error.message);
       }
 
@@ -236,10 +223,7 @@ export class QueryHelper {
   /**
    * Execute a select query with comprehensive error handling
    */
-  async select<T = any>(
-    table: string,
-    options: QueryOptions = {},
-  ): Promise<DatabaseResult<T[]>> {
+  async select<T = any>(table: string, options: QueryOptions = {}): Promise<DatabaseResult<T[]>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
 
@@ -332,7 +316,7 @@ export class QueryHelper {
   async insert<T = any>(
     table: string,
     data: Record<string, any> | Record<string, any>[],
-    options: { select?: string; upsert?: boolean } = {},
+    options: { select?: string; upsert?: boolean } = {}
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -400,7 +384,7 @@ export class QueryHelper {
     table: string,
     data: Record<string, any>,
     filters: Record<string, any>,
-    options: { select?: string } = {},
+    options: { select?: string } = {}
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -466,7 +450,7 @@ export class QueryHelper {
   async delete<T = any>(
     table: string,
     filters: Record<string, any>,
-    options: { select?: string } = {},
+    options: { select?: string } = {}
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -531,7 +515,7 @@ export class QueryHelper {
    */
   async rpc<T = any>(
     functionName: string,
-    params: Record<string, any> = {},
+    params: Record<string, any> = {}
   ): Promise<DatabaseResult<T>> {
     const startTime = Date.now();
     const operationId = this.generateOperationId();
@@ -590,11 +574,7 @@ export class QueryHelper {
   /**
    * Create standardized database error
    */
-  private createDatabaseError(
-    error: any,
-    operationId: string,
-    operation: string,
-  ): DatabaseError {
+  private createDatabaseError(error: any, operationId: string, operation: string): DatabaseError {
     const code = this.mapErrorCode(error);
     const message = error?.message || 'Database operation failed';
 
@@ -653,12 +633,13 @@ export class QueryHelper {
 
     // Remove potentially sensitive filter values
     if (sanitized.filters) {
-      sanitized.filters = Object.keys(sanitized.filters).reduce((acc, key) => {
-        acc[key] = key.toLowerCase().includes('password')
-          ? '[REDACTED]'
-          : sanitized.filters[key];
-        return acc;
-      }, {} as Record<string, any>);
+      sanitized.filters = Object.keys(sanitized.filters).reduce(
+        (acc, key) => {
+          acc[key] = key.toLowerCase().includes('password') ? '[REDACTED]' : sanitized.filters[key];
+          return acc;
+        },
+        {} as Record<string, any>
+      );
     }
 
     return sanitized;
@@ -677,12 +658,10 @@ export class TransactionManager {
    */
   static async withTransaction<T>(
     operations: (context: TransactionContext) => Promise<T>,
-    client?: SupabaseClient,
+    client?: SupabaseClient
   ): Promise<T> {
     const transactionClient = client || ConnectionPool.getServiceClient();
-    const operationId = `txn_${Date.now()}_${
-      Math.random().toString(36).substr(2, 9)
-    }`;
+    const operationId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const startTime = Date.now();
 
     const context: TransactionContext = {
@@ -721,7 +700,7 @@ export class TransactionManager {
    */
   static async withRetry<T>(
     operation: () => Promise<T>,
-    attempts: number = TransactionManager.MAX_RETRY_ATTEMPTS,
+    attempts: number = TransactionManager.MAX_RETRY_ATTEMPTS
   ): Promise<T> {
     let lastError: Error | null = null;
 
@@ -737,13 +716,10 @@ export class TransactionManager {
 
         // Only retry on specific errors
         if (this.shouldRetry(error)) {
-          logger.warn(
-            `Database operation failed, retrying (${attempt}/${attempts})`,
-            {
-              error: lastError.message,
-              nextRetryDelay: TransactionManager.RETRY_DELAY_MS * attempt,
-            },
-          );
+          logger.warn(`Database operation failed, retrying (${attempt}/${attempts})`, {
+            error: lastError.message,
+            nextRetryDelay: TransactionManager.RETRY_DELAY_MS * attempt,
+          });
 
           await this.delay(TransactionManager.RETRY_DELAY_MS * attempt);
         } else {
@@ -770,7 +746,8 @@ export class TransactionManager {
     }
 
     // Retry on specific PostgreSQL errors
-    if (code === '40001' || code === '40P01') { // serialization_failure, deadlock_detected
+    if (code === '40001' || code === '40P01') {
+      // serialization_failure, deadlock_detected
       return true;
     }
 
@@ -781,7 +758,7 @@ export class TransactionManager {
    * Delay utility for retry logic
    */
   private static delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 
@@ -797,8 +774,7 @@ export const database = {
   // Connection management
   getAnonClient: () => ConnectionPool.getAnonClient(),
   getServiceClient: () => ConnectionPool.getServiceClient(),
-  getAuthenticatedClient: (token: string) =>
-    ConnectionPool.getAuthenticatedClient(token),
+  getAuthenticatedClient: (token: string) => ConnectionPool.getAuthenticatedClient(token),
 
   // Query helpers
   createQueryHelper: (client: SupabaseClient, context?: ErrorContext) =>

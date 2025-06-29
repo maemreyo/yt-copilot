@@ -1,4 +1,4 @@
-// - API key listing with pagination, filtering, and comprehensive metadata (secure - no plain text keys)
+// API key listing with pagination, filtering, and comprehensive metadata (secure - no plain text keys)
 
 import { denoEnv } from '../../../../shared/edge-functions/_shared/deno-env.ts';
 

@@ -1,7 +1,7 @@
-// - Integration test verifying security measures using Layer 1 security utilities
+// Integration test verifying security measures using Layer 1 security utilities
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { request } from 'supertest';
+import { describe, expect, it } from 'vitest';
 
 const BASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 
@@ -12,7 +12,7 @@ describe('Security Headers Integration Tests', () => {
     { path: '/core_version', method: 'GET', name: 'Version' },
     { path: '/core_error-reporting/report', method: 'POST', name: 'Error Reporting' },
     { path: '/core_metrics', method: 'GET', name: 'Metrics' },
-    { path: '/core_configuration', method: 'GET', name: 'Configuration' }
+    { path: '/core_configuration', method: 'GET', name: 'Configuration' },
   ];
 
   describe('Standard Security Headers Across All Endpoints', () => {
@@ -21,10 +21,14 @@ describe('Security Headers Integration Tests', () => {
         it(`should include all required security headers on ${endpoint.path}`, async () => {
           const response = await request(`${BASE_URL}/functions/v1`)
             [endpoint.method.toLowerCase() as 'get' | 'post'](endpoint.path)
-            .send(endpoint.method === 'POST' ? {
-              message: 'Test security headers',
-              module: 'security-test'
-            } : undefined);
+            .send(
+              endpoint.method === 'POST'
+                ? {
+                    message: 'Test security headers',
+                    module: 'security-test',
+                  }
+                : undefined
+            );
 
           // Accept both success and access denied responses
           expect([200, 201, 403, 405]).toContain(response.status);
@@ -45,14 +49,18 @@ describe('Security Headers Integration Tests', () => {
         it(`should include proper CORS headers on ${endpoint.path}`, async () => {
           const response = await request(`${BASE_URL}/functions/v1`)
             [endpoint.method.toLowerCase() as 'get' | 'post'](endpoint.path)
-            .send(endpoint.method === 'POST' ? {
-              message: 'Test CORS headers',
-              module: 'security-test'
-            } : undefined);
+            .send(
+              endpoint.method === 'POST'
+                ? {
+                    message: 'Test CORS headers',
+                    module: 'security-test',
+                  }
+                : undefined
+            );
 
           // CORS headers should be present for API endpoints
           expect(response.headers).toHaveProperty('access-control-allow-origin');
-          
+
           // Most endpoints should allow all origins for API access
           if (response.status !== 403) {
             expect(response.headers['access-control-allow-origin']).toBe('*');
@@ -88,10 +96,14 @@ describe('Security Headers Integration Tests', () => {
       const promises = coreEndpoints.map(endpoint =>
         request(`${BASE_URL}/functions/v1`)
           [endpoint.method.toLowerCase() as 'get' | 'post'](endpoint.path)
-          .send(endpoint.method === 'POST' ? {
-            message: 'Test content type',
-            module: 'security-test'
-          } : undefined)
+          .send(
+            endpoint.method === 'POST'
+              ? {
+                  message: 'Test content type',
+                  module: 'security-test',
+                }
+              : undefined
+          )
       );
 
       const responses = await Promise.all(promises);
@@ -99,7 +111,7 @@ describe('Security Headers Integration Tests', () => {
       responses.forEach((response, index) => {
         // Accept various response codes
         expect([200, 201, 403, 405]).toContain(response.status);
-        
+
         // All should prevent content type sniffing
         expect(response.headers['x-content-type-options']).toBe('nosniff');
       });
@@ -109,10 +121,14 @@ describe('Security Headers Integration Tests', () => {
       const promises = coreEndpoints.map(endpoint =>
         request(`${BASE_URL}/functions/v1`)
           [endpoint.method.toLowerCase() as 'get' | 'post'](endpoint.path)
-          .send(endpoint.method === 'POST' ? {
-            message: 'Test clickjacking protection',
-            module: 'security-test'
-          } : undefined)
+          .send(
+            endpoint.method === 'POST'
+              ? {
+                  message: 'Test clickjacking protection',
+                  module: 'security-test',
+                }
+              : undefined
+          )
       );
 
       const responses = await Promise.all(promises);
@@ -129,12 +145,11 @@ describe('Security Headers Integration Tests', () => {
         { path: '/core_version', shouldCache: true },
         { path: '/core_error-reporting/report', shouldCache: false },
         { path: '/core_metrics', shouldCache: false },
-        { path: '/core_configuration', shouldCache: false }
+        { path: '/core_configuration', shouldCache: false },
       ];
 
       for (const rule of endpointCacheRules) {
-        const response = await request(`${BASE_URL}/functions/v1`)
-          .get(rule.path);
+        const response = await request(`${BASE_URL}/functions/v1`).get(rule.path);
 
         // Accept success or access denied
         expect([200, 403]).toContain(response.status);
@@ -159,22 +174,43 @@ describe('Security Headers Integration Tests', () => {
   describe('Request Method Security', () => {
     it('should properly reject unsupported HTTP methods', async () => {
       const testCases = [
-        { endpoint: '/core_health-check', allowed: ['GET', 'OPTIONS'], forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'] },
-        { endpoint: '/core_version', allowed: ['GET', 'OPTIONS'], forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'] },
-        { endpoint: '/core_error-reporting/report', allowed: ['POST', 'OPTIONS'], forbidden: ['GET', 'PUT', 'DELETE', 'PATCH'] },
-        { endpoint: '/core_metrics', allowed: ['GET', 'OPTIONS'], forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'] },
-        { endpoint: '/core_configuration', allowed: ['GET', 'OPTIONS'], forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'] }
+        {
+          endpoint: '/core_health-check',
+          allowed: ['GET', 'OPTIONS'],
+          forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'],
+        },
+        {
+          endpoint: '/core_version',
+          allowed: ['GET', 'OPTIONS'],
+          forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'],
+        },
+        {
+          endpoint: '/core_error-reporting/report',
+          allowed: ['POST', 'OPTIONS'],
+          forbidden: ['GET', 'PUT', 'DELETE', 'PATCH'],
+        },
+        {
+          endpoint: '/core_metrics',
+          allowed: ['GET', 'OPTIONS'],
+          forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'],
+        },
+        {
+          endpoint: '/core_configuration',
+          allowed: ['GET', 'OPTIONS'],
+          forbidden: ['POST', 'PUT', 'DELETE', 'PATCH'],
+        },
       ];
 
       for (const testCase of testCases) {
         // Test forbidden methods
         for (const method of testCase.forbidden) {
-          const response = await request(`${BASE_URL}/functions/v1`)
-            [method.toLowerCase() as 'post' | 'put' | 'delete' | 'patch' | 'get'](testCase.endpoint);
+          const response = await request(`${BASE_URL}/functions/v1`)[
+            method.toLowerCase() as 'post' | 'put' | 'delete' | 'patch' | 'get'
+          ](testCase.endpoint);
 
           expect(response.status).toBe(405);
           expect(response.headers).toHaveProperty('allow');
-          
+
           const allowedMethods = response.headers.allow;
           testCase.allowed.forEach(allowedMethod => {
             expect(allowedMethods).toContain(allowedMethod);
@@ -201,20 +237,20 @@ describe('Security Headers Integration Tests', () => {
       const maliciousInputs = [
         {
           message: '<script>alert("xss")</script>',
-          module: 'test'
+          module: 'test',
         },
         {
           message: 'SQL injection attempt; DROP TABLE users;',
-          module: 'test'
+          module: 'test',
         },
         {
-          message: 'Normal message', 
-          module: '<img src=x onerror=alert(1)>'
+          message: 'Normal message',
+          module: '<img src=x onerror=alert(1)>',
         },
         {
           message: 'A'.repeat(2000), // Exceeds max length
-          module: 'test'
-        }
+          module: 'test',
+        },
       ];
 
       for (const input of maliciousInputs) {
@@ -243,7 +279,7 @@ describe('Security Headers Integration Tests', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
-      
+
       // Should not expose internal error details
       const responseText = JSON.stringify(response.body);
       expect(responseText).not.toContain('SyntaxError');
@@ -257,7 +293,7 @@ describe('Security Headers Integration Tests', () => {
       const testCases = [
         { path: '/core_error-reporting/report', method: 'POST', data: { invalid: 'data' } },
         { path: '/core_metrics', method: 'POST', data: {} }, // Wrong method
-        { path: '/core_configuration', method: 'PUT', data: {} } // Wrong method
+        { path: '/core_configuration', method: 'PUT', data: {} }, // Wrong method
       ];
 
       for (const testCase of testCases) {
@@ -278,7 +314,7 @@ describe('Security Headers Integration Tests', () => {
           /supabase.*key/i,
           /database.*connection/i,
           /internal.*error/i,
-          /stack.*trace/i
+          /stack.*trace/i,
         ];
 
         sensitivePatterns.forEach(pattern => {
@@ -288,8 +324,7 @@ describe('Security Headers Integration Tests', () => {
     });
 
     it('should not expose server information in headers', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_health-check');
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_health-check');
 
       // Should not expose server software details
       const serverHeader = response.headers.server;
@@ -311,7 +346,7 @@ describe('Security Headers Integration Tests', () => {
           .post('/core_error-reporting/report')
           .send({
             message: `Rate limit test ${i}`,
-            module: 'rate-limit-test'
+            module: 'rate-limit-test',
           })
       );
 
@@ -335,7 +370,7 @@ describe('Security Headers Integration Tests', () => {
         .post('/core_error-reporting/report')
         .send({
           message: 'Rate limit header test',
-          module: 'rate-limit-test'
+          module: 'rate-limit-test',
         });
 
       if (response.status === 429) {
@@ -345,11 +380,7 @@ describe('Security Headers Integration Tests', () => {
       }
 
       // Some endpoints might include rate limit info headers
-      const rateLimitHeaders = [
-        'x-ratelimit-limit',
-        'x-ratelimit-remaining',
-        'x-ratelimit-reset'
-      ];
+      const rateLimitHeaders = ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset'];
 
       rateLimitHeaders.forEach(header => {
         if (response.headers[header]) {
@@ -363,7 +394,7 @@ describe('Security Headers Integration Tests', () => {
   describe('Environment-Specific Security', () => {
     it('should enforce stricter security in production-like environments', async () => {
       const isProduction = process.env.NODE_ENV === 'production';
-      
+
       if (isProduction) {
         // Configuration endpoint should be completely inaccessible
         const configResponse = await request(`${BASE_URL}/functions/v1`)
@@ -383,9 +414,7 @@ describe('Security Headers Integration Tests', () => {
     });
 
     it('should have appropriate security headers for environment', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       const env = response.body.environment;
 
@@ -409,7 +438,7 @@ describe('Security Headers Integration Tests', () => {
       const responses = await Promise.all([
         request(`${BASE_URL}/functions/v1`).get('/core_health-check'),
         request(`${BASE_URL}/functions/v1`).get('/core_version'),
-        request(`${BASE_URL}/functions/v1`).get('/core_metrics')
+        request(`${BASE_URL}/functions/v1`).get('/core_metrics'),
       ]);
 
       // Filter successful responses
@@ -422,12 +451,12 @@ describe('Security Headers Integration Tests', () => {
         'x-content-type-options',
         'x-frame-options',
         'x-xss-protection',
-        'strict-transport-security'
+        'strict-transport-security',
       ];
 
       expectedHeaders.forEach(header => {
         const expectedValue = firstResponse.headers[header];
-        
+
         successfulResponses.forEach(response => {
           expect(response.headers[header]).toBe(expectedValue);
         });
@@ -444,7 +473,7 @@ describe('Security Headers Integration Tests', () => {
 
       errorResponses.forEach(response => {
         expect([400, 405]).toContain(response.status);
-        
+
         // Even error responses should have security headers
         expect(response.headers).toHaveProperty('x-content-type-options', 'nosniff');
         expect(response.headers).toHaveProperty('x-frame-options', 'DENY');

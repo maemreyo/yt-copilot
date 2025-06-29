@@ -1,6 +1,6 @@
-// - Comprehensive test utilities for user creation, data factories, and database helpers
+// Comprehensive test utilities for user creation, data factories, and database helpers
 
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes } from 'crypto';
 
 /**
@@ -36,35 +36,35 @@ export class TestDatabaseManager {
   constructor() {
     this.supabase = createClient(
       process.env.SUPABASE_URL || 'http://localhost:54321',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key',
+      process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key'
     );
   }
 
   /**
    * Create a test user with authentication
    */
-  async createTestUser(overrides: Partial<{
-    email: string;
-    password: string;
-    name: string;
-    role: string;
-  }> = {}): Promise<TestUser> {
-    const email = overrides.email ||
-      `test-${randomBytes(8).toString('hex')}@example.com`;
+  async createTestUser(
+    overrides: Partial<{
+      email: string;
+      password: string;
+      name: string;
+      role: string;
+    }> = {}
+  ): Promise<TestUser> {
+    const email = overrides.email || `test-${randomBytes(8).toString('hex')}@example.com`;
     const password = overrides.password || 'TestPassword123!';
     const name = overrides.name || 'Test User';
 
     // Create user via Supabase Auth
-    const { data: authData, error: signUpError } = await this.supabase.auth
-      .admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          name,
-          role: overrides.role || 'user',
-        },
-      });
+    const { data: authData, error: signUpError } = await this.supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name,
+        role: overrides.role || 'user',
+      },
+    });
 
     if (signUpError || !authData.user) {
       throw new Error(`Failed to create test user: ${signUpError?.message}`);
@@ -73,30 +73,25 @@ export class TestDatabaseManager {
     this.createdUsers.push(authData.user.id);
 
     // Create user profile
-    const { error: profileError } = await this.supabase
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
-        stripe_customer_id: null,
-        stripe_subscription_id: null,
-        stripe_subscription_status: null,
-      });
+    const { error: profileError } = await this.supabase.from('profiles').insert({
+      id: authData.user.id,
+      stripe_customer_id: null,
+      stripe_subscription_id: null,
+      stripe_subscription_status: null,
+    });
 
     if (profileError) {
       console.warn('Failed to create profile for test user:', profileError);
     }
 
     // Generate auth token
-    const { data: sessionData, error: sessionError } = await this.supabase.auth
-      .admin.generateLink({
-        type: 'magiclink',
-        email,
-      });
+    const { data: sessionData, error: sessionError } = await this.supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+    });
 
     if (sessionError) {
-      throw new Error(
-        `Failed to generate session for test user: ${sessionError.message}`,
-      );
+      throw new Error(`Failed to generate session for test user: ${sessionError.message}`);
     }
 
     // Extract token from the magic link (this is a simplified approach for testing)
@@ -114,11 +109,14 @@ export class TestDatabaseManager {
   /**
    * Create test API key for user
    */
-  async createTestApiKey(userId: string, overrides: Partial<{
-    name: string;
-    permissions: string[];
-    expiresInDays: number;
-  }> = {}): Promise<TestApiKey> {
+  async createTestApiKey(
+    userId: string,
+    overrides: Partial<{
+      name: string;
+      permissions: string[];
+      expiresInDays: number;
+    }> = {}
+  ): Promise<TestApiKey> {
     const apiKey = randomBytes(32).toString('hex');
     const prefix = apiKey.substring(0, 8);
     const name = overrides.name || 'Test API Key';
@@ -127,8 +125,7 @@ export class TestDatabaseManager {
     const keyHash = `hashed_${apiKey}`;
 
     const expiresAt = overrides.expiresInDays
-      ? new Date(Date.now() + overrides.expiresInDays * 24 * 60 * 60 * 1000)
-        .toISOString()
+      ? new Date(Date.now() + overrides.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
       : null;
 
     const { data, error } = await this.supabase
@@ -139,9 +136,7 @@ export class TestDatabaseManager {
         key_prefix: prefix,
         name,
         expires_at: expiresAt,
-        permissions: overrides.permissions
-          ? JSON.stringify(overrides.permissions)
-          : null,
+        permissions: overrides.permissions ? JSON.stringify(overrides.permissions) : null,
       })
       .select('id')
       .single();
@@ -164,10 +159,7 @@ export class TestDatabaseManager {
   /**
    * Create test subscription for user
    */
-  async createTestSubscription(
-    userId: string,
-    status: string = 'active',
-  ): Promise<void> {
+  async createTestSubscription(userId: string, status: string = 'active'): Promise<void> {
     const customerId = `cus_test_${randomBytes(8).toString('hex')}`;
     const subscriptionId = `sub_test_${randomBytes(8).toString('hex')}`;
 
@@ -192,10 +184,7 @@ export class TestDatabaseManager {
     try {
       // Delete API keys
       if (this.createdApiKeys.length > 0) {
-        await this.supabase
-          .from('api_keys')
-          .delete()
-          .in('id', this.createdApiKeys);
+        await this.supabase.from('api_keys').delete().in('id', this.createdApiKeys);
       }
 
       // Delete users (this will cascade to profiles)
@@ -240,7 +229,7 @@ export class HttpTestHelpers {
    */
   static createAuthHeader(token: string): Record<string, string> {
     return {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
   }
@@ -267,9 +256,7 @@ export class HttpTestHelpers {
   /**
    * Combine headers
    */
-  static combineHeaders(
-    ...headerObjects: Record<string, string>[]
-  ): Record<string, string> {
+  static combineHeaders(...headerObjects: Record<string, string>[]): Record<string, string> {
     return Object.assign({}, ...headerObjects);
   }
 }
@@ -355,7 +342,7 @@ export class TestEnvironment {
    * Wait for a specified amount of time
    */
   static async wait(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
@@ -364,7 +351,7 @@ export class TestEnvironment {
   static async retry<T>(
     fn: () => Promise<T>,
     maxAttempts: number = 3,
-    delay: number = 1000,
+    delay: number = 1000
   ): Promise<T> {
     let lastError: Error;
 
@@ -419,20 +406,14 @@ export class TestAssertions {
    */
   static assertPaginatedResponse(response: any): void {
     this.assertApiResponse(response, ['data', 'pagination']);
-    this.assertApiResponse(response.pagination, [
-      'page',
-      'limit',
-      'total',
-      'totalPages',
-    ]);
+    this.assertApiResponse(response.pagination, ['page', 'limit', 'total', 'totalPages']);
   }
 
   /**
    * Assert UUID format
    */
   static assertUuid(value: string): void {
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(value)) {
       throw new Error(`Expected UUID format, got: ${value}`);
     }

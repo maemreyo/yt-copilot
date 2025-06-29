@@ -1,4 +1,4 @@
-// - Runtime configuration display endpoint (development only)
+// Runtime configuration display endpoint (development only)
 
 import { serve } from 'std/http/server.ts';
 
@@ -8,13 +8,16 @@ import { serve } from 'std/http/server.ts';
 interface ConfigSection {
   name: string;
   description: string;
-  variables: Record<string, {
-    value: string | number | boolean;
-    type: 'string' | 'number' | 'boolean' | 'url' | 'email';
-    sensitive: boolean;
-    source: 'environment' | 'default' | 'computed';
-    description?: string;
-  }>;
+  variables: Record<
+    string,
+    {
+      value: string | number | boolean;
+      type: 'string' | 'number' | 'boolean' | 'url' | 'email';
+      sensitive: boolean;
+      source: 'environment' | 'default' | 'computed';
+      description?: string;
+    }
+  >;
 }
 
 /**
@@ -76,7 +79,7 @@ class ConfigurationService {
    * Check if a key contains sensitive information
    */
   private isSensitive(key: string): boolean {
-    return this.sensitivePatterns.some((pattern) => pattern.test(key));
+    return this.sensitivePatterns.some(pattern => pattern.test(key));
   }
 
   /**
@@ -98,9 +101,7 @@ class ConfigurationService {
   /**
    * Determine variable type
    */
-  private determineType(
-    value: string,
-  ): 'string' | 'number' | 'boolean' | 'url' | 'email' {
+  private determineType(value: string): 'string' | 'number' | 'boolean' | 'url' | 'email' {
     // Check for boolean
     if (value === 'true' || value === 'false') {
       return 'boolean';
@@ -165,7 +166,7 @@ class ConfigurationService {
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
       'SUPABASE_PROJECT_ID',
-    ].forEach((key) => {
+    ].forEach(key => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -185,11 +186,7 @@ class ConfigurationService {
   private getStripeConfig(): ConfigSection {
     const variables: Record<string, any> = {};
 
-    [
-      'STRIPE_SECRET_KEY',
-      'STRIPE_WEBHOOK_SECRET',
-      'STRIPE_PRICE_ID',
-    ].forEach((key) => {
+    ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PRICE_ID'].forEach(key => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -219,12 +216,7 @@ class ConfigurationService {
   private getAppConfig(): ConfigSection {
     const variables: Record<string, any> = {};
 
-    [
-      'APP_URL',
-      'APP_NAME',
-      'APP_VERSION',
-      'NODE_ENV',
-    ].forEach((key) => {
+    ['APP_URL', 'APP_NAME', 'APP_VERSION', 'NODE_ENV'].forEach(key => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -249,7 +241,7 @@ class ConfigurationService {
       'ENCRYPTION_KEY',
       'RATE_LIMIT_REQUESTS_PER_MINUTE',
       'RATE_LIMIT_WINDOW_MS',
-    ].forEach((key) => {
+    ].forEach(key => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -269,12 +261,7 @@ class ConfigurationService {
   private getMonitoringConfig(): ConfigSection {
     const variables: Record<string, any> = {};
 
-    [
-      'LOG_LEVEL',
-      'METRICS_ENABLED',
-      'SENTRY_DSN',
-      'ANALYTICS_ENABLED',
-    ].forEach((key) => {
+    ['LOG_LEVEL', 'METRICS_ENABLED', 'SENTRY_DSN', 'ANALYTICS_ENABLED'].forEach(key => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -294,12 +281,7 @@ class ConfigurationService {
   private getDatabaseConfig(): ConfigSection {
     const variables: Record<string, any> = {};
 
-    [
-      'DATABASE_MAX_CONNECTIONS',
-      'DATABASE_TIMEOUT',
-      'CACHE_ENABLED',
-      'CACHE_TTL',
-    ].forEach((key) => {
+    ['DATABASE_MAX_CONNECTIONS', 'DATABASE_TIMEOUT', 'CACHE_ENABLED', 'CACHE_TTL'].forEach(key => {
       const processed = this.processEnvVar(key, Deno.env.get(key));
       if (processed) {
         variables[key] = processed;
@@ -372,17 +354,11 @@ class ConfigurationService {
       const encryptionKey = Deno.env.get('ENCRYPTION_KEY') || '';
 
       if (jwtSecret.includes('dev-') || jwtSecret.includes('development')) {
-        warnings.push(
-          'JWT_SECRET appears to be a development key in production',
-        );
+        warnings.push('JWT_SECRET appears to be a development key in production');
       }
 
-      if (
-        encryptionKey.includes('dev-') || encryptionKey.includes('development')
-      ) {
-        warnings.push(
-          'ENCRYPTION_KEY appears to be a development key in production',
-        );
+      if (encryptionKey.includes('dev-') || encryptionKey.includes('development')) {
+        warnings.push('ENCRYPTION_KEY appears to be a development key in production');
       }
 
       const stripeKey = Deno.env.get('STRIPE_SECRET_KEY') || '';
@@ -439,14 +415,14 @@ const securityHeaders = {
   'X-XSS-Protection': '1; mode=block',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0',
+  Pragma: 'no-cache',
+  Expires: '0',
 };
 
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -474,9 +450,9 @@ serve(async (req) => {
         status: 405,
         headers: {
           ...securityHeaders,
-          'Allow': 'GET, OPTIONS',
+          Allow: 'GET, OPTIONS',
         },
-      },
+      }
     );
   }
 
@@ -489,8 +465,7 @@ serve(async (req) => {
         JSON.stringify({
           error: {
             code: 'ACCESS_DENIED',
-            message:
-              'Configuration endpoint is only available in development environment',
+            message: 'Configuration endpoint is only available in development environment',
             environment,
           },
           timestamp: new Date().toISOString(),
@@ -498,7 +473,7 @@ serve(async (req) => {
         {
           status: 403,
           headers: securityHeaders,
-        },
+        }
       );
     }
 
@@ -534,16 +509,14 @@ serve(async (req) => {
         error: {
           code: 'CONFIG_GENERATION_ERROR',
           message: 'Failed to generate configuration',
-          details: Deno.env.get('NODE_ENV') === 'development'
-            ? error.message
-            : undefined,
+          details: Deno.env.get('NODE_ENV') === 'development' ? error.message : undefined,
         },
         timestamp: new Date().toISOString(),
       }),
       {
         status: 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 });

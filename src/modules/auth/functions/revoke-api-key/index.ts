@@ -1,4 +1,4 @@
-// - API key revocation with proper authorization, audit logging, and validation
+// API key revocation with proper authorization, audit logging, and validation
 
 import { denoEnv } from '../../../../shared/edge-functions/_shared/deno-env.ts';
 
@@ -295,10 +295,10 @@ class ApiKeyRevocationService {
     console.log(`[NOTIFICATION] API key revoked for user ${userId}: ${keyName} (${keyPrefix})`);
 
     // In production, this would send an email:
-    // - Key name and prefix
-    // - Revocation timestamp
-    // - Instructions for creating new keys if needed
-    // - Security recommendations
+    // Key name and prefix
+    // Revocation timestamp
+    // Instructions for creating new keys if needed
+    // Security recommendations
   }
 }
 

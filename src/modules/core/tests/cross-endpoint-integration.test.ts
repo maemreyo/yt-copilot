@@ -1,7 +1,7 @@
-// - Integration test verifying interactions between core services
+// Integration test verifying interactions between core services
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { request } from 'supertest';
+import { describe, expect, it } from 'vitest';
 
 const BASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 
@@ -11,13 +11,11 @@ describe('Cross-Endpoint Integration Tests', () => {
       const endpoints = [
         { path: '/core_version', field: 'version' },
         { path: '/core_health-check', field: 'version' },
-        { path: '/core_metrics', field: 'system.version' }
+        { path: '/core_metrics', field: 'system.version' },
       ];
 
       const responses = await Promise.all(
-        endpoints.map(endpoint => 
-          request(`${BASE_URL}/functions/v1`).get(endpoint.path)
-        )
+        endpoints.map(endpoint => request(`${BASE_URL}/functions/v1`).get(endpoint.path))
       );
 
       // All should succeed
@@ -29,7 +27,7 @@ describe('Cross-Endpoint Integration Tests', () => {
       const versions = [
         responses[0].body.version,
         responses[1].body.version,
-        responses[2].body.system?.version || responses[2].body.version
+        responses[2].body.system?.version || responses[2].body.version,
       ];
 
       // All versions should be identical
@@ -42,7 +40,7 @@ describe('Cross-Endpoint Integration Tests', () => {
       const [versionResp, healthResp, metricsResp] = await Promise.all([
         request(`${BASE_URL}/functions/v1`).get('/core_version'),
         request(`${BASE_URL}/functions/v1`).get('/core_health-check'),
-        request(`${BASE_URL}/functions/v1`).get('/core_metrics')
+        request(`${BASE_URL}/functions/v1`).get('/core_metrics'),
       ]);
 
       expect(versionResp.status).toBe(200);
@@ -52,7 +50,7 @@ describe('Cross-Endpoint Integration Tests', () => {
       const environments = [
         versionResp.body.environment,
         healthResp.body.environment,
-        metricsResp.body.system?.environment || metricsResp.body.environment
+        metricsResp.body.system?.environment || metricsResp.body.environment,
       ];
 
       // All should report same environment
@@ -67,14 +65,14 @@ describe('Cross-Endpoint Integration Tests', () => {
         request(`${BASE_URL}/functions/v1`).get('/core_metrics'),
         request(`${BASE_URL}/functions/v1`).post('/core_error-reporting/report').send({
           message: 'Cross-endpoint timestamp test',
-          module: 'integration'
-        })
+          module: 'integration',
+        }),
       ]);
 
       responses.forEach(response => {
         expect([200, 201]).toContain(response.status);
         expect(response.body).toHaveProperty('timestamp');
-        
+
         // All timestamps should be valid ISO strings
         const timestamp = new Date(response.body.timestamp);
         expect(timestamp).toBeInstanceOf(Date);
@@ -89,14 +87,12 @@ describe('Cross-Endpoint Integration Tests', () => {
       const testErrors = [
         { message: 'Test error 1', module: 'test', severity: 'low' },
         { message: 'Test error 2', module: 'test', severity: 'medium' },
-        { message: 'Test error 3', module: 'core', severity: 'high' }
+        { message: 'Test error 3', module: 'core', severity: 'high' },
       ];
 
       await Promise.all(
         testErrors.map(error =>
-          request(`${BASE_URL}/functions/v1`)
-            .post('/core_error-reporting/report')
-            .send(error)
+          request(`${BASE_URL}/functions/v1`).post('/core_error-reporting/report').send(error)
         )
       );
 
@@ -115,7 +111,7 @@ describe('Cross-Endpoint Integration Tests', () => {
 
       // Should have some error data (might be historical + our test errors)
       expect(metricsResponse.body.errors.rates.last15m).toBeGreaterThanOrEqual(0);
-      
+
       // Check that our test modules appear in the data
       const byModule = metricsResponse.body.errors.byModule;
       if (Object.keys(byModule).length > 0) {
@@ -126,7 +122,7 @@ describe('Cross-Endpoint Integration Tests', () => {
     it('should collect database health metrics consistent with health check', async () => {
       const [healthResponse, metricsResponse] = await Promise.all([
         request(`${BASE_URL}/functions/v1`).get('/core_health-check'),
-        request(`${BASE_URL}/functions/v1`).get('/core_metrics')
+        request(`${BASE_URL}/functions/v1`).get('/core_metrics'),
       ]);
 
       expect(healthResponse.status).toBe(200);
@@ -138,9 +134,9 @@ describe('Cross-Endpoint Integration Tests', () => {
 
       // Map between health check and metrics terminology
       const statusMapping = {
-        'ok': 'healthy',
-        'error': 'unhealthy',
-        'degraded': 'unhealthy'
+        ok: 'healthy',
+        error: 'unhealthy',
+        degraded: 'unhealthy',
       };
 
       expect(metricsDbStatus).toBe(statusMapping[healthDbStatus] || 'unhealthy');
@@ -151,9 +147,11 @@ describe('Cross-Endpoint Integration Tests', () => {
 
       expect(healthLatency).toBeGreaterThan(0);
       expect(metricsLatency).toBeGreaterThan(0);
-      
+
       // Should be within reasonable range of each other
-      expect(Math.abs(healthLatency - metricsLatency)).toBeLessThan(Math.max(healthLatency, metricsLatency) * 2);
+      expect(Math.abs(healthLatency - metricsLatency)).toBeLessThan(
+        Math.max(healthLatency, metricsLatency) * 2
+      );
     });
 
     it('should track API usage metrics from actual endpoint calls', async () => {
@@ -164,8 +162,8 @@ describe('Cross-Endpoint Integration Tests', () => {
         request(`${BASE_URL}/functions/v1`).get('/core_metrics'),
         request(`${BASE_URL}/functions/v1`).post('/core_error-reporting/report').send({
           message: 'API usage test',
-          module: 'api-test'
-        })
+          module: 'api-test',
+        }),
       ];
 
       await Promise.all(endpointCalls);
@@ -197,8 +195,8 @@ describe('Cross-Endpoint Integration Tests', () => {
         additionalData: {
           service: 'database',
           latency: 5000,
-          timeout: true
-        }
+          timeout: true,
+        },
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
@@ -220,8 +218,8 @@ describe('Cross-Endpoint Integration Tests', () => {
         category: 'performance',
         additionalData: {
           operation: 'cache_stats',
-          cacheStore: 'default'
-        }
+          cacheStore: 'default',
+        },
       };
 
       const response = await request(`${BASE_URL}/functions/v1`)
@@ -262,7 +260,7 @@ describe('Cross-Endpoint Integration Tests', () => {
       const [configResponse, versionResponse, healthResponse] = await Promise.all([
         request(`${BASE_URL}/functions/v1`).get('/core_configuration'),
         request(`${BASE_URL}/functions/v1`).get('/core_version'),
-        request(`${BASE_URL}/functions/v1`).get('/core_health-check')
+        request(`${BASE_URL}/functions/v1`).get('/core_health-check'),
       ]);
 
       expect(configResponse.status).toBe(200);
@@ -278,11 +276,10 @@ describe('Cross-Endpoint Integration Tests', () => {
 
       // Feature flags should be consistent with actual behavior
       const featureFlags = configResponse.body.featureFlags;
-      
+
       // If metrics are enabled in config, metrics endpoint should work
       if (featureFlags.features.metricsEnabled) {
-        const metricsResponse = await request(`${BASE_URL}/functions/v1`)
-          .get('/core_metrics');
+        const metricsResponse = await request(`${BASE_URL}/functions/v1`).get('/core_metrics');
         expect(metricsResponse.status).toBe(200);
       }
 
@@ -292,7 +289,7 @@ describe('Cross-Endpoint Integration Tests', () => {
           .post('/core_error-reporting/report')
           .send({
             message: 'Config validation test',
-            module: 'config-test'
+            module: 'config-test',
           });
         expect([201, 429]).toContain(errorResponse.status); // Success or rate limited
       }
@@ -303,22 +300,20 @@ describe('Cross-Endpoint Integration Tests', () => {
     it('should handle concurrent requests across all endpoints efficiently', async () => {
       const concurrentRequests = [
         // Multiple health checks
-        ...Array.from({ length: 3 }, () => 
+        ...Array.from({ length: 3 }, () =>
           request(`${BASE_URL}/functions/v1`).get('/core_health-check')
         ),
         // Multiple version requests
-        ...Array.from({ length: 3 }, () => 
+        ...Array.from({ length: 3 }, () =>
           request(`${BASE_URL}/functions/v1`).get('/core_version')
         ),
         // Metrics request
         request(`${BASE_URL}/functions/v1`).get('/core_metrics'),
         // Error reporting
-        request(`${BASE_URL}/functions/v1`)
-          .post('/core_error-reporting/report')
-          .send({
-            message: 'Concurrent load test',
-            module: 'load-test'
-          })
+        request(`${BASE_URL}/functions/v1`).post('/core_error-reporting/report').send({
+          message: 'Concurrent load test',
+          module: 'load-test',
+        }),
       ];
 
       const startTime = Date.now();
@@ -344,13 +339,11 @@ describe('Cross-Endpoint Integration Tests', () => {
 
       for (let i = 0; i < 5; i++) {
         const startTime = Date.now();
-        
-        await request(`${BASE_URL}/functions/v1`)
-          .get('/core_health-check')
-          .expect(200);
-        
+
+        await request(`${BASE_URL}/functions/v1`).get('/core_health-check').expect(200);
+
         responseTimes.push(Date.now() - startTime);
-        
+
         // Small delay between requests
         await new Promise(resolve => setTimeout(resolve, 100));
       }
@@ -374,7 +367,7 @@ describe('Cross-Endpoint Integration Tests', () => {
         function: 'fullFlowTest',
         severity: 'medium',
         category: 'backend',
-        tags: ['integration', 'full-flow']
+        tags: ['integration', 'full-flow'],
       };
 
       const errorResponse = await request(`${BASE_URL}/functions/v1`)
@@ -394,7 +387,7 @@ describe('Cross-Endpoint Integration Tests', () => {
         .expect(200);
 
       expect(statsResponse.body.stats.totalErrors).toBeGreaterThan(0);
-      
+
       // Check if our module appears in the stats
       const moduleStats = statsResponse.body.stats.errorsByModule;
       if (moduleStats['integration-test']) {
@@ -414,7 +407,7 @@ describe('Cross-Endpoint Integration Tests', () => {
         .expect(200);
 
       expect(metricsResponse.body.errors.rates.last15m).toBeGreaterThanOrEqual(0);
-      
+
       // Our error should contribute to the overall error rate
       expect(metricsResponse.body.errors.rates.last15m).toBeGreaterThan(0);
     });
@@ -422,14 +415,14 @@ describe('Cross-Endpoint Integration Tests', () => {
     it('should maintain service health status consistency', async () => {
       // Get health status multiple times over a short period
       const healthChecks = [];
-      
+
       for (let i = 0; i < 3; i++) {
         const response = await request(`${BASE_URL}/functions/v1`)
           .get('/core_health-check')
           .expect(200);
-        
+
         healthChecks.push(response.body);
-        
+
         if (i < 2) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -438,26 +431,27 @@ describe('Cross-Endpoint Integration Tests', () => {
       // Overall status should be consistent (not flapping)
       const statuses = healthChecks.map(hc => hc.status);
       const uniqueStatuses = new Set(statuses);
-      
+
       // Should not have more than 2 different statuses in a short period
       expect(uniqueStatuses.size).toBeLessThanOrEqual(2);
-      
+
       // If status changes, it should be logical (ok -> degraded, not ok -> error -> ok)
       if (uniqueStatuses.size === 2) {
         const validTransitions = [
           ['ok', 'degraded'],
           ['degraded', 'ok'],
           ['degraded', 'error'],
-          ['error', 'degraded']
+          ['error', 'degraded'],
         ];
-        
+
         // Check transitions are valid
         for (let i = 1; i < statuses.length; i++) {
-          const transition = [statuses[i-1], statuses[i]];
-          const isValidTransition = validTransitions.some(valid => 
-            valid[0] === transition[0] && valid[1] === transition[1]
-          ) || transition[0] === transition[1]; // Same status is valid
-          
+          const transition = [statuses[i - 1], statuses[i]];
+          const isValidTransition =
+            validTransitions.some(
+              valid => valid[0] === transition[0] && valid[1] === transition[1]
+            ) || transition[0] === transition[1]; // Same status is valid
+
           expect(isValidTransition).toBe(true);
         }
       }

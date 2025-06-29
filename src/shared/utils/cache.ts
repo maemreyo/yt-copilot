@@ -160,7 +160,8 @@ export class MemoryCacheStore implements CacheStore {
 
     // Check size limit
     if (
-      this.config.maxSize && this.store.size >= this.config.maxSize &&
+      this.config.maxSize &&
+      this.store.size >= this.config.maxSize &&
       !this.store.has(namespacedKey)
     ) {
       await this.evictOldest();
@@ -209,13 +210,11 @@ export class MemoryCacheStore implements CacheStore {
     const allKeys = Array.from(this.store.keys());
 
     if (!pattern) {
-      return allKeys.map((key) => this.stripNamespace(key));
+      return allKeys.map(key => this.stripNamespace(key));
     }
 
     const regex = new RegExp(pattern);
-    return allKeys
-      .filter((key) => regex.test(key))
-      .map((key) => this.stripNamespace(key));
+    return allKeys.filter(key => regex.test(key)).map(key => this.stripNamespace(key));
   }
 
   async size(): Promise<number> {
@@ -226,9 +225,10 @@ export class MemoryCacheStore implements CacheStore {
     return {
       ...this.stats,
       size: this.store.size,
-      hitRate: this.stats.hits + this.stats.misses > 0
-        ? this.stats.hits / (this.stats.hits + this.stats.misses)
-        : 0,
+      hitRate:
+        this.stats.hits + this.stats.misses > 0
+          ? this.stats.hits / (this.stats.hits + this.stats.misses)
+          : 0,
     };
   }
 
@@ -244,16 +244,15 @@ export class MemoryCacheStore implements CacheStore {
   private updateStats(operation: 'hit' | 'miss' | 'set' | 'delete'): void {
     if (!this.config.enableStats) return;
 
-    this
-      .stats[
-        operation === 'hit'
-          ? 'hits'
-          : operation === 'miss'
+    this.stats[
+      operation === 'hit'
+        ? 'hits'
+        : operation === 'miss'
           ? 'misses'
           : operation === 'set'
-          ? 'sets'
-          : 'deletes'
-      ]++;
+            ? 'sets'
+            : 'deletes'
+    ]++;
   }
 
   private resetStats(): void {
@@ -302,9 +301,7 @@ export class MemoryCacheStore implements CacheStore {
     }
 
     if (expiredKeys.length > 0) {
-      logger.debug(
-        `Cache cleanup: removed ${expiredKeys.length} expired entries`,
-      );
+      logger.debug(`Cache cleanup: removed ${expiredKeys.length} expired entries`);
     }
   }
 
@@ -460,9 +457,10 @@ export class RedisCacheStore implements CacheStore {
     return {
       ...this.localStats,
       size,
-      hitRate: this.localStats.hits + this.localStats.misses > 0
-        ? this.localStats.hits / (this.localStats.hits + this.localStats.misses)
-        : 0,
+      hitRate:
+        this.localStats.hits + this.localStats.misses > 0
+          ? this.localStats.hits / (this.localStats.hits + this.localStats.misses)
+          : 0,
     };
   }
 
@@ -478,16 +476,15 @@ export class RedisCacheStore implements CacheStore {
   private updateStats(operation: 'hit' | 'miss' | 'set' | 'delete'): void {
     if (!this.config.enableStats) return;
 
-    this
-      .localStats[
-        operation === 'hit'
-          ? 'hits'
-          : operation === 'miss'
+    this.localStats[
+      operation === 'hit'
+        ? 'hits'
+        : operation === 'miss'
           ? 'misses'
           : operation === 'set'
-          ? 'sets'
-          : 'deletes'
-      ]++;
+            ? 'sets'
+            : 'deletes'
+    ]++;
   }
 
   private resetStats(): void {
@@ -516,7 +513,7 @@ export class CacheManager {
   constructor(
     primary: CacheStore,
     fallback?: CacheStore,
-    config: { enableFallback?: boolean; syncWrites?: boolean } = {},
+    config: { enableFallback?: boolean; syncWrites?: boolean } = {}
   ) {
     this.primary = primary;
     this.fallback = fallback;
@@ -545,7 +542,7 @@ export class CacheManager {
 
         // Populate primary cache with fallback value
         if (value !== null) {
-          this.primary.set(key, value).catch((err) => {
+          this.primary.set(key, value).catch(err => {
             logger.warn('Failed to populate primary cache from fallback', err, {
               key,
             });
@@ -591,7 +588,7 @@ export class CacheManager {
 
     try {
       const results = await Promise.all(promises);
-      return results.some((result) => result);
+      return results.some(result => result);
     } catch (error: any) {
       logger.error('Cache delete failed', error as Error, { key });
       return false;
@@ -675,11 +672,7 @@ export class CacheMiddleware {
   /**
    * Cache response
    */
-  async cacheResponse(
-    request: Request,
-    response: Response,
-    ttl?: number,
-  ): Promise<Response> {
+  async cacheResponse(request: Request, response: Response, ttl?: number): Promise<Response> {
     // Only cache successful GET responses
     if (request.method !== 'GET' || response.status >= 400) {
       return response;
@@ -706,7 +699,7 @@ export class CacheMiddleware {
           headers,
           body,
         },
-        ttl ?? this.defaultTtl,
+        ttl ?? this.defaultTtl
       );
 
       logger.debug('Response cached', {
@@ -751,9 +744,10 @@ export class GlobalCaches {
 
   static getCache(name: string = 'default'): CacheStore {
     if (!this.instances.has(name)) {
-      const store = environment.isProduction() && env.CACHE_ENABLED
-        ? new MemoryCacheStore() // Would use Redis in production with actual Redis client
-        : new MemoryCacheStore();
+      const store =
+        environment.isProduction() && env.CACHE_ENABLED
+          ? new MemoryCacheStore() // Would use Redis in production with actual Redis client
+          : new MemoryCacheStore();
 
       this.instances.set(name, store);
     }
@@ -761,10 +755,7 @@ export class GlobalCaches {
     return this.instances.get(name)!;
   }
 
-  static createManager(
-    primaryName: string = 'default',
-    fallbackName?: string,
-  ): CacheManager {
+  static createManager(primaryName: string = 'default', fallbackName?: string): CacheManager {
     const primary = this.getCache(primaryName);
     const fallback = fallbackName ? this.getCache(fallbackName) : undefined;
 
@@ -772,9 +763,7 @@ export class GlobalCaches {
   }
 
   static async clearAll(): Promise<void> {
-    const promises = Array.from(this.instances.values()).map((cache) =>
-      cache.clear()
-    );
+    const promises = Array.from(this.instances.values()).map(cache => cache.clear());
     await Promise.all(promises);
   }
 
@@ -796,8 +785,7 @@ export const cacheUtils = {
   /**
    * Create memory cache store
    */
-  createMemoryStore: (config?: Partial<CacheConfig>) =>
-    new MemoryCacheStore(config),
+  createMemoryStore: (config?: Partial<CacheConfig>) => new MemoryCacheStore(config),
 
   /**
    * Create Redis cache store
@@ -833,7 +821,7 @@ export const cacheUtils = {
    * Generate cache key
    */
   generateKey: (...parts: (string | number)[]): string => {
-    return parts.map((part) => String(part)).join(':');
+    return parts.map(part => String(part)).join(':');
   },
 
   /**
@@ -865,6 +853,13 @@ export const cacheUtils = {
 };
 
 /**
+ * Global cache instance for direct use
+ */
+export const cache = new CacheManager(
+  environment.isProduction() ? GlobalCaches.redis : GlobalCaches.memory
+);
+
+/**
  * Default export
  */
 export default {
@@ -874,4 +869,5 @@ export default {
   CacheMiddleware,
   GlobalCaches,
   utils: cacheUtils,
+  cache,
 };

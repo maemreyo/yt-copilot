@@ -12,14 +12,14 @@
  * - Migration utilities from @/migrations
  */
 
+import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { environment } from '../config/environment';
 import { database } from './database';
+import { DatabaseError, ValidationError } from './errors';
 import { logger } from './logging';
 import { migrationManager } from './migrations';
-import { ApiError, DatabaseError, ErrorCode, ValidationError } from './errors';
-import { env, environment } from '../config/environment';
 
 /**
  * Database schema information
@@ -175,8 +175,7 @@ export class SchemaIntrospector {
         views,
         functions,
         enums,
-        totalEntities: tables.length + views.length + functions.length +
-          enums.length,
+        totalEntities: tables.length + views.length + functions.length + enums.length,
         generatedAt: new Date(),
         schemaVersion: await this.getSchemaVersion(),
       };
@@ -240,26 +239,11 @@ export class SchemaIntrospector {
       const tableInfo: TableInfo = {
         name: tableRow.table_name,
         schema: tableRow.table_schema,
-        columns: await this.getTableColumns(
-          tableRow.table_schema,
-          tableRow.table_name,
-        ),
-        primaryKeys: await this.getPrimaryKeys(
-          tableRow.table_schema,
-          tableRow.table_name,
-        ),
-        foreignKeys: await this.getForeignKeys(
-          tableRow.table_schema,
-          tableRow.table_name,
-        ),
-        indexes: await this.getIndexes(
-          tableRow.table_schema,
-          tableRow.table_name,
-        ),
-        policies: await this.getPolicies(
-          tableRow.table_schema,
-          tableRow.table_name,
-        ),
+        columns: await this.getTableColumns(tableRow.table_schema, tableRow.table_name),
+        primaryKeys: await this.getPrimaryKeys(tableRow.table_schema, tableRow.table_name),
+        foreignKeys: await this.getForeignKeys(tableRow.table_schema, tableRow.table_name),
+        indexes: await this.getIndexes(tableRow.table_schema, tableRow.table_name),
+        policies: await this.getPolicies(tableRow.table_schema, tableRow.table_name),
         hasRLS: await this.checkRLS(tableRow.table_schema, tableRow.table_name),
       };
 
@@ -272,10 +256,7 @@ export class SchemaIntrospector {
   /**
    * Get columns for a specific table
    */
-  private async getTableColumns(
-    schema: string,
-    tableName: string,
-  ): Promise<ColumnInfo[]> {
+  private async getTableColumns(schema: string, tableName: string): Promise<ColumnInfo[]> {
     const helper = database.createQueryHelper(this.client);
 
     const columnsQuery = `
@@ -320,10 +301,7 @@ export class SchemaIntrospector {
   /**
    * Get primary keys for a table
    */
-  private async getPrimaryKeys(
-    schema: string,
-    tableName: string,
-  ): Promise<string[]> {
+  private async getPrimaryKeys(schema: string, tableName: string): Promise<string[]> {
     const helper = database.createQueryHelper(this.client);
 
     const pkQuery = `
@@ -349,10 +327,7 @@ export class SchemaIntrospector {
   /**
    * Get foreign keys for a table
    */
-  private async getForeignKeys(
-    schema: string,
-    tableName: string,
-  ): Promise<ForeignKeyInfo[]> {
+  private async getForeignKeys(schema: string, tableName: string): Promise<ForeignKeyInfo[]> {
     const helper = database.createQueryHelper(this.client);
 
     const fkQuery = `
@@ -391,10 +366,7 @@ export class SchemaIntrospector {
   /**
    * Get indexes for a table
    */
-  private async getIndexes(
-    schema: string,
-    tableName: string,
-  ): Promise<IndexInfo[]> {
+  private async getIndexes(schema: string, tableName: string): Promise<IndexInfo[]> {
     const helper = database.createQueryHelper(this.client);
 
     const indexQuery = `
@@ -432,10 +404,7 @@ export class SchemaIntrospector {
   /**
    * Get RLS policies for a table
    */
-  private async getPolicies(
-    schema: string,
-    tableName: string,
-  ): Promise<PolicyInfo[]> {
+  private async getPolicies(schema: string, tableName: string): Promise<PolicyInfo[]> {
     const helper = database.createQueryHelper(this.client);
 
     const policiesQuery = `
@@ -517,10 +486,7 @@ export class SchemaIntrospector {
         name: viewRow.view_name,
         schema: viewRow.table_schema,
         definition: viewRow.view_definition,
-        columns: await this.getTableColumns(
-          viewRow.table_schema,
-          viewRow.view_name,
-        ),
+        columns: await this.getTableColumns(viewRow.table_schema, viewRow.view_name),
       };
 
       views.push(viewInfo);
@@ -563,10 +529,7 @@ export class SchemaIntrospector {
         name: funcRow.function_name,
         schema: funcRow.schema_name,
         returnType: this.mapPostgreSQLTypeToTypeScript(funcRow.return_type),
-        parameters: await this.getFunctionParameters(
-          funcRow.schema_name,
-          funcRow.function_name,
-        ),
+        parameters: await this.getFunctionParameters(funcRow.schema_name, funcRow.function_name),
         language: funcRow.language,
         isSecurityDefiner: funcRow.is_security_definer,
       };
@@ -582,7 +545,7 @@ export class SchemaIntrospector {
    */
   private async getFunctionParameters(
     schema: string,
-    functionName: string,
+    functionName: string
   ): Promise<ParameterInfo[]> {
     const helper = database.createQueryHelper(this.client);
 
@@ -650,7 +613,7 @@ export class SchemaIntrospector {
     try {
       // Use migration manager to get the latest applied migration
       const summary = await migrationManager.getMigrationSummary(
-        path.join(process.cwd(), 'src', 'modules'),
+        path.join(process.cwd(), 'src', 'modules')
       );
 
       const totalApplied = summary.overall.applied;
@@ -665,10 +628,7 @@ export class SchemaIntrospector {
   /**
    * Map PostgreSQL types to TypeScript types
    */
-  private mapPostgreSQLTypeToTypeScript(
-    pgType: string,
-    udtName?: string,
-  ): string {
+  private mapPostgreSQLTypeToTypeScript(pgType: string, udtName?: string): string {
     // Handle array types
     if (pgType.endsWith('[]')) {
       const baseType = this.mapPostgreSQLTypeToTypeScript(pgType.slice(0, -2));
@@ -683,55 +643,55 @@ export class SchemaIntrospector {
     // Map common PostgreSQL types
     const typeMap: Record<string, string> = {
       // Numbers
-      'integer': 'number',
-      'bigint': 'number',
-      'smallint': 'number',
-      'decimal': 'number',
-      'numeric': 'number',
-      'real': 'number',
+      integer: 'number',
+      bigint: 'number',
+      smallint: 'number',
+      decimal: 'number',
+      numeric: 'number',
+      real: 'number',
       'double precision': 'number',
-      'serial': 'number',
-      'bigserial': 'number',
+      serial: 'number',
+      bigserial: 'number',
 
       // Strings
-      'text': 'string',
-      'varchar': 'string',
+      text: 'string',
+      varchar: 'string',
       'character varying': 'string',
-      'character': 'string',
-      'char': 'string',
+      character: 'string',
+      char: 'string',
 
       // Booleans
-      'boolean': 'boolean',
-      'bool': 'boolean',
+      boolean: 'boolean',
+      bool: 'boolean',
 
       // Dates
-      'timestamp': 'string',
-      'timestamptz': 'string',
+      timestamp: 'string',
+      timestamptz: 'string',
       'timestamp with time zone': 'string',
       'timestamp without time zone': 'string',
-      'date': 'string',
-      'time': 'string',
-      'timetz': 'string',
-      'interval': 'string',
+      date: 'string',
+      time: 'string',
+      timetz: 'string',
+      interval: 'string',
 
       // JSON
-      'json': 'any',
-      'jsonb': 'any',
+      json: 'any',
+      jsonb: 'any',
 
       // UUID
-      'uuid': 'string',
+      uuid: 'string',
 
       // Network
-      'inet': 'string',
-      'cidr': 'string',
-      'macaddr': 'string',
+      inet: 'string',
+      cidr: 'string',
+      macaddr: 'string',
 
       // Arrays
-      'ARRAY': 'any[]',
+      ARRAY: 'any[]',
 
       // Others
-      'bytea': 'string',
-      'money': 'string',
+      bytea: 'string',
+      money: 'string',
     };
 
     return typeMap[pgType.toLowerCase()] || 'any';
@@ -744,7 +704,7 @@ export class SchemaIntrospector {
     return str
       .replace(/[^a-zA-Z0-9]/g, '_')
       .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
   }
 }
@@ -818,17 +778,14 @@ export class TypesGenerator {
    * Generate enum types
    */
   private generateEnums(enums: EnumInfo[]): string {
-    const enumTypes = enums.map((enumInfo) => {
-      const values = enumInfo.values.map((value) => `  '${value}' = '${value}'`)
-        .join(',\n');
+    const enumTypes = enums.map(enumInfo => {
+      const values = enumInfo.values.map(value => `  '${value}' = '${value}'`).join(',\n');
 
       return `export enum ${this.pascalCase(enumInfo.name)} {
 ${values}
 }
 
-export type ${this.pascalCase(enumInfo.name)}Type = \`\${${
-        this.pascalCase(enumInfo.name)
-      }}\`;`;
+export type ${this.pascalCase(enumInfo.name)}Type = \`\${${this.pascalCase(enumInfo.name)}}\`;`;
     });
 
     return `// Enums\n${enumTypes.join('\n\n')}`;
@@ -837,39 +794,38 @@ export type ${this.pascalCase(enumInfo.name)}Type = \`\${${
   /**
    * Generate table interfaces
    */
-  private generateTableInterfaces(
-    tables: TableInfo[],
-    config: TypesGenerationConfig,
-  ): string {
-    const interfaces = tables.map((table) => {
+  private generateTableInterfaces(tables: TableInfo[], config: TypesGenerationConfig): string {
+    const interfaces = tables.map(table => {
       const tableName = this.pascalCase(table.name);
 
       // Generate table row interface
-      const columns = table.columns.map((col) => {
-        const optional = col.nullable || col.defaultValue ? '?' : '';
-        const comment = config.generateComments && col.comment
-          ? `  /** ${col.comment} */\n`
-          : '';
+      const columns = table.columns
+        .map(col => {
+          const optional = col.nullable || col.defaultValue ? '?' : '';
+          const comment = config.generateComments && col.comment ? `  /** ${col.comment} */\n` : '';
 
-        return `${comment}  ${col.name}${optional}: ${col.type}`;
-      }).join('\n');
+          return `${comment}  ${col.name}${optional}: ${col.type}`;
+        })
+        .join('\n');
 
       // Generate insert interface (all optional except required fields)
       const insertColumns = table.columns
-        .filter((col) => !col.isGenerated)
-        .map((col) => {
+        .filter(col => !col.isGenerated)
+        .map(col => {
           const required = !col.nullable && !col.defaultValue;
           const optional = required ? '' : '?';
 
           return `  ${col.name}${optional}: ${col.type}`;
-        }).join('\n');
+        })
+        .join('\n');
 
       // Generate update interface (all optional)
       const updateColumns = table.columns
-        .filter((col) => !col.isGenerated)
-        .map((col) => {
+        .filter(col => !col.isGenerated)
+        .map(col => {
           return `  ${col.name}?: ${col.type}`;
-        }).join('\n');
+        })
+        .join('\n');
 
       return `// Table: ${table.name}
 export interface ${tableName} {
@@ -891,21 +847,18 @@ ${updateColumns}
   /**
    * Generate view interfaces
    */
-  private generateViewInterfaces(
-    views: ViewInfo[],
-    config: TypesGenerationConfig,
-  ): string {
-    const interfaces = views.map((view) => {
+  private generateViewInterfaces(views: ViewInfo[], config: TypesGenerationConfig): string {
+    const interfaces = views.map(view => {
       const viewName = this.pascalCase(view.name);
 
-      const columns = view.columns.map((col) => {
-        const optional = col.nullable ? '?' : '';
-        const comment = config.generateComments && col.comment
-          ? `  /** ${col.comment} */\n`
-          : '';
+      const columns = view.columns
+        .map(col => {
+          const optional = col.nullable ? '?' : '';
+          const comment = config.generateComments && col.comment ? `  /** ${col.comment} */\n` : '';
 
-        return `${comment}  ${col.name}${optional}: ${col.type}`;
-      }).join('\n');
+          return `${comment}  ${col.name}${optional}: ${col.type}`;
+        })
+        .join('\n');
 
       return `// View: ${view.name}
 export interface ${viewName} {
@@ -919,19 +872,17 @@ ${columns}
   /**
    * Generate function types
    */
-  private generateFunctionTypes(
-    functions: FunctionInfo[],
-    config: TypesGenerationConfig,
-  ): string {
-    const functionTypes = functions.map((func) => {
+  private generateFunctionTypes(functions: FunctionInfo[], config: TypesGenerationConfig): string {
+    const functionTypes = functions.map(func => {
       const funcName = this.pascalCase(func.name);
 
       const params = func.parameters
-        .filter((p) => p.mode === 'IN' || p.mode === 'INOUT')
-        .map((p) => {
+        .filter(p => p.mode === 'IN' || p.mode === 'INOUT')
+        .map(p => {
           const optional = p.defaultValue ? '?' : '';
           return `  ${p.name}${optional}: ${p.type}`;
-        }).join('\n');
+        })
+        .join('\n');
 
       return `// Function: ${func.name}
 export interface ${funcName}Params {
@@ -948,29 +899,35 @@ export type ${funcName}Return = ${func.returnType};`;
    * Generate main database interface
    */
   private generateDatabaseInterface(schema: SchemaInfo): string {
-    const tableTypes = schema.tables.map((table) => {
-      const tableName = this.pascalCase(table.name);
-      return `    ${table.name}: {
+    const tableTypes = schema.tables
+      .map(table => {
+        const tableName = this.pascalCase(table.name);
+        return `    ${table.name}: {
       Row: ${tableName}
       Insert: ${tableName}Insert
       Update: ${tableName}Update
     }`;
-    }).join('\n');
+      })
+      .join('\n');
 
-    const viewTypes = schema.views.map((view) => {
-      const viewName = this.pascalCase(view.name);
-      return `    ${view.name}: {
+    const viewTypes = schema.views
+      .map(view => {
+        const viewName = this.pascalCase(view.name);
+        return `    ${view.name}: {
       Row: ${viewName}
     }`;
-    }).join('\n');
+      })
+      .join('\n');
 
-    const functionTypes = schema.functions.map((func) => {
-      const funcName = this.pascalCase(func.name);
-      return `    ${func.name}: {
+    const functionTypes = schema.functions
+      .map(func => {
+        const funcName = this.pascalCase(func.name);
+        return `    ${func.name}: {
       Args: ${funcName}Params
       Returns: ${funcName}Return
     }`;
-    }).join('\n');
+      })
+      .join('\n');
 
     return `// Database
 export interface Database {
@@ -985,10 +942,7 @@ ${viewTypes}
 ${functionTypes}
     }
     Enums: {
-${
-      schema.enums.map((e) => `      ${e.name}: ${this.pascalCase(e.name)}Type`)
-        .join('\n')
-    }
+${schema.enums.map(e => `      ${e.name}: ${this.pascalCase(e.name)}Type`).join('\n')}
     }
   }
 }`;
@@ -1014,7 +968,7 @@ export const DatabaseMetadata = {
     return str
       .replace(/[^a-zA-Z0-9]/g, '_')
       .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
   }
 }

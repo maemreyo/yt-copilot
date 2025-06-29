@@ -1,7 +1,7 @@
-// - Integration test verifying version endpoint accuracy and consistency
+// Integration test verifying version endpoint accuracy and consistency
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { request } from 'supertest';
+import { describe, expect, it } from 'vitest';
 
 const BASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 
@@ -10,8 +10,7 @@ describe('Version Endpoint Integration Tests', () => {
     it('should return consistent version information across requests', async () => {
       // Make multiple requests to ensure consistency
       const promises = Array.from({ length: 3 }, () =>
-        request(`${BASE_URL}/functions/v1`)
-          .get('/core_version')
+        request(`${BASE_URL}/functions/v1`).get('/core_version')
       );
 
       const responses = await Promise.all(promises);
@@ -35,9 +34,7 @@ describe('Version Endpoint Integration Tests', () => {
     });
 
     it('should include all required version fields', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       // Required fields
       expect(response.body).toHaveProperty('version');
@@ -65,9 +62,7 @@ describe('Version Endpoint Integration Tests', () => {
     });
 
     it('should validate version format consistency', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       // Version should follow semantic versioning (X.Y.Z)
       const versionRegex = /^\d+\.\d+\.\d+(-\w+)?$/;
@@ -88,7 +83,7 @@ describe('Version Endpoint Integration Tests', () => {
     it('should handle minimal version parameter correctly', async () => {
       const [fullResponse, minimalResponse] = await Promise.all([
         request(`${BASE_URL}/functions/v1`).get('/core_version'),
-        request(`${BASE_URL}/functions/v1`).get('/core_version?minimal=true')
+        request(`${BASE_URL}/functions/v1`).get('/core_version?minimal=true'),
       ]);
 
       expect(fullResponse.status).toBe(200);
@@ -116,9 +111,7 @@ describe('Version Endpoint Integration Tests', () => {
 
   describe('Build Information Integration', () => {
     it('should include build metadata when available', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       // Check for build information
       if (response.body.buildDate) {
@@ -142,9 +135,7 @@ describe('Version Endpoint Integration Tests', () => {
     });
 
     it('should include runtime environment information', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       // Runtime information
       expect(response.body).toHaveProperty('runtime');
@@ -157,10 +148,8 @@ describe('Version Endpoint Integration Tests', () => {
 
     it('should validate timestamp and response metadata', async () => {
       const startTime = Date.now();
-      
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       const endTime = Date.now();
 
@@ -191,7 +180,7 @@ describe('Version Endpoint Integration Tests', () => {
       const [versionResponse, healthResponse, metricsResponse] = await Promise.all([
         request(`${BASE_URL}/functions/v1`).get('/core_version'),
         request(`${BASE_URL}/functions/v1`).get('/core_health-check'),
-        request(`${BASE_URL}/functions/v1`).get('/core_metrics')
+        request(`${BASE_URL}/functions/v1`).get('/core_metrics'),
       ]);
 
       expect(versionResponse.status).toBe(200);
@@ -224,7 +213,7 @@ describe('Version Endpoint Integration Tests', () => {
 
       const [versionResponse, configResponse] = await Promise.all([
         request(`${BASE_URL}/functions/v1`).get('/core_version'),
-        request(`${BASE_URL}/functions/v1`).get('/core_configuration')
+        request(`${BASE_URL}/functions/v1`).get('/core_configuration'),
       ]);
 
       expect(versionResponse.status).toBe(200);
@@ -251,7 +240,7 @@ describe('Version Endpoint Integration Tests', () => {
         version: versionResponse.body.version,
         environment: versionResponse.body.environment,
         severity: 'low',
-        category: 'backend'
+        category: 'backend',
       };
 
       const errorResponse = await request(`${BASE_URL}/functions/v1`)
@@ -266,9 +255,7 @@ describe('Version Endpoint Integration Tests', () => {
 
   describe('API Versioning and Compatibility', () => {
     it('should properly declare API version compatibility', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       // API version information
       expect(response.body.api).toHaveProperty('version');
@@ -284,8 +271,7 @@ describe('Version Endpoint Integration Tests', () => {
     });
 
     it('should include version information in custom headers', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version');
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version');
 
       // Custom headers should include version information
       expect(response.headers).toHaveProperty('x-api-version');
@@ -294,7 +280,7 @@ describe('Version Endpoint Integration Tests', () => {
 
       // Values should match response body
       expect(response.headers['x-api-version']).toBe(response.body.api.version);
-      
+
       if (response.body.buildNumber && response.body.buildNumber !== 'unknown') {
         expect(response.headers['x-build-number']).toBe(response.body.buildNumber);
       }
@@ -307,8 +293,7 @@ describe('Version Endpoint Integration Tests', () => {
 
   describe('Caching and Performance', () => {
     it('should include appropriate cache headers', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version');
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version');
 
       // Version information should be cacheable
       expect(response.headers).toHaveProperty('cache-control');
@@ -318,10 +303,8 @@ describe('Version Endpoint Integration Tests', () => {
 
     it('should respond quickly for version requests', async () => {
       const startTime = Date.now();
-      
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       const responseTime = Date.now() - startTime;
 
@@ -335,8 +318,7 @@ describe('Version Endpoint Integration Tests', () => {
     it('should handle concurrent version requests efficiently', async () => {
       // Make multiple concurrent requests
       const promises = Array.from({ length: 5 }, () =>
-        request(`${BASE_URL}/functions/v1`)
-          .get('/core_version')
+        request(`${BASE_URL}/functions/v1`).get('/core_version')
       );
 
       const startTime = Date.now();
@@ -356,9 +338,7 @@ describe('Version Endpoint Integration Tests', () => {
 
   describe('Error Handling and Fallbacks', () => {
     it('should handle missing build information gracefully', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       // Should return 200 even if some build info is missing
       expect(response.body).toHaveProperty('version');
@@ -375,8 +355,7 @@ describe('Version Endpoint Integration Tests', () => {
     });
 
     it('should provide fallback version information on partial failures', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version');
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version');
 
       // Even if some version building fails, should still return basic info
       expect([200, 500]).toContain(response.status);
@@ -395,8 +374,7 @@ describe('Version Endpoint Integration Tests', () => {
 
   describe('Security Integration', () => {
     it('should include security headers', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version');
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version');
 
       // Standard security headers
       expect(response.headers).toHaveProperty('x-content-type-options', 'nosniff');
@@ -406,20 +384,12 @@ describe('Version Endpoint Integration Tests', () => {
     });
 
     it('should not expose sensitive build information', async () => {
-      const response = await request(`${BASE_URL}/functions/v1`)
-        .get('/core_version')
-        .expect(200);
+      const response = await request(`${BASE_URL}/functions/v1`).get('/core_version').expect(200);
 
       const responseText = JSON.stringify(response.body);
 
       // Should not contain sensitive patterns
-      const sensitivePatterns = [
-        /password/i,
-        /secret/i,
-        /token/i,
-        /key/i,
-        /private/i
-      ];
+      const sensitivePatterns = [/password/i, /secret/i, /token/i, /key/i, /private/i];
 
       sensitivePatterns.forEach(pattern => {
         expect(responseText).not.toMatch(pattern);

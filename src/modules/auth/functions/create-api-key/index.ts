@@ -1,4 +1,4 @@
-// - Enhanced API key creation with proper validation, rate limiting, and security
+// Enhanced API key creation with proper validation, rate limiting, and security
 
 import { denoEnv } from '../../../../shared/edge-functions/_shared/deno-env.ts';
 

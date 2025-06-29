@@ -1,4 +1,4 @@
-// - User profile management endpoints using Layer 1 & 2 utilities
+// User profile management endpoints using Layer 1 & 2 utilities
 
 import { denoEnv } from '../../../../shared/edge-functions/_shared/deno-env.ts';
 

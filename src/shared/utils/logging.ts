@@ -175,9 +175,7 @@ export class ConsoleFormatter implements LogFormatter {
       }
 
       if (entry.performance.memory !== undefined) {
-        perfParts.push(
-          `${Math.round(entry.performance.memory / 1024 / 1024)}MB`,
-        );
+        perfParts.push(`${Math.round(entry.performance.memory / 1024 / 1024)}MB`);
       }
 
       if (perfParts.length > 0) {
@@ -324,7 +322,7 @@ export class ExternalServiceOutput implements LogOutput {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify(entry),
       });
@@ -341,10 +339,7 @@ export class DataRedactor {
   private sensitiveFields: Set<string>;
   private redactionValue: string;
 
-  constructor(
-    sensitiveFields: string[] = [],
-    redactionValue: string = '[REDACTED]',
-  ) {
+  constructor(sensitiveFields: string[] = [], redactionValue: string = '[REDACTED]') {
     this.sensitiveFields = new Set([
       'password',
       'token',
@@ -371,7 +366,7 @@ export class DataRedactor {
     }
 
     if (Array.isArray(data)) {
-      return data.map((item) => this.redact(item));
+      return data.map(item => this.redact(item));
     }
 
     if (typeof data === 'object') {
@@ -380,10 +375,7 @@ export class DataRedactor {
       for (const [key, value] of Object.entries(data)) {
         const lowerKey = key.toLowerCase();
 
-        if (
-          this.sensitiveFields.has(lowerKey) ||
-          this.containsSensitivePattern(lowerKey)
-        ) {
+        if (this.sensitiveFields.has(lowerKey) || this.containsSensitivePattern(lowerKey)) {
           redacted[key] = this.redactionValue;
         } else {
           redacted[key] = this.redact(value);
@@ -397,16 +389,9 @@ export class DataRedactor {
   }
 
   private containsSensitivePattern(key: string): boolean {
-    const sensitivePatterns = [
-      /password/i,
-      /secret/i,
-      /token/i,
-      /key$/i,
-      /auth/i,
-      /credential/i,
-    ];
+    const sensitivePatterns = [/password/i, /secret/i, /token/i, /key$/i, /auth/i, /credential/i];
 
-    return sensitivePatterns.some((pattern) => pattern.test(key));
+    return sensitivePatterns.some(pattern => pattern.test(key));
   }
 }
 
@@ -452,8 +437,7 @@ export class Logger {
       enableConsole: config.enableConsole ?? true,
       enableStructured: config.enableStructured ?? environment.isProduction(),
       enableColors: config.enableColors ?? !environment.isProduction(),
-      includeStackTrace: config.includeStackTrace ??
-        !environment.isProduction(),
+      includeStackTrace: config.includeStackTrace ?? !environment.isProduction(),
       maxMessageLength: config.maxMessageLength ?? 10000,
       sensitiveFields: config.sensitiveFields ?? [],
       redactSensitiveData: config.redactSensitiveData ?? true,
@@ -483,10 +467,7 @@ export class Logger {
     if (this.config.enableConsole) {
       const formatter = this.config.enableStructured
         ? new JsonFormatter()
-        : new ConsoleFormatter(
-          this.config.enableColors,
-          this.config.includeStackTrace,
-        );
+        : new ConsoleFormatter(this.config.enableColors, this.config.includeStackTrace);
 
       outputs.push(new ConsoleOutput(formatter));
     }
@@ -523,7 +504,7 @@ export class Logger {
     message: string,
     metadata?: Record<string, unknown>,
     error?: Error,
-    performance?: { duration?: number; memory?: number },
+    performance?: { duration?: number; memory?: number }
   ): Promise<void> {
     // Check if level is enabled
     if (level < this.config.level) {
@@ -531,14 +512,14 @@ export class Logger {
     }
 
     // Truncate message if too long
-    const truncatedMessage = message.length > this.config.maxMessageLength
-      ? message.substring(0, this.config.maxMessageLength) + '...'
-      : message;
+    const truncatedMessage =
+      message.length > this.config.maxMessageLength
+        ? message.substring(0, this.config.maxMessageLength) + '...'
+        : message;
 
     // Redact sensitive data
-    const redactedMetadata = this.config.redactSensitiveData && metadata
-      ? this.redactor.redact(metadata)
-      : metadata;
+    const redactedMetadata =
+      this.config.redactSensitiveData && metadata ? this.redactor.redact(metadata) : metadata;
 
     // Create log entry
     const entry: LogEntry = {
@@ -550,20 +531,20 @@ export class Logger {
       metadata: redactedMetadata,
       error: error
         ? {
-          name: error.name,
-          message: error.message,
-          stack: this.config.includeStackTrace ? error.stack : undefined,
-          code: (error as any).code,
-        }
+            name: error.name,
+            message: error.message,
+            stack: this.config.includeStackTrace ? error.stack : undefined,
+            code: (error as any).code,
+          }
         : undefined,
       performance,
     };
 
     // Write to all enabled outputs
     const writePromises = this.config.outputs
-      .filter((output) => output.enabled && level >= output.minLevel)
-      .map((output) =>
-        output.write(entry).catch((err) => {
+      .filter(output => output.enabled && level >= output.minLevel)
+      .map(output =>
+        output.write(entry).catch(err => {
           console.error(`Failed to write to output ${output.name}:`, err);
         })
       );
@@ -588,52 +569,35 @@ export class Logger {
   /**
    * Debug level logging
    */
-  async debug(
-    message: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
+  async debug(message: string, metadata?: Record<string, unknown>): Promise<void> {
     await this.log(LogLevel.DEBUG, message, metadata);
   }
 
   /**
    * Info level logging
    */
-  async info(
-    message: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
+  async info(message: string, metadata?: Record<string, unknown>): Promise<void> {
     await this.log(LogLevel.INFO, message, metadata);
   }
 
   /**
    * Warning level logging
    */
-  async warn(
-    message: string,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
+  async warn(message: string, metadata?: Record<string, unknown>): Promise<void> {
     await this.log(LogLevel.WARN, message, metadata);
   }
 
   /**
    * Error level logging
    */
-  async error(
-    message: string,
-    error?: Error,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
+  async error(message: string, error?: Error, metadata?: Record<string, unknown>): Promise<void> {
     await this.log(LogLevel.ERROR, message, metadata, error);
   }
 
   /**
    * Fatal level logging
    */
-  async fatal(
-    message: string,
-    error?: Error,
-    metadata?: Record<string, unknown>,
-  ): Promise<void> {
+  async fatal(message: string, error?: Error, metadata?: Record<string, unknown>): Promise<void> {
     await this.log(LogLevel.FATAL, message, metadata, error);
   }
 
@@ -643,7 +607,7 @@ export class Logger {
   async time<T>(
     operation: string,
     fn: () => Promise<T>,
-    metadata?: Record<string, unknown>,
+    metadata?: Record<string, unknown>
   ): Promise<T> {
     const tracker = new PerformanceTracker();
 
@@ -695,8 +659,7 @@ export const loggingUtils = {
   /**
    * Create data redactor
    */
-  createRedactor: (sensitiveFields?: string[]) =>
-    new DataRedactor(sensitiveFields),
+  createRedactor: (sensitiveFields?: string[]) => new DataRedactor(sensitiveFields),
 
   /**
    * Log levels

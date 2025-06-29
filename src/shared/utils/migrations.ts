@@ -12,9 +12,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import { database } from './database';
+import { DatabaseError, ValidationError } from './errors';
 import { logger } from './logging';
-import { database, DatabaseResult } from './database';
-import { ApiError, DatabaseError, ErrorCode, ValidationError } from './errors';
 
 /**
  * Migration file interface
@@ -75,9 +75,7 @@ export class MigrationDiscovery {
   /**
    * Discover all migration files from modules
    */
-  static async discoverMigrations(
-    modulesDir: string,
-  ): Promise<MigrationFile[]> {
+  static async discoverMigrations(modulesDir: string): Promise<MigrationFile[]> {
     const migrations: MigrationFile[] = [];
 
     try {
@@ -86,15 +84,13 @@ export class MigrationDiscovery {
         return migrations;
       }
 
-      const modules = fs.readdirSync(modulesDir, { withFileTypes: true })
-        .filter((dirent) => dirent.isDirectory())
-        .map((dirent) => dirent.name);
+      const modules = fs
+        .readdirSync(modulesDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
 
       for (const module of modules) {
-        const moduleMigrations = await this.discoverModuleMigrations(
-          modulesDir,
-          module,
-        );
+        const moduleMigrations = await this.discoverModuleMigrations(modulesDir, module);
         migrations.push(...moduleMigrations);
       }
 
@@ -120,7 +116,7 @@ export class MigrationDiscovery {
    */
   private static async discoverModuleMigrations(
     modulesDir: string,
-    module: string,
+    module: string
   ): Promise<MigrationFile[]> {
     const migrations: MigrationFile[] = [];
     const migrationsDir = path.join(modulesDir, module, 'migrations');
@@ -130,17 +126,14 @@ export class MigrationDiscovery {
       return migrations;
     }
 
-    const files = fs.readdirSync(migrationsDir)
-      .filter((file) => this.MIGRATION_PATTERN.test(file))
+    const files = fs
+      .readdirSync(migrationsDir)
+      .filter(file => this.MIGRATION_PATTERN.test(file))
       .sort(); // Sort by filename to ensure correct order
 
     for (const filename of files) {
       try {
-        const migration = await this.parseMigrationFile(
-          migrationsDir,
-          module,
-          filename,
-        );
+        const migration = await this.parseMigrationFile(migrationsDir, module, filename);
         migrations.push(migration);
       } catch (error: any) {
         logger.error('Failed to parse migration file', {
@@ -166,7 +159,7 @@ export class MigrationDiscovery {
   private static async parseMigrationFile(
     migrationsDir: string,
     module: string,
-    filename: string,
+    filename: string
   ): Promise<MigrationFile> {
     const fullPath = path.join(migrationsDir, filename);
     const content = fs.readFileSync(fullPath, 'utf-8');
@@ -208,7 +201,7 @@ export class MigrationDiscovery {
     let match;
 
     while ((match = this.DEPENDENCY_PATTERN.exec(content)) !== null) {
-      const deps = match[1].split(',').map((dep) => dep.trim());
+      const deps = match[1].split(',').map(dep => dep.trim());
       dependencies.push(...deps);
     }
 
@@ -231,7 +224,7 @@ export class MigrationDiscovery {
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(16);
@@ -266,7 +259,7 @@ export class DependencyResolver {
    */
   private static topologicalSort(
     nodes: Map<string, MigrationFile>,
-    edges: Map<string, string[]>,
+    edges: Map<string, string[]>
   ): string[] {
     const visited = new Set<string>();
     const visiting = new Set<string>();
@@ -274,9 +267,7 @@ export class DependencyResolver {
 
     const visit = (nodeId: string) => {
       if (visiting.has(nodeId)) {
-        throw new ValidationError(
-          `Circular dependency detected involving migration: ${nodeId}`,
-        );
+        throw new ValidationError(`Circular dependency detected involving migration: ${nodeId}`);
       }
 
       if (visited.has(nodeId)) {
@@ -326,10 +317,9 @@ export class DependencyResolver {
       for (const depId of dependencies) {
         if (!graph.nodes.has(depId)) {
           errors.push(
-            new ValidationError(
-              `Migration ${nodeId} depends on missing migration ${depId}`,
-              { context: { nodeId, dependency: depId } },
-            ),
+            new ValidationError(`Migration ${nodeId} depends on missing migration ${depId}`, {
+              context: { nodeId, dependency: depId },
+            })
           );
         }
       }
@@ -381,9 +371,7 @@ export class MigrationTracker {
   /**
    * Get migration status for all migrations
    */
-  async getMigrationStatus(
-    migrations: MigrationFile[],
-  ): Promise<MigrationStatus[]> {
+  async getMigrationStatus(migrations: MigrationFile[]): Promise<MigrationStatus[]> {
     const helper = database.createQueryHelper(this.client);
 
     // Get applied migrations
@@ -490,9 +478,7 @@ export class MigrationManager {
       await this.tracker.initializeTracking();
 
       // Discover migrations
-      const migrations = await MigrationDiscovery.discoverMigrations(
-        modulesDir,
-      );
+      const migrations = await MigrationDiscovery.discoverMigrations(modulesDir);
 
       // Build dependency graph
       const graph = DependencyResolver.buildDependencyGraph(migrations);
@@ -504,13 +490,12 @@ export class MigrationManager {
       const statuses = await this.tracker.getMigrationStatus(migrations);
 
       // Check for failed migrations
-      const failedMigrations = statuses.filter((s) => s.status === 'failed');
+      const failedMigrations = statuses.filter(s => s.status === 'failed');
       for (const failed of failedMigrations) {
         errors.push(
-          new ValidationError(
-            `Migration ${failed.id} has failed: ${failed.error}`,
-            { context: failed },
-          ),
+          new ValidationError(`Migration ${failed.id} has failed: ${failed.error}`, {
+            context: failed,
+          })
         );
       }
 
@@ -519,13 +504,9 @@ export class MigrationManager {
       logger.info('Migration validation completed', {
         success,
         totalMigrations: migrations.length,
-        pendingMigrations: statuses.filter((s) =>
-          s.status === 'pending'
-        ).length,
-        appliedMigrations: statuses.filter((s) =>
-          s.status === 'applied'
-        ).length,
-        failedMigrations: statuses.filter((s) => s.status === 'failed').length,
+        pendingMigrations: statuses.filter(s => s.status === 'pending').length,
+        appliedMigrations: statuses.filter(s => s.status === 'applied').length,
+        failedMigrations: statuses.filter(s => s.status === 'failed').length,
         errors: errors.length,
       });
 
@@ -550,12 +531,15 @@ export class MigrationManager {
    * Get migration summary for reporting
    */
   async getMigrationSummary(modulesDir: string): Promise<{
-    modules: Record<string, {
-      total: number;
-      pending: number;
-      applied: number;
-      failed: number;
-    }>;
+    modules: Record<
+      string,
+      {
+        total: number;
+        pending: number;
+        applied: number;
+        failed: number;
+      }
+    >;
     overall: {
       total: number;
       pending: number;

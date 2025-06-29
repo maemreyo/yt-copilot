@@ -8,9 +8,11 @@ export class AuditLogger {
 
   constructor() {
     this.logger = new Logger({
-      service: 'audit-service',
       level: LogLevel.INFO,
-      enablePerformanceTracking: false,
+    });
+    // Set context with service name
+    this.logger.setContext({
+      module: 'audit-service',
     });
   }
 
@@ -21,7 +23,7 @@ export class AuditLogger {
     eventType: string,
     userId: string,
     details: Record<string, any>,
-    requestId?: string,
+    requestId?: string
   ): Promise<void> {
     this.logger.info(`AUDIT: ${eventType}`, {
       userId,
@@ -39,7 +41,7 @@ export class AuditLogger {
     eventType: string,
     userId: string,
     details: Record<string, any>,
-    requestId?: string,
+    requestId?: string
   ): Promise<void> {
     this.logger.warn(`SECURITY: ${eventType}`, {
       userId,
@@ -59,7 +61,7 @@ export class AuditLogger {
     userId: string,
     action: 'read' | 'create' | 'update' | 'delete',
     details: Record<string, any>,
-    requestId?: string,
+    requestId?: string
   ): Promise<void> {
     this.logger.info(`DATA_ACCESS: ${action}`, {
       userId,

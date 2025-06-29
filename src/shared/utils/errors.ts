@@ -1,4 +1,4 @@
-// - Comprehensive error handling system with standardized classes, formatting, and monitoring
+// Comprehensive error handling system with standardized classes, formatting, and monitoring
 
 import { environment } from '../config/environment';
 
@@ -10,31 +10,33 @@ export enum ErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
   AUTHORIZATION_ERROR = 'AUTHORIZATION_ERROR',
+  FORBIDDEN = 'FORBIDDEN',
   NOT_FOUND = 'NOT_FOUND',
   CONFLICT = 'CONFLICT',
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   REQUEST_TOO_LARGE = 'REQUEST_TOO_LARGE',
   UNSUPPORTED_MEDIA_TYPE = 'UNSUPPORTED_MEDIA_TYPE',
-  
+
   // Server Errors (5xx)
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
   DATABASE_ERROR = 'DATABASE_ERROR',
   EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR',
   TIMEOUT_ERROR = 'TIMEOUT_ERROR',
-  
+
   // Business Logic Errors
   BUSINESS_RULE_VIOLATION = 'BUSINESS_RULE_VIOLATION',
   INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
   RESOURCE_LOCKED = 'RESOURCE_LOCKED',
   OPERATION_NOT_ALLOWED = 'OPERATION_NOT_ALLOWED',
-  
+
   // Payment/Billing Errors
   PAYMENT_REQUIRED = 'PAYMENT_REQUIRED',
   SUBSCRIPTION_REQUIRED = 'SUBSCRIPTION_REQUIRED',
+  SUBSCRIPTION_TIER_REQUIRED = 'SUBSCRIPTION_TIER_REQUIRED',
   PAYMENT_FAILED = 'PAYMENT_FAILED',
   SUBSCRIPTION_EXPIRED = 'SUBSCRIPTION_EXPIRED',
-  
+
   // API Key Errors
   INVALID_API_KEY = 'INVALID_API_KEY',
   API_KEY_EXPIRED = 'API_KEY_EXPIRED',
@@ -48,28 +50,30 @@ const ERROR_STATUS_MAP: Record<ErrorCode, number> = {
   [ErrorCode.VALIDATION_ERROR]: 400,
   [ErrorCode.AUTHENTICATION_ERROR]: 401,
   [ErrorCode.AUTHORIZATION_ERROR]: 403,
+  [ErrorCode.FORBIDDEN]: 403,
   [ErrorCode.NOT_FOUND]: 404,
   [ErrorCode.CONFLICT]: 409,
   [ErrorCode.RATE_LIMIT_EXCEEDED]: 429,
   [ErrorCode.REQUEST_TOO_LARGE]: 413,
   [ErrorCode.UNSUPPORTED_MEDIA_TYPE]: 415,
-  
+
   [ErrorCode.INTERNAL_ERROR]: 500,
   [ErrorCode.SERVICE_UNAVAILABLE]: 503,
   [ErrorCode.DATABASE_ERROR]: 500,
   [ErrorCode.EXTERNAL_SERVICE_ERROR]: 502,
   [ErrorCode.TIMEOUT_ERROR]: 504,
-  
+
   [ErrorCode.BUSINESS_RULE_VIOLATION]: 400,
   [ErrorCode.INSUFFICIENT_PERMISSIONS]: 403,
   [ErrorCode.RESOURCE_LOCKED]: 423,
   [ErrorCode.OPERATION_NOT_ALLOWED]: 405,
-  
+
   [ErrorCode.PAYMENT_REQUIRED]: 402,
   [ErrorCode.SUBSCRIPTION_REQUIRED]: 402,
+  [ErrorCode.SUBSCRIPTION_TIER_REQUIRED]: 402,
   [ErrorCode.PAYMENT_FAILED]: 402,
   [ErrorCode.SUBSCRIPTION_EXPIRED]: 402,
-  
+
   [ErrorCode.INVALID_API_KEY]: 401,
   [ErrorCode.API_KEY_EXPIRED]: 401,
   [ErrorCode.API_KEY_REVOKED]: 401,
@@ -139,7 +143,7 @@ export class AppError extends Error {
     } = {}
   ) {
     super(message);
-    
+
     this.name = this.constructor.name;
     this.code = code;
     this.statusCode = ERROR_STATUS_MAP[code] || 500;
@@ -203,9 +207,11 @@ export class AppError extends Error {
    * Check if error should be reported to monitoring service
    */
   shouldReport(): boolean {
-    return this.statusCode >= 500 || 
-           this.severity === ErrorSeverity.HIGH ||
-           this.severity === ErrorSeverity.CRITICAL;
+    return (
+      this.statusCode >= 500 ||
+      this.severity === ErrorSeverity.HIGH ||
+      this.severity === ErrorSeverity.CRITICAL
+    );
   }
 }
 
@@ -213,11 +219,7 @@ export class AppError extends Error {
  * Validation error class
  */
 export class ValidationError extends AppError {
-  constructor(
-    message: string,
-    details?: unknown,
-    context?: ErrorContext
-  ) {
+  constructor(message: string, details?: unknown, context?: ErrorContext) {
     super(ErrorCode.VALIDATION_ERROR, message, {
       details,
       context,
@@ -267,15 +269,11 @@ export class AuthorizationError extends AppError {
  * Not found error class
  */
 export class NotFoundError extends AppError {
-  constructor(
-    resource: string,
-    identifier?: string,
-    context?: ErrorContext
-  ) {
-    const message = identifier 
+  constructor(resource: string, identifier?: string, context?: ErrorContext) {
+    const message = identifier
       ? `${resource} with identifier '${identifier}' not found`
       : `${resource} not found`;
-      
+
     super(ErrorCode.NOT_FOUND, message, {
       details: { resource, identifier },
       context,
@@ -289,11 +287,7 @@ export class NotFoundError extends AppError {
  * Rate limit error class
  */
 export class RateLimitError extends AppError {
-  constructor(
-    limit: number,
-    windowMs: number,
-    context?: ErrorContext
-  ) {
+  constructor(limit: number, windowMs: number, context?: ErrorContext) {
     super(ErrorCode.RATE_LIMIT_EXCEEDED, 'Rate limit exceeded', {
       details: { limit, windowMs, retryAfter: Math.ceil(windowMs / 1000) },
       context,
@@ -307,11 +301,7 @@ export class RateLimitError extends AppError {
  * Database error class
  */
 export class DatabaseError extends AppError {
-  constructor(
-    message: string,
-    originalError?: Error,
-    context?: ErrorContext
-  ) {
+  constructor(message: string, originalError?: Error, context?: ErrorContext) {
     super(ErrorCode.DATABASE_ERROR, message, {
       details: originalError?.message,
       context,
@@ -326,11 +316,7 @@ export class DatabaseError extends AppError {
  * External service error class
  */
 export class ExternalServiceError extends AppError {
-  constructor(
-    serviceName: string,
-    originalError?: Error,
-    context?: ErrorContext
-  ) {
+  constructor(serviceName: string, originalError?: Error, context?: ErrorContext) {
     super(ErrorCode.EXTERNAL_SERVICE_ERROR, `${serviceName} service error`, {
       details: { service: serviceName, originalError: originalError?.message },
       context,
@@ -345,11 +331,7 @@ export class ExternalServiceError extends AppError {
  * Business rule violation error class
  */
 export class BusinessRuleError extends AppError {
-  constructor(
-    rule: string,
-    message?: string,
-    context?: ErrorContext
-  ) {
+  constructor(rule: string, message?: string, context?: ErrorContext) {
     super(ErrorCode.BUSINESS_RULE_VIOLATION, message || `Business rule violation: ${rule}`, {
       details: { rule },
       context,
@@ -363,12 +345,7 @@ export class BusinessRuleError extends AppError {
  * Payment error class
  */
 export class PaymentError extends AppError {
-  constructor(
-    code: ErrorCode,
-    message: string,
-    stripeError?: unknown,
-    context?: ErrorContext
-  ) {
+  constructor(code: ErrorCode, message: string, stripeError?: unknown, context?: ErrorContext) {
     super(code, message, {
       details: stripeError,
       context,
@@ -399,7 +376,7 @@ export class ErrorLogger {
 
   static log(error: AppError, additionalContext?: Record<string, unknown>) {
     const logEntry = this.formatLogEntry(error, additionalContext);
-    
+
     if (environment.isDevelopment()) {
       console.error('🚨 Application Error:', logEntry);
     } else {
@@ -411,7 +388,7 @@ export class ErrorLogger {
   static async report(error: AppError, additionalContext?: Record<string, unknown>) {
     // Log the error
     this.log(error, additionalContext);
-    
+
     // Report to external monitoring service if configured
     if (error.shouldReport() && environment.isProduction()) {
       try {
@@ -432,7 +409,10 @@ export class ErrorResponseFormatter {
   /**
    * Format error for API response
    */
-  static formatResponse(error: unknown, requestId?: string): {
+  static formatResponse(
+    error: unknown,
+    requestId?: string
+  ): {
     error: {
       code: string;
       message: string;
@@ -451,7 +431,7 @@ export class ErrorResponseFormatter {
 
     // Handle unknown errors
     const timestamp = new Date().toISOString();
-    const sanitizedMessage = environment.isProduction() 
+    const sanitizedMessage = environment.isProduction()
       ? 'An unexpected error occurred'
       : (error as Error)?.message || 'Unknown error';
 
@@ -472,10 +452,7 @@ export class ErrorResponseFormatter {
   /**
    * Format validation errors from Zod or similar libraries
    */
-  static formatValidationError(
-    validationError: unknown,
-    context?: ErrorContext
-  ): ValidationError {
+  static formatValidationError(validationError: unknown, context?: ErrorContext): ValidationError {
     // Handle Zod errors
     if (validationError && typeof validationError === 'object' && 'issues' in validationError) {
       const issues = (validationError as any).issues;
@@ -519,7 +496,7 @@ export function createErrorHandler() {
       // Convert unknown error to AppError
       appError = new AppError(
         ErrorCode.INTERNAL_ERROR,
-        environment.isProduction() 
+        environment.isProduction()
           ? 'An unexpected error occurred'
           : (error as Error)?.message || 'Unknown error',
         {
@@ -556,11 +533,10 @@ export const errorUtils = {
    * Create not found error for common resources
    */
   notFound: {
-    user: (id: string, context?: ErrorContext) => 
-      new NotFoundError('User', id, context),
-    apiKey: (prefix: string, context?: ErrorContext) => 
+    user: (id: string, context?: ErrorContext) => new NotFoundError('User', id, context),
+    apiKey: (prefix: string, context?: ErrorContext) =>
       new NotFoundError('API Key', prefix, context),
-    subscription: (id: string, context?: ErrorContext) => 
+    subscription: (id: string, context?: ErrorContext) =>
       new NotFoundError('Subscription', id, context),
   },
 
@@ -568,13 +544,13 @@ export const errorUtils = {
    * Create authentication errors
    */
   auth: {
-    invalidCredentials: (context?: ErrorContext) => 
+    invalidCredentials: (context?: ErrorContext) =>
       new AuthenticationError('Invalid credentials', undefined, context),
-    tokenExpired: (context?: ErrorContext) => 
+    tokenExpired: (context?: ErrorContext) =>
       new AuthenticationError('Token expired', undefined, context),
-    invalidToken: (context?: ErrorContext) => 
+    invalidToken: (context?: ErrorContext) =>
       new AuthenticationError('Invalid token', undefined, context),
-    missingToken: (context?: ErrorContext) => 
+    missingToken: (context?: ErrorContext) =>
       new AuthenticationError('Authentication token required', undefined, context),
   },
 
@@ -582,9 +558,13 @@ export const errorUtils = {
    * Create authorization errors
    */
   authz: {
-    insufficient: (resource: string, action: string, context?: ErrorContext) => 
-      new AuthorizationError(`Insufficient permissions to ${action} ${resource}`, { resource, action }, context),
-    forbidden: (context?: ErrorContext) => 
+    insufficient: (resource: string, action: string, context?: ErrorContext) =>
+      new AuthorizationError(
+        `Insufficient permissions to ${action} ${resource}`,
+        { resource, action },
+        context
+      ),
+    forbidden: (context?: ErrorContext) =>
       new AuthorizationError('Access forbidden', undefined, context),
   },
 
@@ -592,13 +572,23 @@ export const errorUtils = {
    * Create payment errors
    */
   payment: {
-    required: (context?: ErrorContext) => 
-      new PaymentError(ErrorCode.PAYMENT_REQUIRED, 'Payment required to access this resource', undefined, context),
-    failed: (reason: string, context?: ErrorContext) => 
+    required: (context?: ErrorContext) =>
+      new PaymentError(
+        ErrorCode.PAYMENT_REQUIRED,
+        'Payment required to access this resource',
+        undefined,
+        context
+      ),
+    failed: (reason: string, context?: ErrorContext) =>
       new PaymentError(ErrorCode.PAYMENT_FAILED, `Payment failed: ${reason}`, undefined, context),
-    subscriptionRequired: (context?: ErrorContext) => 
-      new PaymentError(ErrorCode.SUBSCRIPTION_REQUIRED, 'Active subscription required', undefined, context),
-    subscriptionExpired: (context?: ErrorContext) => 
+    subscriptionRequired: (context?: ErrorContext) =>
+      new PaymentError(
+        ErrorCode.SUBSCRIPTION_REQUIRED,
+        'Active subscription required',
+        undefined,
+        context
+      ),
+    subscriptionExpired: (context?: ErrorContext) =>
       new PaymentError(ErrorCode.SUBSCRIPTION_EXPIRED, 'Subscription expired', undefined, context),
   },
 };

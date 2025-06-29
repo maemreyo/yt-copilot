@@ -1,7 +1,7 @@
-// - Enhanced health check with comprehensive service monitoring and error handling
+// Enhanced health check with comprehensive service monitoring and error handling
 
-import { serve } from 'std/http/server.ts';
 import { createClient } from '@supabase/supabase-js';
+import { serve } from 'std/http/server.ts';
 import Stripe from 'stripe';
 
 /**
@@ -79,7 +79,7 @@ class HealthChecker {
     try {
       this.supabase = createClient(
         Deno.env.get('SUPABASE_URL') || '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
       );
     } catch (error: any) {
       console.error('Failed to initialize Supabase client:', error);
@@ -120,7 +120,8 @@ class HealthChecker {
 
       const latency = Date.now() - startTime;
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned (acceptable)
+      if (error && error.code !== 'PGRST116') {
+        // PGRST116 = no rows returned (acceptable)
         return {
           status: ServiceStatus.ERROR,
           latency,
@@ -141,9 +142,7 @@ class HealthChecker {
       return {
         status,
         latency,
-        message: status === ServiceStatus.OK
-          ? 'Database is healthy'
-          : `High latency: ${latency}ms`,
+        message: status === ServiceStatus.OK ? 'Database is healthy' : `High latency: ${latency}ms`,
         details: {
           connectionPool: 'active',
           queryTime: latency,
@@ -324,7 +323,7 @@ class HealthChecker {
       const response = await fetch('https://api.resend.com/domains', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
+          Authorization: `Bearer ${resendApiKey}`,
           'Content-Type': 'application/json',
         },
       });
@@ -422,10 +421,8 @@ class HealthChecker {
   /**
    * Determine overall health status
    */
-  determineOverallStatus(
-    services: Record<string, ServiceHealth>,
-  ): HealthStatus {
-    const statuses = Object.values(services).map((service) => service.status);
+  determineOverallStatus(services: Record<string, ServiceHealth>): HealthStatus {
+    const statuses = Object.values(services).map(service => service.status);
 
     if (statuses.includes(ServiceStatus.ERROR)) {
       return HealthStatus.ERROR;
@@ -445,15 +442,14 @@ class HealthChecker {
     const checkStartTime = Date.now();
 
     // Run all health checks in parallel
-    const [database, auth, storage, stripe, resend, edgeFunctions] =
-      await Promise.all([
-        this.checkDatabase(),
-        this.checkAuth(),
-        this.checkStorage(),
-        this.checkStripe(),
-        this.checkResend(),
-        this.checkEdgeFunctions(),
-      ]);
+    const [database, auth, storage, stripe, resend, edgeFunctions] = await Promise.all([
+      this.checkDatabase(),
+      this.checkAuth(),
+      this.checkStorage(),
+      this.checkStripe(),
+      this.checkResend(),
+      this.checkEdgeFunctions(),
+    ]);
 
     const services = {
       database,
@@ -491,14 +487,14 @@ const securityHeaders = {
   'X-XSS-Protection': '1; mode=block',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Cache-Control': 'no-cache, no-store, must-revalidate',
-  'Pragma': 'no-cache',
-  'Expires': '0',
+  Pragma: 'no-cache',
+  Expires: '0',
 };
 
 /**
  * Main serve function
  */
-serve(async (req) => {
+serve(async req => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -526,9 +522,9 @@ serve(async (req) => {
         status: 405,
         headers: {
           ...securityHeaders,
-          'Allow': 'GET, OPTIONS',
+          Allow: 'GET, OPTIONS',
         },
-      },
+      }
     );
   }
 
@@ -563,18 +559,16 @@ serve(async (req) => {
           error: {
             code: 'HEALTH_CHECK_FAILURE',
             message: error.message,
-            details: Deno.env.get('NODE_ENV') === 'development'
-              ? error.stack
-              : undefined,
+            details: Deno.env.get('NODE_ENV') === 'development' ? error.stack : undefined,
           },
         },
         null,
-        2,
+        2
       ),
       {
         status: 500,
         headers: securityHeaders,
-      },
+      }
     );
   }
 });

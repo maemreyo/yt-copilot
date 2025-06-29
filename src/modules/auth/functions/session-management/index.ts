@@ -1,4 +1,4 @@
-// - Session management endpoints using Layer 2 auth middleware
+// Session management endpoints using Layer 2 auth middleware
 
 import { denoEnv } from '../../../../shared/edge-functions/_shared/deno-env.ts';
 

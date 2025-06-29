@@ -1,6 +1,7 @@
 // Complete rate limiting implementation with sliding window, Redis support, and comprehensive middleware
 
-import { env, environment, observabilityConfig } from '../config/environment';
+import { environment } from '../config/environment';
+import { observabilityConfig } from '../config/observability';
 import { AppError, ErrorCode } from './errors';
 
 /**
@@ -92,9 +93,7 @@ export class MemoryRateLimitStore implements RateLimitStore {
     };
 
     // Remove requests outside the sliding window
-    record.requests = record.requests.filter((timestamp) =>
-      timestamp > windowStart
-    );
+    record.requests = record.requests.filter(timestamp => timestamp > windowStart);
 
     // Add current request
     record.requests.push(now);
@@ -157,11 +156,7 @@ export class RedisRateLimitStore implements RateLimitStore {
     if (!this.redis) return;
 
     try {
-      await this.redis.setex(
-        key,
-        Math.ceil(ttlMs / 1000),
-        JSON.stringify(value),
-      );
+      await this.redis.setex(key, Math.ceil(ttlMs / 1000), JSON.stringify(value));
     } catch (error: any) {
       console.error('Redis set error:', error);
     }
@@ -214,15 +209,14 @@ export class RateLimiter {
   private store: RateLimitStore;
   private config: Required<RateLimitConfig>;
 
-  constructor(
-    config: Partial<RateLimitConfig> = {},
-    store?: RateLimitStore,
-  ) {
+  constructor(config: Partial<RateLimitConfig> = {}, store?: RateLimitStore) {
     this.config = {
-      requestsPerMinute: config.requestsPerMinute ||
-        observabilityConfig.rateLimiting.requestsPerMinute,
+      requestsPerMinute:
+        config.requestsPerMinute || observabilityConfig.rateLimiting.requestsPerMinute,
       windowMs: config.windowMs || observabilityConfig.rateLimiting.windowMs,
       keyGenerator: config.keyGenerator || ((id: string) => `rate_limit:${id}`),
+      identifierExtractor:
+        config.identifierExtractor || ((req: Request) => this.extractIdentifier(req)),
       skipSuccessful: config.skipSuccessful || false,
       skipFailed: config.skipFailed || false,
       onLimitReached: config.onLimitReached || (() => {}),
@@ -239,15 +233,9 @@ export class RateLimiter {
     const now = Date.now();
 
     try {
-      const currentCount = await this.store.increment(
-        key,
-        this.config.windowMs,
-      );
+      const currentCount = await this.store.increment(key, this.config.windowMs);
       const resetTime = now + this.config.windowMs;
-      const remaining = Math.max(
-        0,
-        this.config.requestsPerMinute - currentCount,
-      );
+      const remaining = Math.max(0, this.config.requestsPerMinute - currentCount);
       const allowed = currentCount <= this.config.requestsPerMinute;
 
       const info: RateLimitInfo = {
@@ -285,23 +273,23 @@ export class RateLimiter {
    */
   createMiddleware() {
     return async (request: Request, identifier?: string): Promise<void> => {
-      const id = identifier || (this.config.identifierExtractor ? this.config.identifierExtractor(request) : this.extractIdentifier(request));
+      const id =
+        identifier ||
+        (this.config.identifierExtractor
+          ? this.config.identifierExtractor(request)
+          : this.extractIdentifier(request));
       const result = await this.checkLimit(id);
 
       if (!result.allowed) {
-        throw new AppError(
-          ErrorCode.RATE_LIMIT_EXCEEDED,
-          'Rate limit exceeded',
-          {
-            details: {
-              limit: result.info.limit,
-              remaining: result.info.remaining,
-              resetTime: result.info.resetTime,
-              retryAfter: result.info.retryAfter,
-            },
-            retryable: true,
+        throw new AppError(ErrorCode.RATE_LIMIT_EXCEEDED, 'Rate limit exceeded', {
+          details: {
+            limit: result.info.limit,
+            remaining: result.info.remaining,
+            resetTime: result.info.resetTime,
+            retryAfter: result.info.retryAfter,
           },
-        );
+          retryable: true,
+        });
       }
     };
   }
@@ -348,10 +336,7 @@ export class GlobalRateLimiters {
   /**
    * Get or create rate limiter for specific use case
    */
-  static getLimiter(
-    name: string,
-    config?: Partial<RateLimitConfig>,
-  ): RateLimiter {
+  static getLimiter(name: string, config?: Partial<RateLimitConfig>): RateLimiter {
     if (!this.limiters.has(name)) {
       const store = environment.isProduction()
         ? new RedisRateLimitStore() // Would inject Redis client in production
@@ -416,11 +401,7 @@ export class GlobalRateLimiters {
  * Rate limiting decorator for functions
  */
 export function rateLimit(config: Partial<RateLimitConfig> = {}) {
-  return function (
-    target: any,
-    propertyKey: string,
-    descriptor: PropertyDescriptor,
-  ) {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
     const limiter = new RateLimiter(config);
 
@@ -437,6 +418,27 @@ export function rateLimit(config: Partial<RateLimitConfig> = {}) {
     return descriptor;
   };
 }
+
+/**
+ * Global rate limiter instance for direct use
+ */
+export const rateLimiter = {
+  /**
+   * Check if a request is within rate limit
+   */
+  async checkLimit(
+    identifier: string,
+    requestsPerMinute: number = 60,
+    windowMs: number = 60000
+  ): Promise<boolean> {
+    const limiter = new RateLimiter({
+      requestsPerMinute,
+      windowMs,
+    });
+    const result = await limiter.checkLimit(identifier);
+    return result.allowed;
+  },
+};
 
 /**
  * Helper functions
@@ -486,17 +488,14 @@ export const rateLimitingUtils = {
    * Check if error is rate limit error
    */
   isRateLimitError: (error: any): boolean => {
-    return error instanceof AppError &&
-      error.code === ErrorCode.RATE_LIMIT_EXCEEDED;
+    return error instanceof AppError && error.code === ErrorCode.RATE_LIMIT_EXCEEDED;
   },
 };
 
 /**
  * Express-style middleware factory
  */
-export function createRateLimitMiddleware(
-  config: Partial<RateLimitConfig> = {},
-) {
+export function createRateLimitMiddleware(config: Partial<RateLimitConfig> = {}) {
   const limiter = new RateLimiter(config);
 
   return async (req: Request): Promise<Response | void> => {
@@ -506,20 +505,15 @@ export function createRateLimitMiddleware(
     } catch (error: any) {
       if (rateLimitingUtils.isRateLimitError(error)) {
         const appError = error as AppError;
-        const headers = rateLimitingUtils.createRateLimitHeaders(
-          appError.details as RateLimitInfo,
-        );
+        const headers = rateLimitingUtils.createRateLimitHeaders(appError.details as RateLimitInfo);
 
-        return new Response(
-          JSON.stringify(appError.toResponse()),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-              ...headers,
-            },
+        return new Response(JSON.stringify(appError.toResponse()), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            ...headers,
           },
-        );
+        });
       }
       throw error;
     }
@@ -547,6 +541,6 @@ export default {
   MemoryRateLimitStore,
   RedisRateLimitStore,
   createRateLimitMiddleware,
-  rateLimit,
+  rateLimiter,
   utils: rateLimitingUtils,
 };
